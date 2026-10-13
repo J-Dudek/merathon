@@ -2,6 +2,13 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.2.0](https://github.com/J-Dudek/merathon/compare/v2.1.0...v2.2.0) (2026-10-13)
+
+### Nouveautés
+
+- add memo fit in menu for newbie (f05a63c)
+- add to .gitignore on right menu (57b61fd)
+
 ## [2.1.0](https://github.com/J-Dudek/merathon/compare/v2.0.0...v2.1.0) (2026-10-13)
 
 ### Nouveautés

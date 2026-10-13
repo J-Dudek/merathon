@@ -2,7 +2,7 @@ import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore } from "../store/useUiStore";
 import { useTabsStore } from "../store/useTabsStore";
 import {
-  AppWindow, CloudDownload, FolderOpen, FolderPlus, History, Info, Monitor, Moon, RefreshCw, Settings, SquarePlus, Sun, X, type LucideIcon,
+  AppWindow, BookOpen, CloudDownload, FolderOpen, FolderPlus, History, Info, Monitor, Moon, RefreshCw, Settings, SquarePlus, Sun, X, type LucideIcon,
 } from "lucide-react";
 import {
   createBranch, fetchRemote, openNewWindow, pull, push, stashApply, stashSave,
@@ -37,6 +37,7 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
   const activeTab = useTabsStore((s) => s.activeId);
   const tabCount = useTabsStore((s) => s.tabs.length);
   const setPreferencesOpen = useUiStore((s) => s.setPreferencesOpen);
+  const setMemoOpen = useUiStore((s) => s.setMemoOpen);
   const busy = useUiStore((s) => s.busy);
   const ask = useUiStore((s) => s.ask);
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
@@ -66,6 +67,7 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
       "separator",
       { label: "Préférences…", icon: Settings, shortcut: "Ctrl+,", action: () => setPreferencesOpen(true) },
       { label: "Rechercher des mises à jour…", icon: RefreshCw, action: () => checkForUpdates(true) },
+      { label: "Mémo Git", icon: BookOpen, action: () => setMemoOpen(true) },
       { label: "À propos de Merathon", icon: Info, action: () => setPreferencesOpen(true, "about") },
     ];
   }

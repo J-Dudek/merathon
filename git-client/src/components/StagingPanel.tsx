@@ -4,13 +4,14 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useRepoStore, type CenterView, type CommitDraft } from "../store/useRepoStore";
 import { useUiStore, confirmAction } from "../store/useUiStore";
 import {
-  abortInteractiveRebase, abortMerge, abortRebase, continueInteractiveRebase, continueRebase, createCommit, discardFiles, getCommitDetails, lfsTrack, stageAll,
+  abortInteractiveRebase, abortMerge, abortRebase, continueInteractiveRebase, continueRebase, createCommit, discardFiles, getCommitDetails, ignorePatterns, lfsTrack, stageAll,
   stageFiles, unstageAll, unstageFiles,
 } from "../ipc/commands";
 import { errorMessage, reportInteractive, reportMerge, runGit } from "../lib/actions";
 import { ContextMenu, useContextMenu, type MenuEntry } from "./ContextMenu";
 import { plural } from "../lib/strings";
 import { fileTree, visibleFiles, type FileNode } from "../lib/fileTree";
+import { ignoreExtensionPattern, ignoreFilePattern, ignoreFolderPattern } from "../lib/gitignore";
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
 import type { FileStatus, InteractiveStop, RepoState } from "../types/git";
 
@@ -221,6 +222,9 @@ export function StagingPanel() {
         ? { label: `Désindexer ${n}`, action: () => runGit(() => unstageFiles(path, pathsOf(files))) }
         : { label: section === "c" ? `Marquer ${n} comme résolus (indexer)` : `Indexer ${n}`, action: () => runGit(() => stageFiles(path, pathsOf(files))) },
       ...(section === "u" ? [{ label: `Annuler les modifications de ${n}…`, danger: true, action: () => discard(files) }] : []),
+      ...(files.every((f) => f.status === "untracked")
+        ? ["separator" as const, { label: `Ajouter ${n} au .gitignore`, action: () => ignore(files.map((f) => ignoreFilePattern(f.path))) }]
+        : []),
       "separator",
       { label: "Copier les chemins", action: () => navigator.clipboard.writeText(pathsOf(files).join("\n")) },
       { label: "Annuler la sélection", action: clearSelection },
@@ -239,9 +243,27 @@ export function StagingPanel() {
         ? [{ label: "Annuler les modifications…", danger: true, action: () => discard([f]) }]
         : []),
       ...lfsEntry(f),
+      ...ignoreEntries(f),
       "separator" as const,
       { label: "Copier le chemin", action: () => navigator.clipboard.writeText(f.path) },
       { label: "Afficher dans le gestionnaire de fichiers", action: () => revealItemInDir(abs).catch((e) => notify("error", errorMessage(e))) },
+    ];
+  }
+
+  function ignore(patterns: string[]) {
+    return runGit(() => ignorePatterns(path, patterns), { success: "Ajouté au .gitignore" });
+  }
+
+  /** Propose d'ignorer le fichier, son extension ou son dossier (fichier pas encore suivi). */
+  function ignoreEntries(f: FileStatus): MenuEntry[] {
+    if (f.status !== "untracked") return [];
+    const entry = (label: string, pattern: string | null): MenuEntry[] =>
+      pattern ? [{ label, hint: pattern, action: () => ignore([pattern]) }] : [];
+    return [
+      "separator",
+      ...entry("Ajouter au .gitignore", ignoreFilePattern(f.path)),
+      ...entry("Ignorer cette extension", ignoreExtensionPattern(f.path)),
+      ...entry("Ignorer ce dossier", ignoreFolderPattern(f.path)),
     ];
   }
 

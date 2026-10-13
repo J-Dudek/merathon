@@ -82,6 +82,7 @@ export const stageAll = (path: string) => invoke<void>("stage_all", { path });
 export const unstageFiles = (path: string, paths: string[]) => invoke<void>("unstage_files", { path, paths });
 export const unstageAll = (path: string) => invoke<void>("unstage_all", { path });
 export const discardFiles = (path: string, paths: string[]) => invoke<void>("discard_files", { path, paths });
+export const ignorePatterns = (path: string, patterns: string[]) => invoke<void>("ignore_patterns", { path, patterns });
 export type LineAction = "stage" | "unstage" | "discard";
 /** `lines` null : tout le bloc. Index des lignes tels qu'affichés dans le bloc. */
 export const applyLines = (path: string, filePath: string, hunk: number, lines: number[] | null, action: LineAction) =>

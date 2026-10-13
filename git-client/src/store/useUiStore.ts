@@ -100,6 +100,8 @@ interface UiStore {
   preferencesOpen: boolean;
   /** Rubrique affichée à l'ouverture des préférences. */
   preferencesSection: PreferencesSection;
+  /** Fenêtre du mémo git ouverte. */
+  memoOpen: boolean;
 
   notify: (kind: Toast["kind"], message: string) => void;
   dismiss: (id: number) => void;
@@ -110,6 +112,7 @@ interface UiStore {
   setPanel: (patch: Partial<BottomPanelState>) => void;
   setSideWidth: (side: Side, width: number) => void;
   setPreferencesOpen: (open: boolean, section?: PreferencesSection) => void;
+  setMemoOpen: (open: boolean) => void;
 }
 
 let nextToastId = 1;
@@ -123,6 +126,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   sideWidths: loadSideWidths(),
   preferencesOpen: false,
   preferencesSection: "appearance",
+  memoOpen: false,
 
   notify: (kind, message) => {
     const id = nextToastId++;
@@ -147,6 +151,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setInteractiveRebaseBase: (interactiveRebaseBase) => set({ interactiveRebaseBase }),
 
   setPreferencesOpen: (preferencesOpen, preferencesSection = "appearance") => set({ preferencesOpen, preferencesSection }),
+  setMemoOpen: (memoOpen) => set({ memoOpen }),
 
   setPanel: (patch) => {
     const panel = { ...get().panel, ...patch };

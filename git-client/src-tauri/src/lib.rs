@@ -42,6 +42,7 @@ pub fn run() {
             commands::unstage_files,
             commands::unstage_all,
             commands::discard_files,
+            commands::ignore_patterns,
             commands::apply_lines,
             commands::create_commit,
             commands::get_conflict_content,

@@ -38,6 +38,7 @@ const COMMANDS: Record<string, (a: Args) => string> = {
   unstage_files: (a) => `git restore --staged ${files(a.paths)}`,
   unstage_all: () => "git restore --staged :/",
   discard_files: (a) => `git restore ${files(a.paths)}`,
+  ignore_patterns: (a) => `printf '%s\\n' ${(Array.isArray(a.patterns) ? a.patterns : []).map(quote).join(" ")} >> .gitignore`,
   apply_lines: (a) => {
     const flags: Record<string, string> = { stage: "--cached", unstage: "--cached --reverse", discard: "--reverse" };
     const part = a.lines ? "lignes choisies" : "bloc";

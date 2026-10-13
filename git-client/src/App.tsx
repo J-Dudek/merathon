@@ -22,6 +22,7 @@ import { defaultSideWidths, useUiStore, type Side } from "./store/useUiStore";
 import { persistTabSession, useTabsStore } from "./store/useTabsStore";
 import { stepZoom, useDisplayStore } from "./store/useDisplayStore";
 import { PreferencesDialog } from "./components/PreferencesDialog";
+import { GitMemoDialog } from "./components/GitMemoDialog";
 import { openNewWindow } from "./ipc/commands";
 import { chooseAndOpenRepo as openRepoDialog } from "./lib/repoActions";
 import { errorMessage } from "./lib/actions";
@@ -48,6 +49,8 @@ export default function App() {
   const rebaseBase = useUiStore((s) => s.interactiveRebaseBase);
   const preferencesOpen = useUiStore((s) => s.preferencesOpen);
   const setPreferencesOpen = useUiStore((s) => s.setPreferencesOpen);
+  const memoOpen = useUiStore((s) => s.memoOpen);
+  const setMemoOpen = useUiStore((s) => s.setMemoOpen);
   const setRebaseBase = useUiStore((s) => s.setInteractiveRebaseBase);
   const sideWidths = useUiStore((s) => s.sideWidths);
 
@@ -168,6 +171,7 @@ export default function App() {
 
       {showClone && <CloneDialog onClose={() => setShowClone(false)} />}
       {preferencesOpen && <PreferencesDialog onClose={() => setPreferencesOpen(false)} />}
+      {memoOpen && <GitMemoDialog onClose={() => setMemoOpen(false)} />}
       {rebaseBase && repoPath && <InteractiveRebaseDialog base={rebaseBase} onClose={() => setRebaseBase(null)} />}
       <Dialog />
       <Toasts />

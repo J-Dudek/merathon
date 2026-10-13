@@ -201,6 +201,33 @@ pub fn discard_paths(repo: &Repository, paths: &[String]) -> Result<(), GitError
     Ok(())
 }
 
+/// Ajoute des motifs au .gitignore racine (créé au besoin), sans dupliquer ceux déjà présents.
+pub fn ignore_patterns(repo: &Repository, patterns: &[String]) -> Result<(), GitError> {
+    let workdir = repo.workdir().ok_or_else(|| GitError::Other("dépôt bare".into()))?;
+    let file = checked_path(workdir, ".gitignore")?;
+    let mut content = match std::fs::read_to_string(&file) {
+        Ok(content) => content,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e.into()),
+    };
+    for pattern in patterns {
+        let pattern = pattern.trim_start();
+        if pattern.trim().is_empty() || pattern.contains(['\n', '\r', '\0']) {
+            return Err(GitError::Other(format!("Motif .gitignore invalide : {pattern:?}")));
+        }
+        if content.lines().any(|l| l == pattern) {
+            continue;
+        }
+        if !content.is_empty() && !content.ends_with('\n') {
+            content.push('\n');
+        }
+        content.push_str(pattern);
+        content.push('\n');
+    }
+    std::fs::write(file, content)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,5 +335,27 @@ mod tests {
         assert_eq!(fs::read_to_string(dir.path().join("f.txt")).unwrap(), "v1");
         assert!(!dir.path().join("junk.txt").exists());
         assert!(get_status(&repo).unwrap().is_empty());
+    }
+
+    #[test]
+    fn ignore_patterns_appends_without_duplicates() {
+        let (dir, repo) = make_repo();
+        fs::write(dir.path().join(".gitignore"), "target").unwrap();
+        fs::write(dir.path().join("junk.log"), "junk").unwrap();
+
+        ignore_patterns(&repo, &["/junk.log".into(), "target".into()]).unwrap();
+
+        assert_eq!(fs::read_to_string(dir.path().join(".gitignore")).unwrap(), "target\n/junk.log\n");
+        let status = get_status(&repo).unwrap();
+        assert_eq!(status.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), vec![".gitignore"]);
+    }
+
+    #[test]
+    fn ignore_patterns_creates_file_and_rejects_multiline() {
+        let (dir, repo) = make_repo();
+        assert!(ignore_patterns(&repo, &["a\n!b".into()]).is_err());
+        assert!(!dir.path().join(".gitignore").exists());
+        ignore_patterns(&repo, &["*.log".into()]).unwrap();
+        assert_eq!(fs::read_to_string(dir.path().join(".gitignore")).unwrap(), "*.log\n");
     }
 }

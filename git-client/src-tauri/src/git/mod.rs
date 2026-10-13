@@ -20,7 +20,7 @@ pub use error::GitError;
 pub use auth::Credentials;
 pub use repository::{open_repo, repo_info, get_identity, set_identity, RepoInfo, Identity};
 pub use history::{get_commits, get_branches, get_tags, get_commit_details, compare_refs, CommitInfo, BranchInfo, TagInfo, CommitDetails, RefComparison};
-pub use status::{get_status, stage_paths, stage_all, unstage_paths, unstage_all, discard_paths, FileStatus};
+pub use status::{get_status, stage_paths, stage_all, unstage_paths, unstage_all, discard_paths, ignore_patterns, FileStatus};
 pub use diff::{get_diff, get_commit_file_diff, get_compare_file_diff, FileDiff};
 pub use remote::{
     init_repo, clone_repo, fetch, fetch_all, pull, push_branch, delete_remote_branch, push_tag,

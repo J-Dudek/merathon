@@ -205,6 +205,12 @@ pub fn discard_files(path: String, paths: Vec<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::discard_paths(r, &paths))
 }
 
+/// Ajoute des motifs au .gitignore racine du dépôt.
+#[tauri::command]
+pub fn ignore_patterns(path: String, patterns: Vec<String>) -> Result<(), GitError> {
+    with_repo(&path, |r| git::ignore_patterns(r, &patterns))
+}
+
 /// Indexe / désindexe / annule un bloc (`lines` absent) ou des lignes d'un bloc.
 #[tauri::command]
 pub fn apply_lines(

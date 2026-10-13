@@ -49,7 +49,7 @@ Les versions jusqu'à la 2.0.0 incluse demandent glibc ≥ 2.39 (Ubuntu 24.04, D
 - **Terminal intégré** : panneau repliable sous le graphe (Ctrl+J), avec un vrai shell ouvert dans le dossier du dépôt de l'onglet. Le graphe et le statut se rafraîchissent tout seuls après chaque commande.
 - **Journal des opérations** : à côté du terminal, chaque action de l'application (commit, pull, push, rebase, stash…) est affichée sous la forme de la commande `git` équivalente, avec son statut, sa durée et le message d'erreur complet en cas d'échec. Les identifiants contenus dans une URL ne sont jamais affichés.
 - **Historique** : graphe de toutes les branches (locales, distantes, tags), recherche, détail d'un commit (message, auteur, fichiers modifiés) et diff de chaque fichier. Chaque point du graphe porte les initiales de l'auteur, dont le nom s'affiche au survol. Sélection de plusieurs commits avec Ctrl+clic (ou Cmd+clic) et Maj+clic pour une plage, puis clic droit → **Squasher les commits sélectionnés** : ils sont fusionnés dans le plus ancien, avec un message modifiable (pré-rempli avec les messages d'origine).
-- **Copie de travail** : indexer / désindexer / annuler par fichier, par bloc (hunk) ou ligne par ligne depuis le diff (clic, Maj+clic pour une plage), commit avec résumé + description, amend.
+- **Copie de travail** : indexer / désindexer / annuler par fichier, par bloc (hunk) ou ligne par ligne depuis le diff (clic, Maj+clic pour une plage), commit avec résumé + description, amend. Clic droit sur un fichier non suivi → **Ajouter au .gitignore** : le fichier lui-même, tous ceux de son extension (`*.log`) ou son dossier ; avec plusieurs fichiers sélectionnés, ils sont ajoutés en une fois. Le motif est écrit dans le `.gitignore` à la racine du dépôt (créé au besoin), sans doublon.
 - **Branches** : création, checkout (y compris d'une branche distante avec suivi, ou d'un commit en HEAD détaché), renommage, suppression, branche suivie, ahead/behind. Un badge `local` signale, dans la barre latérale et sur le graphe, les branches qui n'existent sur aucun remote, et un badge `PR #12` (ou `MR !12`) celles qui ont une pull / merge request ouverte. Plusieurs branches locales peuvent être sélectionnées (Ctrl+clic, Maj+clic) et supprimées en une fois.
 - **Intégration** : merge (fast-forward ou commit de merge), rebase, cherry-pick, revert, reset soft/mixed/hard, avec résolution de conflits et continuer / annuler.
 - **Rebase interactif** (clic droit sur un commit) : réordonner (glisser-déposer ou flèches), renommer, modifier (arrêt pour amender ou ajouter des commits), fusionner (squash / fixup) ou supprimer des commits. Avec des merges dans l'historique, au choix : *aplatir* (comme `git rebase -i`) ou *préserver les merges* (comme `--rebase-merges` : forme conservée, résolutions de conflits des merges gardées). Le rebase s'arrête sur un conflit à résoudre puis « Continuer », et peut être annulé à tout moment pour revenir exactement à l'état initial ; l'ancienne position reste accessible via `ORIG_HEAD`. Comme avec git, un commit devenu vide (ses changements sont déjà présents) est sauté.
@@ -61,6 +61,7 @@ Les versions jusqu'à la 2.0.0 incluse demandent glibc ≥ 2.39 (Ubuntu 24.04, D
 - **Comptes** : GitHub, GitLab.com et GitLab auto-hébergé, par connexion navigateur (OAuth, voir plus bas) ou token personnel. Le token est validé à l'ajout puis stocké dans le trousseau du système (Secret Service, Keychain, Credential Manager). À défaut de trousseau, il est écrit dans `tokens.json` (droits 600) du dossier de configuration de l'app. Le compte dont l'hôte correspond au remote est utilisé automatiquement pour clone / fetch / pull / push en HTTPS ; en SSH, l'agent puis les clés `~/.ssh` sont utilisés. L'onglet **Comptes** liste aussi les PR / MR de tous les projets (voir plus bas) et les issues ouvertes du dépôt courant.
 - **Identité Git** : nom et email, globaux ou propres au dépôt.
 - **Préférences** (Ctrl+,) : thème clair, sombre ou celui du système (suivi en direct), taille de toute l'interface de 80 à 200 % (Ctrl+= / Ctrl+- / Ctrl+0), taille du texte du terminal, densité du graphe (compacte, normale, aérée), intervalle de la synchronisation automatique (avec un bouton « Synchroniser maintenant ») et liste des raccourcis clavier. Les réglages s'appliquent immédiatement à toutes les fenêtres.
+- **Mémo Git** (menu Merathon → « Mémo Git ») : un aide-mémoire des opérations git, classées par rubrique (modifications, branches, synchronisation, intégration, réécriture de l'historique, stash, tags, sous-modules et LFS…). Chaque fiche donne la commande équivalente, ce qu'elle fait, un cas d'usage concret, la marche à suivre dans l'application et, s'il y a lieu, une mise en garde (perte de données, historique réécrit). Une recherche filtre l'ensemble des fiches.
 - **Mises à jour automatiques** : au démarrage, l'application vérifie s'il existe une nouvelle release, propose de l'installer puis redémarre (aussi via le menu Merathon → « Rechercher des mises à jour… »). Les paquets sont signés et la signature est vérifiée avant toute installation (AppImage, `.deb`, `.exe`, `.msi`).
 
 ### Pull requests et merge requests
@@ -261,13 +262,14 @@ git-client/
 ├── branding/            # Sources du logo et de l'icône (SVG) et signature J6N
 ├── src/                 # Frontend React
 │   ├── components/      # UI : Toolbar, TabBar, Sidebar, StagingPanel, BottomPanel (terminal / journal),
-│   │                    # PreferencesDialog, DiffViewer, ConflictViewer, PullRequest* (liste, création,
-│   │                    # revue, fichiers modifiés), MyPullRequests (PR de tous les projets)…
+│   │                    # PreferencesDialog, GitMemoDialog, DiffViewer, ConflictViewer, PullRequest* (liste,
+│   │                    # création, revue, fichiers modifiés), MyPullRequests (PR de tous les projets)…
 │   ├── graph/           # Rendu du graphe de commits
 │   ├── store/           # État global (Zustand) : dépôt affiché, onglets, journal, réglages, PR lues…
 │   ├── ipc/commands.ts  # Appels aux commandes Tauri (et inscription au journal)
 │   ├── lib/             # Actions git, synchronisation périodique, état des PR, terminaux (xterm.js),
-│   │                    # commandes du journal, plan de squash, commentaires de revue, fichiers vus…
+│   │                    # commandes du journal, plan de squash, commentaires de revue, fichiers vus,
+│   │                    # motifs .gitignore, contenu du mémo git…
 │   └── api/             # Clients GitHub / GitLab (PR / MR, revues, CI, modèles) et interface commune
 └── src-tauri/           # Backend Rust
     └── src/
