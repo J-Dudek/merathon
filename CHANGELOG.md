@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.0.0](https://github.com/J-Dudek/merathon/compare/v0.0.1-test...v2.0.0) (2026-10-13)
+
+### ⚠ Changements incompatibles
+
+- update CI and pass to public repo (fa56541)
+
 ## [1.9.0](https://github.com/J-Dudek/git-management/compare/v1.8.0...v1.9.0) (2026-10-12)
 
 ### Nouveautés

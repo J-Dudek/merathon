@@ -183,18 +183,24 @@ function commitsSinceLastTag() {
   return { lastTag, commits };
 }
 
-/** URL web du dépôt sur GitHub Actions (liens vers les commits), sinon rien. */
-function repoUrl() {
-  const { GITHUB_SERVER_URL: server, GITHUB_REPOSITORY: repo } = process.env;
-  return server && repo ? `${server}/${repo}` : undefined;
+/**
+ * URLs web pour les liens du changelog sur GitHub Actions, sinon rien.
+ * Avec un dépôt public distinct (`PUBLIC_REPOSITORY`), les comparaisons de tags y pointent et
+ * les commits ne sont pas liés : ils n'existent que dans le dépôt de développement, privé.
+ */
+function changelogUrls() {
+  const { GITHUB_SERVER_URL: server, GITHUB_REPOSITORY: repo, PUBLIC_REPOSITORY: publicRepo } = process.env;
+  if (!server) return {};
+  if (publicRepo) return { compare: `${server}/${publicRepo}` };
+  return repo ? { compare: `${server}/${repo}`, commits: `${server}/${repo}` } : {};
 }
 
 /** Écrit la section de `version` en tête de CHANGELOG.md et renvoie ses notes. */
 export function writeChangelog(version, date = new Date().toISOString().slice(0, 10)) {
   const { lastTag, commits } = commitsSinceLastTag();
-  const url = repoUrl();
-  const notes = releaseNotes(commits, { repoUrl: url });
-  const section = changelogSection(version, date, notes, { repoUrl: url, previousTag: lastTag || undefined });
+  const urls = changelogUrls();
+  const notes = releaseNotes(commits, { repoUrl: urls.commits });
+  const section = changelogSection(version, date, notes, { repoUrl: urls.compare, previousTag: lastTag || undefined });
   const current = existsSync(files.changelog) ? readFileSync(files.changelog, "utf8") : "";
   writeFileSync(files.changelog, prependChangelog(current, section));
   return notes;

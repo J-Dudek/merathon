@@ -1,0 +1,9 @@
+# Choix proposé à la création d'une issue : un des deux formulaires, pas d'issue libre.
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/J-Dudek/merathon#readme
+    about: Installation, fonctionnalités, comptes GitHub / GitLab — la réponse s'y trouve peut-être déjà.
+  - name: 🔒 Faille de sécurité
+    url: https://github.com/J-Dudek/merathon/security/advisories/new
+    about: Ne la publie pas dans une issue publique — signale-la en privé ici.

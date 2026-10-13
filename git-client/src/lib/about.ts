@@ -1,6 +1,6 @@
 import type { AppInfo } from "../ipc/commands";
 
-export const REPO_URL = "https://github.com/J-Dudek/git-management";
+export const REPO_URL = "https://github.com/J-Dudek/merathon";
 
 /** Page de la release d'une version ; liste des releases tant que la version n'est pas connue. */
 export function releaseUrl(version: string): string {

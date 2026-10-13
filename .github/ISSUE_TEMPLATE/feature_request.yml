@@ -1,0 +1,91 @@
+name: 💡 Proposer une idée
+description: Une fonctionnalité ou une amélioration à ajouter à Merathon.
+title: "[Idée] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de contribuer à faire évoluer Merathon ! ✨
+        Une bonne proposition part d'un **besoin concret** : décris d'abord le problème que tu rencontres,
+        la solution vient ensuite. Les idées sont discutées ouvertement dans l'issue avant toute implémentation.
+
+  - type: checkboxes
+    id: prerequis
+    attributes:
+      label: Avant de commencer
+      options:
+        - label: J'ai vérifié qu'aucune [issue existante](https://github.com/J-Dudek/merathon/issues?q=is%3Aissue+label%3Aenhancement) ne propose déjà cette idée (sinon, ajoute un 👍 dessus).
+          required: true
+
+  - type: textarea
+    id: probleme
+    attributes:
+      label: Problème ou besoin
+      description: Quelle difficulté rencontres-tu aujourd'hui ? Dans quelle situation ?
+      placeholder: "Ex. : sur un dépôt avec 80 branches, je perds du temps à retrouver les miennes dans la barre latérale."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solution proposée
+      description: Ce que tu imagines, du point de vue de l'utilisateur. Maquettes ou captures bienvenues.
+      placeholder: "Ex. : ranger les branches par dossiers selon le « / » de leur nom, pliables / dépliables."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives envisagées
+      description: Autres solutions ou contournements actuels. Comment font d'autres clients Git (GitKraken, Fork, Sourcetree…) ?
+
+  - type: dropdown
+    id: domaine
+    attributes:
+      label: Partie de l'application concernée
+      multiple: true
+      options:
+        - Graphe des commits / historique
+        - Branches, tags, remotes (barre latérale)
+        - Indexation, commit, stash
+        - Merge, rebase, conflits
+        - Fetch, pull, push, clone
+        - Comptes GitHub / GitLab, pull / merge requests
+        - Sous-modules, Git LFS
+        - Terminal, onglet navigateur, journal
+        - Mises à jour de l'application
+        - Interface, affichage, préférences
+        - Nouvelle fonctionnalité transverse
+    validations:
+      required: true
+
+  - type: dropdown
+    id: importance
+    attributes:
+      label: Importance pour toi
+      options:
+        - Confort — ce serait agréable
+        - Utile — je l'utiliserais régulièrement
+        - Bloquant — il me manque pour adopter Merathon au quotidien
+    validations:
+      required: true
+
+  - type: textarea
+    id: criteres
+    attributes:
+      label: Critères d'acceptation
+      description: Comment saura-t-on que c'est terminé ? Une ligne par comportement attendu.
+      placeholder: |
+        - [ ] Les branches « feat/x » et « feat/y » apparaissent dans un dossier « feat »
+        - [ ] Un clic sur le dossier le plie / déplie
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: Je suis prêt·e à contribuer à l'implémentation (pull request).
+        - label: Je suis disponible pour tester une version de développement.

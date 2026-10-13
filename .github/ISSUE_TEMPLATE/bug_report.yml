@@ -1,0 +1,145 @@
+name: 🐞 Signaler un bug
+description: Quelque chose ne fonctionne pas comme prévu dans Merathon.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de prendre le temps de signaler un problème ! 🙏
+        Plus le rapport est précis, plus vite il pourra être reproduit et corrigé.
+        Pense à **retirer toute donnée sensible** (tokens, URLs privées, noms de dépôts internes) des captures et des journaux.
+
+  - type: checkboxes
+    id: prerequis
+    attributes:
+      label: Avant de commencer
+      options:
+        - label: J'ai vérifié qu'aucune [issue existante](https://github.com/J-Dudek/merathon/issues?q=is%3Aissue) ne décrit déjà ce problème.
+          required: true
+        - label: Le problème se produit avec la [dernière version](https://github.com/J-Dudek/merathon/releases/latest) (menu « Rechercher des mises à jour… »).
+          required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Que se passe-t-il ? Un résumé clair en une ou deux phrases.
+      placeholder: "Ex. : le push échoue avec « Token refusé » sur un dépôt GitLab auto-hébergé."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Étapes pour reproduire
+      description: La suite d'actions minimale qui provoque le problème.
+      placeholder: |
+        1. Ouvrir un dépôt qui…
+        2. Clic droit sur la branche…
+        3. Choisir « … »
+        4. Voir l'erreur
+    validations:
+      required: true
+
+  - type: textarea
+    id: attendu
+    attributes:
+      label: Comportement attendu
+      placeholder: Ce qui aurait dû se passer.
+    validations:
+      required: true
+
+  - type: textarea
+    id: observe
+    attributes:
+      label: Comportement observé
+      description: Message d'erreur exact, captures d'écran ou enregistrement (glisser-déposer ici).
+      placeholder: Ce qui se passe réellement.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequence
+    attributes:
+      label: Fréquence
+      options:
+        - À chaque fois
+        - Souvent
+        - Parfois
+        - Une seule fois
+    validations:
+      required: true
+
+  - type: dropdown
+    id: domaine
+    attributes:
+      label: Partie de l'application concernée
+      multiple: true
+      options:
+        - Graphe des commits / historique
+        - Branches, tags, remotes (barre latérale)
+        - Indexation, commit, stash
+        - Merge, rebase, conflits
+        - Fetch, pull, push, clone
+        - Comptes GitHub / GitLab, pull / merge requests
+        - Sous-modules, Git LFS
+        - Terminal, onglet navigateur, journal
+        - Mises à jour de l'application
+        - Installation / démarrage
+        - Interface, affichage, préférences
+        - Autre
+
+  - type: input
+    id: version
+    attributes:
+      label: Version de Merathon
+      description: Visible dans le nom du paquet installé ou dans la fenêtre de mise à jour (« Version installée »).
+      placeholder: "1.3.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: systeme
+    attributes:
+      label: Système et format d'installation
+      options:
+        - Linux — .deb
+        - Linux — AppImage
+        - Windows — .exe (NSIS)
+        - Windows — .msi
+        - Compilé depuis les sources
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Version du système
+      placeholder: "Ubuntu 24.04, Fedora 41, Windows 11 23H2…"
+
+  - type: dropdown
+    id: forge
+    attributes:
+      label: Hébergement du dépôt concerné
+      multiple: true
+      options:
+        - GitHub.com
+        - GitHub Enterprise
+        - GitLab.com
+        - GitLab auto-hébergé
+        - Autre / sans remote
+        - Sans objet
+
+  - type: textarea
+    id: journal
+    attributes:
+      label: Journal / logs
+      description: Extrait du journal (panneau du bas, onglet « Journal ») ou sortie console. Mis en forme automatiquement, inutile d'ajouter des ```.
+      render: text
+
+  - type: textarea
+    id: contexte
+    attributes:
+      label: Contexte supplémentaire
+      description: Taille du dépôt, configuration particulière (proxy, certificat d'entreprise, SSH…), contournement trouvé…

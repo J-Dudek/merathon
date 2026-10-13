@@ -24,7 +24,7 @@
 
 ## Installation
 
-Les paquets de chaque version sont publiés dans les [releases GitHub](https://github.com/J-Dudek/git-management/releases/latest) :
+Les paquets de chaque version sont publiés dans les [releases GitHub](https://github.com/J-Dudek/merathon/releases/latest) :
 
 - **Linux** : `.deb` (Debian/Ubuntu) ou `.AppImage` (universel). Le paquet `.deb` remplace automatiquement l'ancien paquet `j6n`.
 - **Windows** : `.msi` ou `.exe`. Les installeurs ne sont pas encore signés : au premier lancement, cliquer sur **Informations complémentaires** puis **Exécuter quand même**.
