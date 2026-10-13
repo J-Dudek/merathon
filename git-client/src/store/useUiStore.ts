@@ -17,6 +17,8 @@ export interface DialogOptions {
   danger?: boolean;
   /** Liste à rubriques sous le message (ex. notes de version), dans une zone défilante. */
   sections?: DialogSection[];
+  /** Lien affiché sous le champ de saisie, ouvert dans le navigateur. */
+  link?: { label: string; url: string };
 }
 
 export interface DialogSection {
@@ -37,7 +39,7 @@ export interface BottomPanelState {
   height: number;
 }
 
-const PANEL_KEY = "git-client.bottom-panel";
+const PANEL_KEY = "merathon.bottom-panel";
 const defaultPanel: BottomPanelState = { open: false, tab: "terminal", height: 260 };
 
 function loadPanel(): BottomPanelState {
@@ -60,7 +62,7 @@ export type Side = keyof SideWidths;
 /** Rubriques de la fenêtre des préférences. */
 export type PreferencesSection = "appearance" | "terminal" | "sync" | "shortcuts" | "about";
 
-const SIDES_KEY = "git-client.side-widths";
+const SIDES_KEY = "merathon.side-widths";
 export const defaultSideWidths: SideWidths = { left: 240, right: 320 };
 export const SIDE_LIMITS: Record<Side, { min: number; max: number }> = {
   left: { min: 180, max: 600 },

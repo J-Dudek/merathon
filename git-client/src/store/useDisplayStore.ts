@@ -28,7 +28,7 @@ export const SYNC_INTERVALS = [0, 1, 2, 5, 10, 15, 30, 60];
 
 export const defaultDisplay: DisplaySettings = { zoom: 1, terminalFontSize: 12, density: "normal", syncInterval: 5, theme: "system" };
 
-const KEY = "git-client.display";
+const KEY = "merathon.display";
 
 /** Palier de zoom suivant (`direction` = 1) ou précédent (-1), borné aux paliers proposés. */
 export function stepZoom(current: number, direction: 1 | -1): number {

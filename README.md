@@ -181,12 +181,12 @@ La connexion par navigateur utilise le *device flow* : l'application affiche un 
 L'identifiant se saisit dans le formulaire d'ajout de compte (il est mémorisé par instance), ou se fournit par variable d'environnement, lue au lancement de l'application puis, à défaut, intégrée au build :
 
 ```bash
-export GIT_CLIENT_GITHUB_CLIENT_ID=Ov23li...
-export GIT_CLIENT_GITLAB_CLIENT_ID=abc123...
+export MERATHON_GITHUB_CLIENT_ID=Ov23li...
+export MERATHON_GITLAB_CLIENT_ID=abc123...
 npm run tauri dev     # à lancer depuis ce même terminal
 ```
 
-En CI, le workflow de release intègre au binaire les variables (ou secrets) de dépôt `GIT_CLIENT_GITHUB_CLIENT_ID` et `GIT_CLIENT_GITLAB_CLIENT_ID`.
+En CI, le workflow de release intègre au binaire les variables (ou secrets) de dépôt `MERATHON_GITHUB_CLIENT_ID` et `MERATHON_GITLAB_CLIENT_ID` (les anciens noms `GIT_CLIENT_…` restent acceptés, au lancement comme au build).
 
 Les tokens GitLab expirent au bout de 2 h : ils sont renouvelés automatiquement grâce au refresh token.
 
@@ -246,6 +246,8 @@ Les installeurs sont générés dans `git-client/src-tauri/target/release/bundle
   4. génération des paquets Linux (`.deb`, `.AppImage`) et Windows (`.msi`, `.exe`) puis publication automatique de la release GitHub, une fois tous les paquets prêts (si une plateforme échoue, la release reste en brouillon).
 
 La branche `main` étant protégée, le commit de version est poussé avec le secret `RELEASE_TOKEN` : un token autorisé à contourner la protection (GitHub App ou token *fine-grained* limité à ce dépôt, permission « Contents : read and write »).
+
+Pour prévenir les utilisateurs d'un point particulier d'une version (action à faire après la mise à jour, changement de nom…), ajouter au corps d'un commit une ligne `Release-Note: le message`. Elle est reprise en tête des notes de version, dans une rubrique « À savoir », et s'affiche donc aussi dans la fenêtre de mise à jour de l'application.
 
 Vérifier localement la prochaine version : `node git-client/scripts/version.mjs next`.
 

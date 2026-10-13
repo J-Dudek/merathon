@@ -116,6 +116,9 @@ function IdentitySection() {
 
 // ---------------------------------------------------------------- Comptes
 
+const tokenHelpLabel = (kind: Kind) =>
+  `Créer un token (${kind === "github" ? "scopes repo, read:user, workflow" : "scopes api, read_user, write_repository"})`;
+
 function tokenHelpUrl(kind: Kind, url: string): string {
   if (kind === "github") {
     return "https://github.com/settings/tokens/new?scopes=repo,read:user,workflow&description=Merathon";
@@ -123,7 +126,7 @@ function tokenHelpUrl(kind: Kind, url: string): string {
   return `${url}/-/user_settings/personal_access_tokens?name=Merathon&scopes=api,read_user,write_repository`;
 }
 
-const CLIENT_ID_KEY = "git-client.oauth-client-ids";
+const CLIENT_ID_KEY = "merathon.oauth-client-ids";
 
 function savedClientIds(): Record<string, string> {
   try {
@@ -379,7 +382,7 @@ function TokenFields({ kind, url, token, onToken }: {
         title={url ? tokenHelpUrl(kind, url) : MISSING_URL}
         onClick={() => url && openUrl(tokenHelpUrl(kind, url))}
       >
-        Créer un token ({kind === "github" ? "scopes repo, read:user, workflow" : "scopes api, read_user, write_repository"}) ↗
+        {tokenHelpLabel(kind)} ↗
       </button>
     </>
   );
@@ -440,6 +443,7 @@ function AccountRow({ account }: { account: ForgeAccount }) {
     const result = await ask({
       title: `Nouveau token pour ${account.label}`,
       input: { placeholder: "Token d'accès personnel", secret: true },
+      link: { label: tokenHelpLabel(account.provider), url: tokenHelpUrl(account.provider, account.base_url) },
       confirmLabel: "Enregistrer",
     });
     const token = result?.value.trim();

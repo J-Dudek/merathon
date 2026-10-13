@@ -142,7 +142,7 @@ export const useTabsStore = create<TabsStore>((set, get) => {
   };
 });
 
-const SESSION_KEY = "git-client.open-tabs";
+const SESSION_KEY = "merathon.open-tabs";
 
 interface Session {
   paths: string[];

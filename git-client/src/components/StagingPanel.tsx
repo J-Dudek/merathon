@@ -49,7 +49,7 @@ function interactiveHint(stop: InteractiveStop, conflicts: number): string {
   return "Conflits résolus : clique sur Continuer pour créer le commit et poursuivre.";
 }
 
-const TREE_KEY = "git-client.stagingTree";
+const TREE_KEY = "merathon.stagingTree";
 
 /** Section du panneau : conflits, non indexé, indexé. */
 type Section = "c" | "u" | "s";

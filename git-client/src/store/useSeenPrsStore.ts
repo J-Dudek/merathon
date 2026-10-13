@@ -19,7 +19,7 @@ export type PrFreshness =
   | { kind: "read" }
   | { kind: "updated"; commits: boolean; comments: boolean };
 
-const KEY = "git-client.seen-prs";
+const KEY = "merathon.seen-prs";
 const MAX_SEEN = 1000;
 
 /** Début des clés de toutes les PR d'un projet. */

@@ -12,7 +12,7 @@ export type CenterView =
   | { kind: "diff"; path: string; source: { type: "workdir"; staged: boolean } | { type: "commit"; hash: string } }
   | { kind: "conflict"; path: string };
 
-const RECENT_KEY = "git-client.recent-repos";
+const RECENT_KEY = "merathon.recent-repos";
 const MAX_RECENT = 10;
 
 function loadRecent(): string[] {

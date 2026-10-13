@@ -83,7 +83,7 @@ export default function App() {
   // Fenêtre ouverte sur un dépôt précis (ex. un sous-module) : voir window.rs.
   // La fenêtre principale rouvre les onglets de la session précédente et les mémorise.
   useEffect(() => {
-    const repo = (window as { __GIT_CLIENT_OPEN_REPO__?: string | null }).__GIT_CLIENT_OPEN_REPO__;
+    const repo = (window as { __MERATHON_OPEN_REPO__?: string | null }).__MERATHON_OPEN_REPO__;
     if (repo) openRepoAt(repo);
     if (getCurrentWindow().label === "main") return persistTabSession(!repo);
   }, []);

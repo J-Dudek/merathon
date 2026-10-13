@@ -18,10 +18,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
 const NO_RELEASE = new Set(["docs", "ci", "test", "chore", "style"]);
+const NOTE_PREFIX = "release-note:";
 const RANK = { patch: 1, minor: 2, major: 3 };
 const CHANGELOG_TITLE = "# Changelog\n\nToutes les évolutions notables de Merathon, générées à partir des messages de commit.\n";
 /** Rubriques du changelog, dans l'ordre d'affichage ; les autres types vont dans « Autres changements ». */
 const SECTIONS = [
+  ["note", "À savoir"],
   ["breaking", "⚠ Changements incompatibles"],
   ["feat", "Nouveautés"],
   ["fix", "Corrections"],
@@ -70,11 +72,11 @@ export function maxVersion(a, b) {
   return a;
 }
 
-/** Remplace la version du paquet `git-client` dans Cargo.toml / Cargo.lock. */
+/** Remplace la version du paquet `merathon` dans Cargo.toml / Cargo.lock. */
 export function setCargoVersion(content, version, { lock = false } = {}) {
   if (lock) {
-    const re = /(\[\[package\]\]\nname = "git-client"\nversion = ")[^"]+(")/;
-    if (!re.test(content)) throw new Error("Paquet git-client introuvable dans Cargo.lock");
+    const re = /(\[\[package\]\]\nname = "merathon"\nversion = ")[^"]+(")/;
+    if (!re.test(content)) throw new Error("Paquet merathon introuvable dans Cargo.lock");
     return content.replace(re, `$1${version}$2`);
   }
   const re = /(\[package\][^[]*?\nversion = ")[^"]+(")/;
@@ -92,14 +94,29 @@ export function parseCommit(message) {
 }
 
 /**
+ * Messages destinés aux utilisateurs, portés par un commit : lignes « Release-Note: … » de son corps
+ * (une par message). Ils ouvrent les notes de version, donc aussi la fenêtre de mise à jour de l'application.
+ */
+export function commitNotes(message) {
+  return message
+    .split("\n")
+    .slice(1)
+    .filter((line) => line.toLowerCase().startsWith(NOTE_PREFIX))
+    .map((line) => line.slice(NOTE_PREFIX.length).trim())
+    .filter(Boolean);
+}
+
+/**
  * Notes de version (Markdown, sans titre) : commits regroupés par rubrique.
- * Les commits sans impact applicatif (docs, ci, chore…) et les merges sont omis.
+ * Les commits sans impact applicatif (docs, ci, chore…) et les merges sont omis,
+ * mais les messages « Release-Note: » de tout commit (hors merge) sont repris dans « À savoir ».
  * `commits` : [{ hash, message }] ; `repoUrl` (optionnel) ajoute un lien vers chaque commit.
  */
 export function releaseNotes(commits, { repoUrl } = {}) {
   const groups = new Map(SECTIONS.map(([key]) => [key, []]));
   for (const { hash, message } of commits) {
     if (/^Merge (pull request|branch|remote-tracking branch) /.test(message)) continue;
+    groups.get("note").push(...commitNotes(message).map((note) => `- ${note}`));
     if (!bumpForCommit(message)) continue;
     const commit = parseCommit(message);
     const scope = commit.scope ? `**${commit.scope} :** ` : "";

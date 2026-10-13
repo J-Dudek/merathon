@@ -1,3 +1,5 @@
+// En premier : reprend les réglages de l'ancien nom avant que les stores ne les lisent.
+import "./lib/migrateStorage";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";

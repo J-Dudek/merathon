@@ -692,17 +692,19 @@ fn client_id_default(runtime: Option<String>, built_in: Option<&str>) -> Option<
         .filter(|id| !id.is_empty())
 }
 
-/// Identifiants client OAuth par défaut (GIT_CLIENT_GITHUB_CLIENT_ID, GIT_CLIENT_GITLAB_CLIENT_ID).
+/// Identifiants client OAuth par défaut (MERATHON_GITHUB_CLIENT_ID, MERATHON_GITLAB_CLIENT_ID).
+/// Les anciens noms GIT_CLIENT_* restent acceptés.
 #[tauri::command]
 pub fn oauth_defaults() -> OAuthDefaults {
+    let env = |name: &str, legacy: &str| std::env::var(name).or_else(|_| std::env::var(legacy)).ok();
     OAuthDefaults {
         github: client_id_default(
-            std::env::var("GIT_CLIENT_GITHUB_CLIENT_ID").ok(),
-            option_env!("GIT_CLIENT_GITHUB_CLIENT_ID"),
+            env("MERATHON_GITHUB_CLIENT_ID", "GIT_CLIENT_GITHUB_CLIENT_ID"),
+            option_env!("MERATHON_GITHUB_CLIENT_ID").or(option_env!("GIT_CLIENT_GITHUB_CLIENT_ID")),
         ),
         gitlab: client_id_default(
-            std::env::var("GIT_CLIENT_GITLAB_CLIENT_ID").ok(),
-            option_env!("GIT_CLIENT_GITLAB_CLIENT_ID"),
+            env("MERATHON_GITLAB_CLIENT_ID", "GIT_CLIENT_GITLAB_CLIENT_ID"),
+            option_env!("MERATHON_GITLAB_CLIENT_ID").or(option_env!("GIT_CLIENT_GITLAB_CLIENT_ID")),
         ),
     }
 }

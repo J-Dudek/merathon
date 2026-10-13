@@ -1420,30 +1420,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "git-client"
-version = "2.2.0"
-dependencies = [
- "git2",
- "keyring",
- "portable-pty",
- "rustls",
- "rustls-native-certs",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "tauri-plugin-process",
- "tauri-plugin-updater",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "ureq",
- "webpki-roots 1.0.9",
-]
-
-[[package]]
 name = "git2"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2330,6 +2306,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "merathon"
+version = "2.3.0"
+dependencies = [
+ "git2",
+ "keyring",
+ "portable-pty",
+ "rustls",
+ "rustls-native-certs",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "tauri-plugin-process",
+ "tauri-plugin-updater",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "ureq",
+ "webpki-roots 1.0.9",
 ]
 
 [[package]]

@@ -2,6 +2,21 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.3.0](https://github.com/J-Dudek/merathon/compare/v2.2.0...v2.3.0) (2026-10-13)
+
+### À savoir
+
+- Attention, sous Linux avec le paquet .deb (Debian, Ubuntu, WSL) : après cette mise à jour, il se peut que Merathon ne se rouvre pas tout seul. Relance-le à la main ; la commande git-client devient merathon. Windows et AppImage ne sont pas concernés.
+
+### Nouveautés
+
+- link to the token creation page in the change token dialog (3d75680)
+
+### Corrections
+
+- keep the legacy keyring entry when migrating account tokens (e5d2987)
+- install the app under the merathon name instead of git-client (466c411)
+
 ## [2.2.0](https://github.com/J-Dudek/merathon/compare/v2.1.0...v2.2.0) (2026-10-13)
 
 ### Nouveautés

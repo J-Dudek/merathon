@@ -42,7 +42,7 @@ fn workdir(repo: &Repository) -> Result<PathBuf, GitError> {
 /// Helper d'identification transmis à `git` : ne répond que pour l'hôte du compte, en HTTPS
 /// (un `.lfsconfig` pointant vers un autre serveur n'obtient rien). Le token passe par
 /// l'environnement du processus, jamais par la ligne de commande.
-const CREDENTIAL_HELPER: &str = r#"!f() { test "$1" = get || exit 0; h=; p=; while IFS= read -r l; do [ -z "$l" ] && break; case "$l" in host=*) h="${l#host=}";; protocol=*) p="${l#protocol=}";; esac; done; h=$(printf %s "${h%%:*}" | tr A-Z a-z); [ "$h" = "$GIT_CLIENT_HOST" ] || exit 0; [ "$p" = https ] || [ "$GIT_CLIENT_ALLOW_HTTP" = 1 ] || exit 0; echo "username=$GIT_CLIENT_USERNAME"; echo "password=$GIT_CLIENT_TOKEN"; }; f"#;
+const CREDENTIAL_HELPER: &str = r#"!f() { test "$1" = get || exit 0; h=; p=; while IFS= read -r l; do [ -z "$l" ] && break; case "$l" in host=*) h="${l#host=}";; protocol=*) p="${l#protocol=}";; esac; done; h=$(printf %s "${h%%:*}" | tr A-Z a-z); [ "$h" = "$MERATHON_HOST" ] || exit 0; [ "$p" = https ] || [ "$MERATHON_ALLOW_HTTP" = 1 ] || exit 0; echo "username=$MERATHON_USERNAME"; echo "password=$MERATHON_TOKEN"; }; f"#;
 
 /// Credential helpers de la configuration globale / système (jamais ceux du dépôt, dont la
 /// configuration locale pourrait lancer une commande arbitraire).
@@ -102,10 +102,10 @@ fn git(dir: &Path, creds: Option<&Credentials>) -> Command {
     if let Some(c) = creds {
         cmd.arg("-c")
             .arg(format!("credential.helper={CREDENTIAL_HELPER}"))
-            .env("GIT_CLIENT_USERNAME", &c.username)
-            .env("GIT_CLIENT_TOKEN", &c.token)
-            .env("GIT_CLIENT_HOST", c.host.to_ascii_lowercase())
-            .env("GIT_CLIENT_ALLOW_HTTP", if c.allow_http { "1" } else { "0" });
+            .env("MERATHON_USERNAME", &c.username)
+            .env("MERATHON_TOKEN", &c.token)
+            .env("MERATHON_HOST", c.host.to_ascii_lowercase())
+            .env("MERATHON_ALLOW_HTTP", if c.allow_http { "1" } else { "0" });
     }
     for helper in trusted_credential_helpers() {
         cmd.arg("-c").arg(format!("credential.helper={helper}"));

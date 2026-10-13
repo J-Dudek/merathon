@@ -25,7 +25,7 @@ const MIN_HEIGHT = 200;
 /** Marge gardée autour de la fenêtre agrandie ou redimensionnée. */
 const MARGIN = 16;
 
-const storageKey = (key: string) => `git-client.modal.${key}`;
+const storageKey = (key: string) => `merathon.modal.${key}`;
 
 function loadSize(key?: string): ModalSize {
   if (!key) return { maximized: false };

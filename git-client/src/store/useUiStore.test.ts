@@ -20,6 +20,6 @@ describe("side panel widths", () => {
     useUiStore.getState().setSideWidth("right", 400);
 
     expect(useUiStore.getState().sideWidths).toEqual({ left: 180, right: 400 });
-    expect(JSON.parse(localStorage.getItem("git-client.side-widths")!)).toEqual({ left: 180, right: 400 });
+    expect(JSON.parse(localStorage.getItem("merathon.side-widths")!)).toEqual({ left: 180, right: 400 });
   });
 });

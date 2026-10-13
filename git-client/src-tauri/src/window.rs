@@ -17,7 +17,7 @@ pub fn open_new_window(app: &AppHandle, repo: Option<&str>) -> Result<(), String
 
     // Le dépôt à ouvrir est transmis au frontend avant le chargement de la page.
     let init = format!(
-        "window.__GIT_CLIENT_OPEN_REPO__ = {};",
+        "window.__MERATHON_OPEN_REPO__ = {};",
         serde_json::to_string(&repo).map_err(|e| e.to_string())?
     );
 

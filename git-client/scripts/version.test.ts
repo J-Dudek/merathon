@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 // @ts-expect-error module JavaScript sans déclarations de types
 import {
-  bumpForCommit, bumpForCommits, changelogSection, incrementVersion, maxVersion, prependChangelog, releaseNotes, setCargoVersion,
+  bumpForCommit, bumpForCommits, changelogSection, commitNotes, incrementVersion, maxVersion, prependChangelog, releaseNotes, setCargoVersion,
 } from "./version.mjs";
 
 describe("bumpForCommit", () => {
@@ -50,17 +50,17 @@ describe("versions", () => {
 
 describe("setCargoVersion", () => {
   it("met à jour uniquement la section [package] de Cargo.toml", () => {
-    const toml = '[package]\nname = "git-client"\nversion = "0.1.0"\n\n[dependencies]\nserde = { version = "1" }\n';
+    const toml = '[package]\nname = "merathon"\nversion = "0.1.0"\n\n[dependencies]\nserde = { version = "1" }\n';
     const out = setCargoVersion(toml, "0.2.0");
     expect(out).toContain('version = "0.2.0"');
     expect(out).toContain('serde = { version = "1" }');
   });
 
-  it("met à jour uniquement le paquet git-client de Cargo.lock", () => {
-    const lock = '[[package]]\nname = "git2"\nversion = "0.21.0"\n\n[[package]]\nname = "git-client"\nversion = "0.1.0"\n';
+  it("met à jour uniquement le paquet merathon de Cargo.lock", () => {
+    const lock = '[[package]]\nname = "git2"\nversion = "0.21.0"\n\n[[package]]\nname = "merathon"\nversion = "0.1.0"\n';
     const out = setCargoVersion(lock, "1.0.0", { lock: true });
     expect(out).toContain('name = "git2"\nversion = "0.21.0"');
-    expect(out).toContain('name = "git-client"\nversion = "1.0.0"');
+    expect(out).toContain('name = "merathon"\nversion = "1.0.0"');
   });
 });
 
@@ -91,6 +91,25 @@ describe("releaseNotes", () => {
 
   it("signale une version sans changement visible", () => {
     expect(releaseNotes([{ hash: "a".repeat(40), message: "chore: deps" }])).toBe("Maintenance interne, sans changement visible.\n");
+  });
+});
+
+describe("commitNotes", () => {
+  it("lit les lignes Release-Note du corps du commit", () => {
+    expect(commitNotes("fix: x\n\ndétails\n\nRelease-Note: relance l'application\nrelease-note:  autre message \nCo-Authored-By: a")).toEqual([
+      "relance l'application",
+      "autre message",
+    ]);
+    expect(commitNotes("fix: Release-Note: dans le titre")).toEqual([]);
+  });
+
+  it("ouvre les notes de version, même portée par un commit sans release", () => {
+    const notes = releaseNotes([
+      { hash: "a".repeat(40), message: "fix: crash au démarrage" },
+      { hash: "b".repeat(40), message: "ci: pipeline\n\nRelease-Note: relance l'application après la mise à jour" },
+      { hash: "c".repeat(40), message: "Merge pull request #3 from x/y\n\nRelease-Note: ignorée" },
+    ]);
+    expect(notes).toBe(`### À savoir\n\n- relance l'application après la mise à jour\n\n### Corrections\n\n- crash au démarrage (aaaaaaa)\n`);
   });
 });
 
