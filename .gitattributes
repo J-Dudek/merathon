@@ -1,0 +1,3 @@
+# Fins de ligne LF partout, même sur Windows (core.autocrlf=true) : certains outils
+# (ex. Vitest avec le shebang de scripts/version.mjs) échouent sur des fichiers en CRLF.
+* text=auto eol=lf

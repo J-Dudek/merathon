@@ -1,0 +1,45 @@
+[package]
+name = "git-client"
+version = "1.9.0"
+description = "Merathon — Git Repository Manager : client Git graphique de bureau"
+authors = ["Julien Dudek"]
+license = "MIT"
+repository = "https://github.com/J-Dudek/git-management"
+homepage = "https://github.com/J-Dudek/git-management"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "git_client_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+# Mises à jour automatiques (téléchargement signé depuis les releases GitHub) et redémarrage.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+git2 = { version = "0.21", features = ["https", "ssh"] }
+tokio = { version = "1", features = ["full"] }
+thiserror = "1"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+ureq = { version = "2", features = ["json"] }
+# TLS des appels aux forges : autorités du système (certificats d'entreprise) en plus de celles de Mozilla.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8"
+webpki-roots = "1"
+portable-pty = "0.9"
+
+[dev-dependencies]
+tempfile = "3"
+

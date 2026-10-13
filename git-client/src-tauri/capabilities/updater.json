@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "updater",
+  "description": "Mises à jour : vérification, installation et redémarrage, depuis toutes les fenêtres (« Rechercher des mises à jour… » est dans chaque fenêtre ; la vérification au démarrage reste limitée à la fenêtre principale par le code)",
+  "windows": ["main", "repo-*"],
+  "permissions": [
+    "updater:default",
+    "process:allow-restart"
+  ]
+}

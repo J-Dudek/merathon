@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+/*
+ * Thèmes : `data-theme` (« dark » ou « light ») est posé sur <html> d'après les préférences (voir lib/theme.ts).
+ * Les composants n'utilisent que ces variables, jamais de couleur en dur :
+ * - surfaces : --color-bg-primary (fond), --color-bg-secondary (panneaux), --color-bg-elevated (fenêtres, menus) ;
+ * - texte : --color-text, --color-muted ; accent : --color-accent ;
+ * - overlay : voile de survol, bordures et séparateurs (blanc en sombre, encre en clair), toujours avec opacité ;
+ * - shade : creux des champs et blocs de code (noir en sombre, blanc en clair), toujours avec opacité.
+ */
+:root,
+:root[data-theme="dark"] {
+  --color-bg-primary: #1a1b26;
+  --color-bg-secondary: #16213e;
+  --color-bg-elevated: #1e2030;
+  --color-bg-info: #1e2a3a;
+  --color-info: #5b8dd9;
+  --color-accent: #e94560;
+  --color-text: #e2e8f0;
+  --color-muted: #718096;
+  --overlay: #ffffff;
+  --shade: #000000;
+  /* Contrôles natifs (select, scrollbars…) */
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --color-bg-primary: #f6f7fb;
+  --color-bg-secondary: #eceff5;
+  --color-bg-elevated: #ffffff;
+  --color-bg-info: #e3ecf8;
+  --color-info: #2f62b4;
+  --color-accent: #d6335a;
+  --color-text: #1e2333;
+  --color-muted: #5f6b80;
+  --overlay: #1e2333;
+  --shade: #ffffff;
+  color-scheme: light;
+
+  /*
+   * Teintes Tailwind pensées pour un fond sombre (texte en 300 / 400, fonds en 900 / 950) :
+   * en clair, elles prennent la nuance symétrique pour rester lisibles. Les 500 à 800 ne changent pas.
+   */
+  --color-red-100: oklch(44.4% 0.177 26.899); /* red-800 */
+  --color-red-200: oklch(44.4% 0.177 26.899); /* red-800 */
+  --color-red-300: oklch(50.5% 0.213 27.518); /* red-700 */
+  --color-red-400: oklch(57.7% 0.245 27.325); /* red-600 */
+  --color-red-900: oklch(80.8% 0.114 19.571); /* red-300 */
+  --color-red-950: oklch(88.5% 0.062 18.334); /* red-200 */
+  --color-orange-100: oklch(47% 0.157 37.304); /* orange-800 */
+  --color-orange-200: oklch(47% 0.157 37.304); /* orange-800 */
+  --color-orange-300: oklch(55.3% 0.195 38.402); /* orange-700 */
+  --color-orange-400: oklch(55.3% 0.195 38.402); /* orange-700 */
+  --color-orange-900: oklch(83.7% 0.128 66.29); /* orange-300 */
+  --color-orange-950: oklch(90.1% 0.076 70.697); /* orange-200 */
+  --color-amber-100: oklch(47.3% 0.137 46.201); /* amber-800 */
+  --color-amber-200: oklch(47.3% 0.137 46.201); /* amber-800 */
+  --color-amber-300: oklch(47.3% 0.137 46.201); /* amber-800 */
+  --color-amber-400: oklch(55.5% 0.163 48.998); /* amber-700 */
+  --color-amber-900: oklch(87.9% 0.169 91.605); /* amber-300 */
+  --color-amber-950: oklch(92.4% 0.12 95.746); /* amber-200 */
+  --color-yellow-100: oklch(47.6% 0.114 61.907); /* yellow-800 */
+  --color-yellow-200: oklch(47.6% 0.114 61.907); /* yellow-800 */
+  --color-yellow-300: oklch(47.6% 0.114 61.907); /* yellow-800 */
+  --color-yellow-400: oklch(55.4% 0.135 66.442); /* yellow-700 */
+  --color-yellow-900: oklch(90.5% 0.182 98.111); /* yellow-300 */
+  --color-yellow-950: oklch(94.5% 0.129 101.54); /* yellow-200 */
+  --color-green-100: oklch(44.8% 0.119 151.328); /* green-800 */
+  --color-green-200: oklch(44.8% 0.119 151.328); /* green-800 */
+  --color-green-300: oklch(52.7% 0.154 150.069); /* green-700 */
+  --color-green-400: oklch(52.7% 0.154 150.069); /* green-700 */
+  --color-green-900: oklch(87.1% 0.15 154.449); /* green-300 */
+  --color-green-950: oklch(92.5% 0.084 155.995); /* green-200 */
+  --color-sky-100: oklch(44.3% 0.11 240.79); /* sky-800 */
+  --color-sky-200: oklch(44.3% 0.11 240.79); /* sky-800 */
+  --color-sky-300: oklch(50% 0.134 242.749); /* sky-700 */
+  --color-sky-400: oklch(58.8% 0.158 241.966); /* sky-600 */
+  --color-sky-900: oklch(82.8% 0.111 230.318); /* sky-300 */
+  --color-sky-950: oklch(90.1% 0.058 230.902); /* sky-200 */
+  --color-blue-100: oklch(42.4% 0.199 265.638); /* blue-800 */
+  --color-blue-200: oklch(42.4% 0.199 265.638); /* blue-800 */
+  --color-blue-300: oklch(48.8% 0.243 264.376); /* blue-700 */
+  --color-blue-400: oklch(54.6% 0.245 262.881); /* blue-600 */
+  --color-blue-900: oklch(80.9% 0.105 251.813); /* blue-300 */
+  --color-blue-950: oklch(88.2% 0.059 254.128); /* blue-200 */
+  --color-purple-100: oklch(43.8% 0.218 303.724); /* purple-800 */
+  --color-purple-200: oklch(43.8% 0.218 303.724); /* purple-800 */
+  --color-purple-300: oklch(49.6% 0.265 301.924); /* purple-700 */
+  --color-purple-400: oklch(55.8% 0.288 302.321); /* purple-600 */
+  --color-purple-900: oklch(82.7% 0.119 306.383); /* purple-300 */
+  --color-purple-950: oklch(90.2% 0.063 306.703); /* purple-200 */
+}
+
+@theme inline {
+  --color-overlay: var(--overlay);
+  --color-shade: var(--shade);
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text);
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* Curseur des préférences : piste remplie jusqu'à la valeur, poignée ronde. */
+.pref-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+.pref-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--color-accent) var(--fill, 0%),
+    color-mix(in srgb, var(--overlay) 12%, transparent) var(--fill, 0%)
+  );
+}
+.pref-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  border: 3px solid var(--color-accent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
+  transition: transform 0.1s;
+}
+.pref-slider:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.pref-slider:focus-visible {
+  outline: none;
+}
+.pref-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
