@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.1.0](https://github.com/J-Dudek/merathon/compare/v2.0.0...v2.1.0) (2026-10-13)
+
+### Nouveautés
+
+- Expand the compatibility matrix (f147f8c)
+
 ## [2.0.0](https://github.com/J-Dudek/merathon/compare/v0.0.1-test...v2.0.0) (2026-10-13)
 
 ### ⚠ Changements incompatibles

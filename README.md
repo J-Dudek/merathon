@@ -31,6 +31,18 @@ Les paquets de chaque version sont publiés dans les [releases GitHub](https://g
 
 Les empreintes SHA-256 de tous les fichiers sont dans `SHA256SUMS.txt`. Une fois installée, l'application se met à jour toute seule.
 
+### Configuration minimale
+
+| | Linux | Windows |
+| --- | --- | --- |
+| **Système** | Ubuntu 22.04, Debian 12, ou toute distribution avec **glibc ≥ 2.35** | Windows 10 ou 11 |
+| **Architecture** | x86_64 (amd64) | x86_64 (64 bits) |
+| **Moteur web** | WebKitGTK 4.1 (`libwebkit2gtk-4.1-0`) et GTK 3 (`libgtk-3-0`), installés automatiquement avec le `.deb` | [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) : déjà présent sur Windows 11, téléchargé par l'installeur sur Windows 10 s'il manque |
+
+Sous Linux, les versions plus anciennes ne sont pas prises en charge : Ubuntu 20.04, par exemple, ne fournit pas `libwebkit2gtk-4.1-0`, et l'installation du `.deb` échoue avec « Depends: libwebkit2gtk-4.1-0 but it is not installable ». L'AppImage a la même exigence de glibc. Sous WSL avec une distribution trop ancienne, le plus simple est d'installer la version Windows.
+
+Les versions jusqu'à la 2.0.0 incluse demandent glibc ≥ 2.39 (Ubuntu 24.04, Debian 13) : sur un système plus ancien, le paquet s'installe mais l'application ne démarre pas (« version `GLIBC_2.39' not found »).
+
 ## Fonctionnalités
 
 - **Dépôts et onglets** : ouvrir, initialiser, cloner (avec la liste des dépôts de tes comptes), dépôts récents. Chaque dépôt s'ouvre dans un **onglet** ; pull, push, fetch… s'appliquent à l'onglet affiché, qui garde son état (sélection, diff, message de commit en cours) quand on passe à un autre. Un dépôt déjà ouvert est simplement réaffiché, et les onglets sont rouverts au démarrage. Plusieurs fenêtres restent possibles.
