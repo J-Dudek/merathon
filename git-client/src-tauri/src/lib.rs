@@ -25,6 +25,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::open_new_window,
             notifications::notify_desktop,
+            notifications::close_desktop_notification,
             commands::open_repository,
             commands::get_repo_info,
             commands::init_repository,

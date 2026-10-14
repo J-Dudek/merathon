@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.4.1](https://github.com/J-Dudek/merathon/compare/v2.4.0...v2.4.1) (2026-10-14)
+
+### Corrections
+
+- remove PR notifications once the PR has been viewed (2396f22)
+
 ## [2.4.0](https://github.com/J-Dudek/merathon/compare/v2.3.0...v2.4.0) (2026-10-14)
 
 ### Nouveautés

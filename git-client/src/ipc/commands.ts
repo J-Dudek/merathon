@@ -39,8 +39,10 @@ export const initRepository = (path: string) => invoke<void>("init_repository", 
 /** `repo` : dépôt à ouvrir directement dans la nouvelle fenêtre. */
 export const openNewWindow = (repo: string | null = null) => invoke<void>("open_new_window", { repo });
 
-/** Notification du système (voir notifications.rs pour Linux). */
-export const notifyDesktop = (title: string, body: string) => invoke<void>("notify_desktop", { title, body });
+/** Notification du système (voir notifications.rs pour Linux) ; son identifiant quand elle peut être retirée ensuite. */
+export const notifyDesktop = (title: string, body: string) => invoke<number | null>("notify_desktop", { title, body });
+/** Retire une notification de la liste du système. */
+export const closeDesktopNotification = (id: number) => invoke<void>("close_desktop_notification", { id });
 
 /** `path` null : identité globale. */
 export const getIdentity = (path: string | null) => invoke<Identity>("get_identity", { path });

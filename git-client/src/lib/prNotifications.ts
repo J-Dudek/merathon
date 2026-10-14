@@ -1,8 +1,8 @@
 import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
-import { notifyDesktop } from "../ipc/commands";
+import { closeDesktopNotification, notifyDesktop } from "../ipc/commands";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useDisplayStore, type NotificationSettings } from "../store/useDisplayStore";
-import { seenKey } from "../store/useSeenPrsStore";
+import { prFreshness, seenKey, useSeenPrsStore, type SeenPr } from "../store/useSeenPrsStore";
 import { useUiStore } from "../store/useUiStore";
 import { cachedMyPullRequests, fetchMyPullRequests, publishMyPullRequests } from "./myPullRequests";
 import type { ForgeAccount, MyPullRequests, PrSummary } from "../types/forge";
@@ -119,11 +119,35 @@ function notificationsAllowed(): Promise<boolean> {
   return permission;
 }
 
+/** PR mentionnée par une notification système, sous sa clé de consultation. */
+export interface NotifiedPr {
+  key: string;
+  pr: PrSummary;
+}
+
+/** Notifications système encore affichées (Linux) : retirées quand toutes leurs PR ont été consultées. */
+const shown: { id: number; prs: NotifiedPr[] }[] = [];
+
+/** Notifications dont toutes les PR ont été consultées depuis (dans l'état notifié ou plus récent). */
+export function readNotifications(list: { id: number; prs: NotifiedPr[] }[], seen: Record<string, SeenPr>): number[] {
+  return list.filter((n) => n.prs.every(({ key, pr }) => prFreshness(seen[key], pr).kind === "read")).map((n) => n.id);
+}
+
+// Le dock d'Ubuntu affiche sur l'icône le nombre de notifications de l'appli encore dans la liste de GNOME :
+// une notification sur une PR qu'on vient de consulter y est retirée, sinon le compteur laisse croire à du nouveau.
+useSeenPrsStore.subscribe(({ seen }) => {
+  for (const id of readNotifications(shown, seen)) {
+    shown.splice(shown.findIndex((n) => n.id === id), 1);
+    closeDesktopNotification(id).catch((e) => console.warn("Notification non retirée :", e));
+  }
+});
+
 /** Notification système si la fenêtre est en arrière-plan (ou réduite), simple toast sinon. */
-async function deliver(title: string, body: string) {
+async function deliver(title: string, body: string, prs: NotifiedPr[]) {
   if (!document.hasFocus() && (await notificationsAllowed())) {
     try {
-      await notifyDesktop(title, body);
+      const id = await notifyDesktop(title, body);
+      if (id !== null) shown.push({ id, prs });
       return;
     } catch (e) {
       console.warn("Notification système impossible :", e);
@@ -196,7 +220,7 @@ async function refreshAccount(account: ForgeAccount, settings: NotificationSetti
     const events = filterEvents(pullRequestEvents(previous.data, data), settings);
     if (events.length) {
       const { title, body } = notificationText(events, account.provider);
-      await deliver(title, body);
+      await deliver(title, body, events.map(({ pr }) => ({ key: seenKey(account.id, pr.projectPath, pr.number), pr })));
     }
   }
   return data;

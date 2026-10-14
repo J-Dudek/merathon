@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterEvents, notificationText, pullRequestEvents, type PrEvent } from "./prNotifications";
+import { filterEvents, notificationText, pullRequestEvents, readNotifications, type PrEvent } from "./prNotifications";
 import { defaultNotifications } from "../store/useDisplayStore";
 import type { MyPullRequests, PrSummary } from "../types/forge";
 
@@ -61,5 +61,21 @@ describe("notificationText", () => {
     const { title, body } = notificationText(events, "github");
     expect(title).toBe("6 PR mises à jour");
     expect(body.split("\n")).toEqual(["#1 MR 1 : approuvée", "#2 MR 2 : approuvée", "#3 MR 3 : approuvée", "#4 MR 4 : approuvée", "… et 2 autres"]);
+  });
+});
+
+describe("readNotifications", () => {
+  const seenAt = (updatedAt: string) => ({ head: "h1", updatedAt, at: 0 });
+  const later = "2026-01-02T00:00:00Z";
+  const notified = [
+    { id: 1, prs: [{ key: "a", pr: pr(1, { updatedAt: later }) }] },
+    { id: 2, prs: [{ key: "a", pr: pr(1, { updatedAt: later }) }, { key: "b", pr: pr(2) }] },
+  ];
+
+  it("retire une notification quand toutes ses PR ont été consultées dans l'état notifié", () => {
+    expect(readNotifications(notified, {})).toEqual([]);
+    expect(readNotifications(notified, { a: seenAt("2026-01-01T00:00:00Z") })).toEqual([]);
+    expect(readNotifications(notified, { a: seenAt(later) })).toEqual([1]);
+    expect(readNotifications(notified, { a: seenAt(later), b: seenAt("2026-01-01T00:00:00Z") })).toEqual([1, 2]);
   });
 });
