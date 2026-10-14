@@ -12,6 +12,20 @@ export interface DisplaySettings {
   syncInterval: number;
   /** Thème de couleurs ; « system » suit le réglage clair / sombre du système. */
   theme: ThemePreference;
+  /** Notifications de l'activité des PR / MR à traiter ou ouvertes par moi (relevée à chaque synchronisation). */
+  notifications: NotificationSettings;
+}
+
+/** Interrupteur général, puis un réglage par type d'événement. */
+export interface NotificationSettings {
+  enabled: boolean;
+  opened: boolean;
+  commits: boolean;
+  comments: boolean;
+  ci: boolean;
+  review: boolean;
+  /** Pastille sur l'icône de l'application : nombre de PR / MR avec du nouveau. */
+  badge: boolean;
 }
 
 export type ThemePreference = "system" | "dark" | "light";
@@ -26,7 +40,11 @@ export const TERMINAL_FONT_MAX = 24;
 /** Intervalles de synchronisation proposés, en minutes (0 : désactivée). */
 export const SYNC_INTERVALS = [0, 1, 2, 5, 10, 15, 30, 60];
 
-export const defaultDisplay: DisplaySettings = { zoom: 1, terminalFontSize: 12, density: "normal", syncInterval: 5, theme: "system" };
+export const defaultNotifications: NotificationSettings = { enabled: true, opened: true, commits: true, comments: true, ci: true, review: true, badge: true };
+
+export const defaultDisplay: DisplaySettings = {
+  zoom: 1, terminalFontSize: 12, density: "normal", syncInterval: 5, theme: "system", notifications: defaultNotifications,
+};
 
 const KEY = "merathon.display";
 
@@ -47,7 +65,14 @@ export function sanitize(raw: unknown): DisplaySettings {
     density: r.density && r.density in ROW_HEIGHTS ? r.density : defaultDisplay.density,
     syncInterval: SYNC_INTERVALS.includes(r.syncInterval as number) ? r.syncInterval! : defaultDisplay.syncInterval,
     theme: THEMES.includes(r.theme as ThemePreference) ? r.theme! : defaultDisplay.theme,
+    notifications: sanitizeNotifications(r.notifications),
   };
+}
+
+function sanitizeNotifications(raw: unknown): NotificationSettings {
+  const r = (raw ?? {}) as Partial<Record<keyof NotificationSettings, unknown>>;
+  const keys = Object.keys(defaultNotifications) as (keyof NotificationSettings)[];
+  return Object.fromEntries(keys.map((k) => [k, typeof r[k] === "boolean" ? r[k] : defaultNotifications[k]])) as unknown as NotificationSettings;
 }
 
 function load(): DisplaySettings {
@@ -74,8 +99,8 @@ export const useDisplayStore = create<DisplayStore>((set, get) => {
     }
   }
   const current = (): DisplaySettings => {
-    const { zoom, terminalFontSize, density, syncInterval, theme } = get();
-    return { zoom, terminalFontSize, density, syncInterval, theme };
+    const { zoom, terminalFontSize, density, syncInterval, theme, notifications } = get();
+    return { zoom, terminalFontSize, density, syncInterval, theme, notifications };
   };
   return {
     ...load(),

@@ -47,6 +47,20 @@ pub fn create_commit(repo: &Repository, message: &str, amend: bool) -> Result<St
     Ok(oid.to_string())
 }
 
+/// Remplace le message du dernier commit sans toucher à son contenu : les fichiers indexés n'y sont pas ajoutés.
+pub fn reword_head(repo: &Repository, message: &str) -> Result<String, GitError> {
+    if message.trim().is_empty() {
+        return Err(GitError::Other("Le message de commit est vide".into()));
+    }
+    if repo.state() != RepositoryState::Clean {
+        return Err(GitError::Other("Termine d'abord l'opération en cours (merge, rebase…)".into()));
+    }
+    let head = repo.head()?.peel_to_commit()?;
+    let sig = signature(repo)?;
+    let oid = head.amend(Some("HEAD"), None, Some(&sig), None, Some(message), None)?;
+    Ok(oid.to_string())
+}
+
 /// Lit .git/MERGE_HEAD (`mergehead_foreach` exige un dépôt mutable).
 fn merge_heads(repo: &Repository) -> Result<Vec<Oid>, GitError> {
     let raw = std::fs::read_to_string(repo.path().join("MERGE_HEAD"))?;
@@ -76,6 +90,23 @@ mod tests {
         let mut index = repo.index().unwrap();
         index.add_path(std::path::Path::new(file)).unwrap();
         index.write().unwrap();
+    }
+
+    #[test]
+    fn reword_keeps_the_tree_and_ignores_the_index() {
+        let (dir, repo) = repo_with_identity();
+        fs::write(dir.path().join("a.txt"), "a").unwrap();
+        stage(&repo, "a.txt");
+        create_commit(&repo, "first", false).unwrap();
+        let before = repo.head().unwrap().peel_to_commit().unwrap();
+        fs::write(dir.path().join("b.txt"), "b").unwrap();
+        stage(&repo, "b.txt");
+
+        reword_head(&repo, "renamed").unwrap();
+        let after = repo.head().unwrap().peel_to_commit().unwrap();
+        assert_eq!(after.message().ok(), Some("renamed"));
+        assert_eq!(after.tree_id(), before.tree_id());
+        assert_ne!(after.id(), before.id());
     }
 
     #[test]

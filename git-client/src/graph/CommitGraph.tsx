@@ -7,14 +7,18 @@ import { GraphCanvas, H_PADDING, LANE_WIDTH } from "./GraphCanvas";
 import { ROW_HEIGHTS, useDisplayStore } from "../store/useDisplayStore";
 import { ContextMenu, useContextMenu, type MenuEntry } from "../components/ContextMenu";
 import {
-  checkoutCommit, cherryPick, createBranch, createTag, interactiveRebase, mergeBranch, rebaseOnto, rebaseTodo, resetTo,
-  revertCommit,
+  checkoutCommit, cherryPick, createBranch, createTag, getCommitDetails, interactiveRebase, mergeBranch, rebaseOnto, rebaseTodo,
+  resetTo, revertCommit, rewordHead,
 } from "../ipc/commands";
-import { reportInteractive, reportMerge, runGit } from "../lib/actions";
+import { errorMessage, reportInteractive, reportMerge, runGit } from "../lib/actions";
+import { ancestorsOf } from "../lib/ancestry";
+import { EMPTY_FILTER, effectiveFilter, filterGraph, type GraphFilter } from "../lib/graphFilter";
+import { useGraphFilterStore } from "../store/useGraphFilterStore";
+import { useBranchMenus } from "../components/branchMenus";
 import { localOnlyBranches } from "../lib/branches";
 import { squashPlan } from "../lib/squash";
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
-import type { CommitInfo, RefLabel } from "../types/git";
+import type { BranchInfo, CommitInfo, MergeResult, RefLabel } from "../types/git";
 
 const INFO_OFFSET = 20;
 const OVERSCAN = 10;
@@ -29,7 +33,15 @@ export function CommitGraph() {
   const repoPath = useRepoStore((s) => s.repoPath);
   const branches = useRepoStore((s) => s.branches);
   const localOnly = useMemo(() => localOnlyBranches(branches), [branches]);
-  const visibleCommits = useMemo(() => filterCommits(commits, searchQuery), [commits, searchQuery]);
+  const setComparison = useRepoStore((s) => s.setComparison);
+  const { localMenu, remoteMenu, branchActions, dialog: pullRequestDialog } = useBranchMenus();
+  // Commits déjà contenus dans la branche courante : cherry-pick, merge et rebase sur eux n'ont pas de sens.
+  const headAncestors = useMemo(() => ancestorsOf(commits, info?.head_hash), [commits, info?.head_hash]);
+  // Branches masquées ou en solo (menu d'une branche), puis recherche.
+  const storedFilter = useGraphFilterStore((s) => (repoPath ? s.filters[repoPath] : undefined));
+  const graphFilter = useMemo(() => effectiveFilter(storedFilter ?? EMPTY_FILTER, branches), [storedFilter, branches]);
+  const shownCommits = useMemo(() => filterGraph(commits, graphFilter), [commits, graphFilter]);
+  const visibleCommits = useMemo(() => filterCommits(shownCommits, searchQuery), [shownCommits, searchQuery]);
   // Le conteneur observé n'existe que s'il y a des commits à afficher.
   const hasCommits = visibleCommits.length > 0;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -103,12 +115,161 @@ export function CommitGraph() {
     else reportInteractive(outcome);
   }
 
+  /** Commits sélectionnés, du plus ancien au plus récent (le graphe est trié topologiquement, plus récent en haut). */
+  function oldestFirst(hashes: string[]): CommitInfo[] {
+    return commits.filter((c) => hashes.includes(c.hash)).reverse();
+  }
+
+  async function cherryPickSelected(hashes: string[]) {
+    if (!repoPath) return;
+    const path = repoPath;
+    const ui = useUiStore.getState();
+    const head = info?.head_branch ?? "HEAD";
+    const picked = oldestFirst(hashes);
+    let done = 0;
+    let stopped: MergeResult | undefined;
+    const ok = await runGit(async () => {
+      for (const c of picked) {
+        const result = await cherryPick(path, c.hash).catch((e) => {
+          throw new Error(`${errorMessage(e)} (${c.short_hash} ; ${done}/${picked.length} commits appliqués)`);
+        });
+        if (!result.success) {
+          stopped = result;
+          break;
+        }
+        done++;
+      }
+      return true;
+    }, { busy: "Cherry-pick…" });
+    clearMulti();
+    if (!ok) return;
+    if (!stopped) {
+      ui.notify("success", `${picked.length} commits cherry-pickés dans ${head}`);
+      return;
+    }
+    // Comme reportMerge : le panneau de droite affiche les fichiers en conflit à résoudre.
+    setSelectedCommit(null);
+    const rest = picked.slice(done + 1).map((c) => c.short_hash);
+    ui.notify(
+      "info",
+      `Conflit en appliquant ${picked[done].short_hash} (${done}/${picked.length} déjà appliqués).` +
+        (rest.length ? ` Restent à cherry-picker après résolution : ${rest.join(", ")}.` : ""),
+    );
+  }
+
+  function compareSelected(hashes: string[]) {
+    const [base, head] = oldestFirst(hashes);
+    if (base && head) setComparison({ base, head });
+  }
+
   function multiMenu(hashes: string[]): MenuEntry[] {
+    const head = info?.head_branch ?? "HEAD";
+    const selected = commits.filter((c) => hashes.includes(c.hash));
+    const merges = selected.some((c) => c.parents.length > 1);
+    const already = selected.some((c) => headAncestors.has(c.hash));
+    let pickHint: string | undefined;
+    if (merges) pickHint = "Impossible avec un commit de merge dans la sélection";
+    else if (already) pickHint = `Certains commits sont déjà dans ${head}`;
     return [
+      ...(hashes.length === 2
+        ? [{ label: "Comparer les 2 commits", hint: "Fichiers modifiés de l'un à l'autre", action: () => compareSelected(hashes) }]
+        : []),
+      {
+        label: `Cherry-pick des ${hashes.length} commits dans ${head}`,
+        hint: pickHint ?? "Du plus ancien au plus récent",
+        disabled: merges || already,
+        action: () => cherryPickSelected(hashes),
+      },
       { label: `Squasher les ${hashes.length} commits sélectionnés…`, action: () => squashSelected(hashes) },
       "separator",
       { label: "Annuler la sélection", action: clearMulti },
     ];
+  }
+
+  /** Modifier le message, amend et annuler : seulement sur le dernier commit de la branche courante. */
+  function headCommitEntries(commit: CommitInfo): MenuEntry[] {
+    const head = info?.head_branch;
+    if (!repoPath || !head || commit.hash !== info?.head_hash) return [];
+    const path = repoPath;
+    const ui = useUiStore.getState();
+    const headBranch = branches.find((b) => b.is_head && !b.is_remote);
+    const pushed = !!headBranch?.upstream && headBranch.ahead === 0;
+    const pushedWarning = pushed ? `\nCe commit est déjà sur ${headBranch!.upstream} : il faudra ensuite un push forcé.` : "";
+    const fullMessage = async () => (await getCommitDetails(path, commit.hash)).message.trim();
+    const { setCommitDraft } = useRepoStore.getState();
+
+    return [
+      { header: `Dernier commit de ${head}` },
+      {
+        label: "Modifier le message…",
+        action: async () => {
+          const message = await runGit(fullMessage, { refresh: false });
+          if (message === undefined) return;
+          const result = await ui.ask({
+            title: "Modifier le message du commit",
+            message: `Le contenu du commit ne change pas ; les fichiers indexés n'y sont pas ajoutés.${pushedWarning}`,
+            input: { multiline: true, initial: message },
+            confirmLabel: "Modifier",
+          });
+          const next = result?.value.trim();
+          if (next && next !== message) await runGit(() => rewordHead(path, next), { success: "Message modifié" });
+        },
+      },
+      {
+        label: "Amend : ajouter les modifications indexées…",
+        hint: "Ouvre le panneau de commit en mode amend",
+        action: async () => {
+          const message = await runGit(fullMessage, { refresh: false });
+          if (message === undefined) return;
+          const [summary, ...rest] = message.split("\n");
+          const draft = useRepoStore.getState().commitDraft;
+          setCommitDraft(draft.summary.trim() ? { amend: true } : { amend: true, summary, description: rest.join("\n").trim() });
+          setSelectedCommit(null);
+        },
+      },
+      {
+        label: "Annuler ce commit",
+        hint: commit.parents.length ? "Ses modifications restent indexées" : "Premier commit du dépôt",
+        disabled: commit.parents.length === 0,
+        action: async () => {
+          const ok = await confirmAction(
+            `Annuler le commit ${commit.short_hash} ?`,
+            `${head} revient au commit précédent ; les modifications restent indexées, prêtes à être commitées à nouveau.${pushedWarning}`,
+          );
+          if (!ok) return;
+          const message = await fullMessage().catch(() => commit.message);
+          const done = await runGit(() => resetTo(path, commit.parents[0], "soft"), { success: "Commit annulé, modifications indexées" });
+          if (done === undefined) return;
+          const [summary, ...rest] = message.split("\n");
+          if (!useRepoStore.getState().commitDraft.summary.trim()) setCommitDraft({ summary, description: rest.join("\n").trim(), amend: false });
+          setSelectedCommit(null);
+        },
+      },
+      "separator",
+    ];
+  }
+
+  /** Branche locale ou distante désignée par une étiquette du graphe. */
+  function branchOf(ref: RefLabel): BranchInfo | undefined {
+    if (ref.kind === "tag") return undefined;
+    return branches.find((b) => b.name === ref.name && b.is_remote === (ref.kind === "remote"));
+  }
+
+  function refMenu(ref: RefLabel): MenuEntry[] | null {
+    const b = branchOf(ref);
+    if (!b) return null;
+    return b.is_remote ? remoteMenu(b) : localMenu(b);
+  }
+
+  /**
+   * Branches portées par le commit, autres que la branche courante : leurs actions principales en tête du menu.
+   * Une branche distante n'apparaît que si sa branche locale n'est pas sur le même commit.
+   */
+  function tipBranchEntries(commit: CommitInfo): MenuEntry[] {
+    const tips = commit.refs.map(branchOf).filter((b): b is BranchInfo => !!b && !b.is_head);
+    const localNames = new Set(tips.filter((b) => !b.is_remote).map((b) => b.upstream ?? ""));
+    const shown = tips.filter((b) => !b.is_remote || !localNames.has(b.name)).slice(0, 2);
+    return shown.flatMap((b): MenuEntry[] => [{ header: `${b.is_remote ? "☁" : "⎇"} ${b.name}` }, ...branchActions(b), "separator"]);
   }
 
   useEffect(() => {
@@ -142,6 +303,8 @@ export function CommitGraph() {
     const head = info?.head_branch ?? "HEAD";
     const ask = useUiStore.getState().ask;
     const isMerge = commit.parents.length > 1;
+    const inHead = headAncestors.has(commit.hash);
+    const inHeadHint = inHead ? `Déjà dans ${head}` : undefined;
 
     const reset = (mode: "soft" | "mixed" | "hard") => async () => {
       const descriptions = {
@@ -154,6 +317,8 @@ export function CommitGraph() {
     };
 
     return [
+      ...headCommitEntries(commit),
+      ...tipBranchEntries(commit),
       {
         label: "Checkout ce commit (HEAD détaché)",
         action: () => runGit(() => checkoutCommit(path, commit.hash)),
@@ -190,7 +355,8 @@ export function CommitGraph() {
       "separator",
       {
         label: `Cherry-pick dans ${head}`,
-        disabled: isMerge,
+        disabled: isMerge || inHead,
+        hint: inHeadHint,
         action: async () => reportMerge(await runGit(() => cherryPick(path, commit.hash)), "Cherry-pick terminé"),
       },
       {
@@ -200,15 +366,21 @@ export function CommitGraph() {
       },
       {
         label: `Merger ce commit dans ${head}`,
+        disabled: inHead,
+        hint: inHeadHint,
         action: async () => reportMerge(await runGit(() => mergeBranch(path, commit.hash)), "Merge terminé"),
       },
-      {
-        label: `Rebase interactif de ${head} depuis ce commit…`,
-        disabled: commit.hash === info?.head_hash,
-        action: () => useUiStore.getState().setInteractiveRebaseBase(commit.hash),
-      },
+      // Le rebase interactif réécrit les commits de la branche courante postérieurs à celui-ci : il doit en être un ancêtre.
+      ...(inHead && commit.hash !== info?.head_hash
+        ? [{
+            label: `Rebase interactif de ${head} depuis ce commit…`,
+            action: () => useUiStore.getState().setInteractiveRebaseBase(commit.hash),
+          }]
+        : []),
       {
         label: `Rebaser ${head} sur ce commit`,
+        disabled: inHead,
+        hint: inHeadHint,
         action: async () => {
           if (await confirmAction(`Rebaser ${head} sur ${commit.short_hash} ?`, "Les commits de la branche courante seront réécrits."))
             reportMerge(await runGit(() => rebaseOnto(path, commit.hash)), "Rebase terminé");
@@ -252,10 +424,27 @@ export function CommitGraph() {
     );
   }
 
+  const filterBar = (graphFilter.solo.length > 0 || graphFilter.hidden.length > 0) && repoPath && (
+    <div className="flex items-center gap-2 px-3 h-7 shrink-0 text-[11px] border-b border-overlay/10 bg-[var(--color-accent)]/10">
+      <span className="truncate text-[var(--color-text)]">
+        {filterLabel(graphFilter)}
+      </span>
+      <button
+        className="ml-auto shrink-0 text-[var(--color-accent)] hover:underline"
+        onClick={() => useGraphFilterStore.getState().clear(repoPath)}
+      >
+        Tout afficher
+      </button>
+    </div>
+  );
+
   if (visibleCommits.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-[var(--color-muted)] text-sm">
-        Aucun commit correspondant à la recherche
+      <div className="flex flex-col h-full">
+        {filterBar}
+        <div className="flex-1 flex items-center justify-center text-[var(--color-muted)] text-sm">
+          {searchQuery ? "Aucun commit correspondant à la recherche" : "Aucun commit à afficher avec ce filtre"}
+        </div>
       </div>
     );
   }
@@ -265,6 +454,7 @@ export function CommitGraph() {
 
   return (
     <div className="flex flex-col h-full">
+      {filterBar}
       {wipRow}
       <div
         ref={containerRef}
@@ -299,14 +489,31 @@ export function CommitGraph() {
                 selectOne(node.commit);
                 openMenu(e, commitMenu(node.commit));
               }}
+              onRefMenu={(e, ref) => {
+                const items = refMenu(ref);
+                if (!items) return;
+                e.preventDefault();
+                e.stopPropagation();
+                selectOne(node.commit);
+                openMenu(e, items);
+              }}
             />
           ))}
         </div>
 
         {menu && <ContextMenu menu={menu} onClose={closeMenu} />}
+        {pullRequestDialog}
       </div>
     </div>
   );
+}
+
+/** Résumé du filtre du graphe : branches en solo, ou branches masquées. */
+function filterLabel(filter: GraphFilter): string {
+  const names = (keys: string[]) => keys.map((k) => k.slice(k.indexOf(":") + 1)).join(", ");
+  if (filter.solo.length) return `Solo : ${names(filter.solo)}`;
+  const n = filter.hidden.length;
+  return n > 1 ? `${n} branches masquées : ${names(filter.hidden)}` : `Branche masquée : ${names(filter.hidden)}`;
 }
 
 interface CommitRowProps {
@@ -319,9 +526,13 @@ interface CommitRowProps {
   localOnly: Set<string>;
   onClick: (e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  /** Clic droit sur l'étiquette d'une branche : menu de la branche plutôt que celui du commit. */
+  onRefMenu: (e: React.MouseEvent, ref: RefLabel) => void;
 }
 
-function CommitRow({ commit, row, rowHeight, graphWidth, isSelected, containerWidth, localOnly, onClick, onContextMenu }: CommitRowProps) {
+function CommitRow({
+  commit, row, rowHeight, graphWidth, isSelected, containerWidth, localOnly, onClick, onContextMenu, onRefMenu,
+}: CommitRowProps) {
   const date = new Date(commit.timestamp * 1000).toLocaleDateString("fr-FR", {
     day: "2-digit",
     month: "short",
@@ -348,6 +559,7 @@ function CommitRow({ commit, row, rowHeight, graphWidth, isSelected, containerWi
               key={`${ref.kind}:${ref.name}`}
               label={ref}
               localOnly={(ref.kind === "head" || ref.kind === "local") && localOnly.has(ref.name)}
+              onContextMenu={(e) => onRefMenu(e, ref)}
             />)}
           {commit.refs.length > 4 && <span className="text-[10px] text-[var(--color-muted)]">+{commit.refs.length - 4}</span>}
         </div>
@@ -369,12 +581,17 @@ const REF_STYLES: Record<RefLabel["kind"], string> = {
 
 const REF_ICONS: Record<RefLabel["kind"], string> = { head: "⎇", local: "⎇", remote: "☁", tag: "⌂" };
 
-function RefBadge({ label, localOnly }: { label: RefLabel; localOnly: boolean }) {
+function RefBadge({ label, localOnly, onContextMenu }: {
+  label: RefLabel;
+  localOnly: boolean;
+  onContextMenu: (e: React.MouseEvent) => void;
+}) {
   const title = label.kind === "head" ? `${label.name} (branche courante)` : label.name;
   return (
     <span
       className={`px-1 text-[10px] rounded font-mono border whitespace-nowrap ${REF_STYLES[label.kind]} ${localOnly ? "border-dashed" : ""}`}
       title={localOnly ? `${title} — uniquement en local, absente des remotes` : title}
+      onContextMenu={onContextMenu}
     >
       {REF_ICONS[label.kind]} {label.name}
       {localOnly && <span className="ml-1 opacity-70 italic">local</span>}

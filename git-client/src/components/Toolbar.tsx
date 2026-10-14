@@ -13,6 +13,7 @@ import { ContextMenu, useContextMenu, type MenuEntry } from "./ContextMenu";
 import { SearchBar } from "./SearchBar";
 import { Tooltip } from "./Tooltip";
 import { checkForUpdates } from "../lib/updater";
+import { syncOpenRepos, useSyncRunning } from "../lib/autoSync";
 import { useThemeStore } from "../lib/theme";
 import { useDisplayStore, type ThemePreference } from "../store/useDisplayStore";
 import logoMark from "../assets/logo-mark.webp";
@@ -40,6 +41,7 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
   const setMemoOpen = useUiStore((s) => s.setMemoOpen);
   const busy = useUiStore((s) => s.busy);
   const ask = useUiStore((s) => s.ask);
+  const syncing = useSyncRunning();
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
   const head = branches.find((b) => b.is_head && !b.is_remote);
@@ -164,6 +166,21 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
         <span className="text-xs font-mono text-[var(--color-accent)] truncate max-w-48" title="Branche courante">
           {headLabel(info)}
         </span>
+      )}
+      {repoPath && (
+        <Tooltip
+          title={syncing ? "Synchronisation en cours…" : "Synchroniser maintenant"}
+          lines={["Fetch de chaque dépôt ouvert et actualisation de ses PR / MR"]}
+        >
+          <button
+            className="p-1 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10 disabled:opacity-40 disabled:hover:bg-transparent"
+            onClick={() => void syncOpenRepos()}
+            disabled={syncing || !!busy}
+            aria-label="Synchroniser les dépôts ouverts"
+          >
+            <RefreshCw size={13} strokeWidth={1.75} className={syncing ? "animate-spin" : ""} />
+          </button>
+        </Tooltip>
       )}
 
       <div className="w-px h-5 bg-overlay/10 mx-1" />

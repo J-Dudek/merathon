@@ -114,30 +114,37 @@ export function CommitDetails({ commit }: { commit: CommitInfo }) {
               </span>
             )}
           </div>
-          {details.files.map((f) => {
-            const { letter, color } = STATUS_LETTER[f.status];
-            return (
-              <div
-                key={f.path}
-                className={`flex items-center gap-2 px-3 py-[3px] cursor-pointer ${
-                  selectedPath === f.path ? "bg-overlay/10" : "hover:bg-overlay/5"
-                }`}
-                title={f.old_path ? `${f.old_path} → ${f.path}` : f.path}
-                onClick={() => setCenter({ kind: "diff", path: f.path, source: { type: "commit", hash: commit.hash } })}
-              >
-                <span className={`text-[10px] font-bold font-mono w-3 shrink-0 ${color}`}>{letter}</span>
-                <span className="flex-1 truncate text-left text-[11px] font-mono text-[var(--color-text)]" dir="rtl">
-                  <bdi>{f.path}</bdi>
-                </span>
-                <span className="text-[10px] font-mono shrink-0">
-                  {f.additions > 0 && <span className="text-green-400">+{f.additions}</span>}
-                  {f.deletions > 0 && <span className="text-red-400 ml-1">−{f.deletions}</span>}
-                </span>
-              </div>
-            );
-          })}
+          {details.files.map((f) => (
+            <CommitFileRow
+              key={f.path}
+              file={f}
+              selected={selectedPath === f.path}
+              onClick={() => setCenter({ kind: "diff", path: f.path, source: { type: "commit", hash: commit.hash } })}
+            />
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Fichier modifié : statut, chemin (début tronqué) et lignes ajoutées / supprimées. */
+export function CommitFileRow({ file, selected, onClick }: { file: CommitFile; selected: boolean; onClick: () => void }) {
+  const { letter, color } = STATUS_LETTER[file.status];
+  return (
+    <div
+      className={`flex items-center gap-2 px-3 py-[3px] cursor-pointer ${selected ? "bg-overlay/10" : "hover:bg-overlay/5"}`}
+      title={file.old_path ? `${file.old_path} → ${file.path}` : file.path}
+      onClick={onClick}
+    >
+      <span className={`text-[10px] font-bold font-mono w-3 shrink-0 ${color}`}>{letter}</span>
+      <span className="flex-1 truncate text-left text-[11px] font-mono text-[var(--color-text)]" dir="rtl">
+        <bdi>{file.path}</bdi>
+      </span>
+      <span className="text-[10px] font-mono shrink-0">
+        {file.additions > 0 && <span className="text-green-400">+{file.additions}</span>}
+        {file.deletions > 0 && <span className="text-red-400 ml-1">−{file.deletions}</span>}
+      </span>
     </div>
   );
 }

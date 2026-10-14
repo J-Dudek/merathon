@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRepoStore, type CenterView } from "../store/useRepoStore";
-import { applyLines, getCommitFileDiff, getDiff } from "../ipc/commands";
+import { applyLines, getCommitFileDiff, getCompareFileDiff, getDiff } from "../ipc/commands";
 import { errorMessage, runGit } from "../lib/actions";
 import { DiffViewer, type PartialStaging } from "./DiffViewer";
 import type { FileDiff } from "../types/git";
@@ -9,6 +9,7 @@ type DiffView = Extract<CenterView, { kind: "diff" }>;
 
 function diffSourceLabel(source: DiffView["source"]): string {
   if (source.type === "commit") return `commit ${source.hash.slice(0, 7)}`;
+  if (source.type === "compare") return `${source.base.slice(0, 7)} → ${source.head.slice(0, 7)}`;
   return source.staged ? "indexé" : "non indexé";
 }
 
@@ -28,10 +29,11 @@ export function CenterDiff({ view }: { view: DiffView }) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const load =
-      view.source.type === "workdir"
-        ? getDiff(repoPath, view.path, view.source.staged)
-        : getCommitFileDiff(repoPath, view.source.hash, view.path);
+    const { source } = view;
+    let load: Promise<FileDiff>;
+    if (source.type === "workdir") load = getDiff(repoPath, view.path, source.staged);
+    else if (source.type === "compare") load = getCompareFileDiff(repoPath, source.base, source.head, view.path);
+    else load = getCommitFileDiff(repoPath, source.hash, view.path);
     load
       .then((d) => !cancelled && setDiff(d))
       .catch((e) => !cancelled && setError(errorMessage(e)))

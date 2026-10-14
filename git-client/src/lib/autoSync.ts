@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import { fetchAllQuietly, getBranches, listRemotes } from "../ipc/commands";
 import { linkedForge, refreshOpenPullRequests } from "../components/PullRequestList";
 import { useAccountsStore } from "../store/useAccountsStore";
@@ -5,6 +6,7 @@ import { useRepoStore } from "../store/useRepoStore";
 import { prFreshness, seenKey, useSeenPrsStore, type SeenPr } from "../store/useSeenPrsStore";
 import { tabPath, useTabsStore } from "../store/useTabsStore";
 import { useUiStore } from "../store/useUiStore";
+import { syncMyPullRequests } from "./prNotifications";
 import { trimEndChars } from "./strings";
 import type { ForgePR } from "../types/forge";
 import type { BranchInfo } from "../types/git";
@@ -101,8 +103,11 @@ function openRepos(): string[] {
   return [...new Set(tabs.map((t) => tabPath(t, activeId)).filter((p): p is string => !!p))];
 }
 
-/** Fetch d'un dépôt, actualisation de ses PR ouvertes et du graphe s'il est affiché ; renvoie ce qui a changé. */
-async function syncRepo(path: string): Promise<{ changes: RepoChanges; prLabel: string }> {
+/**
+ * Fetch d'un dépôt, actualisation de ses PR ouvertes et du graphe s'il est affiché ; renvoie ce qui a changé.
+ * Les PR de `followed` (les miennes, déjà notifiées par `syncMyPullRequests`) ne sont pas signalées une seconde fois.
+ */
+async function syncRepo(path: string, followed: Set<string>): Promise<{ changes: RepoChanges; prLabel: string }> {
   const before = await getBranches(path);
   await fetchAllQuietly(path);
   const after = await getBranches(path);
@@ -116,6 +121,9 @@ async function syncRepo(path: string): Promise<{ changes: RepoChanges; prLabel: 
     const { before: oldPrs, after: newPrs } = await refreshOpenPullRequests(forge.account, forge.projectPath);
     const { seen } = useSeenPrsStore.getState();
     prs = pullRequestChanges(oldPrs, newPrs, (pr) => seen[seenKey(forge.account.id, forge.projectPath, pr.number)]);
+    const isFollowed = (pr: ForgePR) => followed.has(seenKey(forge.account.id, forge.projectPath, pr.number).toLowerCase());
+    prs.openedPrs = prs.openedPrs.filter((pr) => !isFollowed(pr));
+    prs.updatedPrs = prs.updatedPrs.filter((u) => !isFollowed(u.pr));
   }
   return {
     changes: { ...remoteBranchChanges(before, after), ...prs },
@@ -125,6 +133,23 @@ async function syncRepo(path: string): Promise<{ changes: RepoChanges; prLabel: 
 
 let running = false;
 const syncedListeners = new Set<() => void>();
+const runningListeners = new Set<() => void>();
+
+function setRunning(value: boolean) {
+  running = value;
+  runningListeners.forEach((l) => l());
+}
+
+/** Vrai pendant une synchronisation, qu'elle soit automatique ou lancée à la main. */
+export function useSyncRunning(): boolean {
+  return useSyncExternalStore(
+    (listener) => {
+      runningListeners.add(listener);
+      return () => runningListeners.delete(listener);
+    },
+    () => running,
+  );
+}
 
 /** Appelé à la fin de chaque synchronisation ; renvoie la fonction de désinscription. */
 export function onSynced(listener: () => void): () => void {
@@ -134,16 +159,20 @@ export function onSynced(listener: () => void): () => void {
   };
 }
 
-/** Synchronise chaque dépôt ouvert et notifie les changements. Silencieux en cas d'erreur (hors ligne, accès refusé…). */
+/**
+ * Notifie l'activité de mes PR / MR, puis synchronise chaque dépôt ouvert et notifie ses changements.
+ * Silencieux en cas d'erreur (hors ligne, accès refusé…).
+ */
 export async function syncOpenRepos() {
   if (running) return;
-  running = true;
+  setRunning(true);
   try {
+    const followed = await syncMyPullRequests();
     for (const path of openRepos()) {
       // Une opération lancée par l'utilisateur (pull, push…) est en cours : on attendra le prochain passage.
       if (useUiStore.getState().busy) return;
       try {
-        const { changes, prLabel } = await syncRepo(path);
+        const { changes, prLabel } = await syncRepo(path, followed);
         const message = describeChanges(repoName(path), changes, prLabel);
         if (message) useUiStore.getState().notify("info", message);
       } catch (e) {
@@ -151,7 +180,7 @@ export async function syncOpenRepos() {
       }
     }
   } finally {
-    running = false;
+    setRunning(false);
     syncedListeners.forEach((l) => l());
   }
 }

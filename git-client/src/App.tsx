@@ -9,6 +9,7 @@ import { AccountsPanel } from "./components/AccountsPanel";
 import { CommitGraph } from "./graph/CommitGraph";
 import { StagingPanel } from "./components/StagingPanel";
 import { CommitDetails } from "./components/CommitDetails";
+import { CompareDetails } from "./components/CompareDetails";
 import { CenterDiff } from "./components/CenterDiff";
 import { ConflictViewer } from "./components/ConflictViewer";
 import { CloneDialog } from "./components/CloneDialog";
@@ -29,6 +30,7 @@ import { errorMessage } from "./lib/actions";
 import { chooseAndInitRepo, chooseAndOpenRepo, openRepoAt } from "./lib/repoActions";
 import { checkForUpdatesOnStartup } from "./lib/updater";
 import { startAutoSync } from "./lib/autoSync";
+import { useIconBadge } from "./lib/iconBadge";
 import { openDevtools } from "./ipc/commands";
 
 type LeftTab = "repo" | "accounts";
@@ -41,6 +43,7 @@ export default function App() {
   const repoPath = useRepoStore((s) => s.repoPath);
   const center = useRepoStore((s) => s.center);
   const selectedCommit = useRepoStore((s) => s.selectedCommit);
+  const comparison = useRepoStore((s) => s.comparison);
   const setCenter = useRepoStore((s) => s.setCenter);
   const refresh = useRepoStore((s) => s.refresh);
   const loadAccounts = useAccountsStore((s) => s.load);
@@ -74,6 +77,9 @@ export default function App() {
 
   // Fetch et PR de chaque dépôt ouvert à intervalle régulier (Préférences) : les changements sont notifiés.
   useEffect(() => startAutoSync(syncInterval), [syncInterval]);
+
+  // Nombre de PR / MR avec du nouveau sur l'icône de l'application (Dock, barre des tâches, lanceur).
+  useIconBadge();
 
   // Taille de l'interface : zoom du webview (net, y compris le graphe dessiné en canvas).
   useEffect(() => {
@@ -121,6 +127,11 @@ export default function App() {
     return repoPath ? <Sidebar /> : <p className="p-3 text-xs text-[var(--color-muted)] italic">Aucun dépôt ouvert</p>;
   }
 
+  function rightPane() {
+    if (comparison) return <CompareDetails comparison={comparison} />;
+    return selectedCommit ? <CommitDetails commit={selectedCommit} /> : <StagingPanel />;
+  }
+
   function mainPane() {
     if (!repoPath) {
       return (
@@ -164,7 +175,7 @@ export default function App() {
         {repoPath && (
           <div className="relative shrink-0 overflow-hidden border-l border-overlay/10" style={{ width: sideWidths.right }}>
             <SideResizer side="right" />
-            {selectedCommit ? <CommitDetails commit={selectedCommit} /> : <StagingPanel />}
+            {rightPane()}
           </div>
         )}
       </div>

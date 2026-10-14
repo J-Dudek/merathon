@@ -186,6 +186,13 @@ pub fn get_commit_details(repo: &Repository, hash: &str) -> Result<CommitDetails
     })
 }
 
+/// Fichiers qui diffèrent entre deux commits (`base` → `head`, comme `git diff base head`).
+pub fn diff_commits(repo: &Repository, base: &str, head: &str) -> Result<Vec<CommitFile>, GitError> {
+    let base_tree = repo.revparse_single(base)?.peel_to_commit()?.tree()?;
+    let head_tree = repo.revparse_single(head)?.peel_to_commit()?.tree()?;
+    tree_diff_files(repo, Some(&base_tree), &head_tree)
+}
+
 /// Fichiers modifiés entre deux arbres, avec détection des renommages et nombre de lignes ajoutées / supprimées.
 fn tree_diff_files(repo: &Repository, old: Option<&git2::Tree>, new: &git2::Tree) -> Result<Vec<CommitFile>, GitError> {
     let mut diff = repo.diff_tree_to_tree(old, Some(new), None)?;

@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useAccountsStore } from "../store/useAccountsStore";
 import { prFreshness, seenKey, useSeenPrsStore } from "../store/useSeenPrsStore";
 import { errorMessage } from "../lib/actions";
 import { onSynced } from "../lib/autoSync";
+import { cachedMyPullRequests, loadMyPullRequests, onMyPullRequests } from "../lib/myPullRequests";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { MY_PR_STATUSES, groupByProject, myPrStatus, sortByStatus } from "../lib/prStatus";
 import { ContextMenu, useContextMenu } from "./ContextMenu";
-import { PRRow, checkoutPullRequest, markPullRequestRead, useLinkedForge, withCommentCounts } from "./PullRequestList";
+import { PRRow, checkoutPullRequest, markPullRequestRead, useLinkedForge } from "./PullRequestList";
 import { PullRequestReviewDialog } from "./PullRequestReviewDialog";
 import { PanelSection as Section } from "./PanelSection";
 import type { ForgeAccount, MyPullRequests, PrSummary } from "../types/forge";
 
-/** Dernières listes chargées par compte : affichées tout de suite au retour sur l'onglet, puis actualisées. */
-const cache = new Map<string, MyPullRequests>();
-
-/** PR / MR ouvertes du compte, tous projets confondus ; rechargées après chaque synchronisation périodique. */
+/**
+ * PR / MR ouvertes du compte, tous projets confondus. Rechargées après chaque synchronisation périodique, qui s'en
+ * charge elle-même quand les notifications sont activées (la nouvelle liste arrive alors par `onMyPullRequests`).
+ */
 function useMyPullRequests(account: ForgeAccount) {
-  const client = useAccountsStore((s) => s.client);
-  const [data, setData] = useState<MyPullRequests | null>(cache.get(account.id) ?? null);
+  const [data, setData] = useState<MyPullRequests | null>(() => cachedMyPullRequests(account.id));
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,26 +25,27 @@ function useMyPullRequests(account: ForgeAccount) {
     setFetching(true);
     setError(null);
     try {
-      const mine = await (await client(account)).getMyPullRequests();
-      const project = (pr: PrSummary) => pr.projectPath;
-      const [assigned, authored] = await Promise.all([
-        withCommentCounts(account, mine.assigned, project),
-        withCommentCounts(account, mine.authored, project),
-      ]);
-      const next = { assigned, authored };
-      cache.set(account.id, next);
-      setData(next);
+      await loadMyPullRequests(account);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setFetching(false);
     }
-  }, [account, client]);
+  }, [account]);
 
   useEffect(() => {
     reload();
-    return onSynced(() => void reload());
-  }, [reload]);
+    const stopList = onMyPullRequests((id) => {
+      if (id === account.id) setData(cachedMyPullRequests(id));
+    });
+    const stopSync = onSynced(() => {
+      if (!useDisplayStore.getState().notifications.enabled) void reload();
+    });
+    return () => {
+      stopList();
+      stopSync();
+    };
+  }, [reload, account.id]);
 
   return { data, loading: fetching && !data, error, reload };
 }

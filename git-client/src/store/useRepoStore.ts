@@ -6,10 +6,20 @@ import {
   getBranches, getCommits, getRepoInfo, getStatus, getTags, lfsStatus, listRemotes, listStashes, listSubmodules, openRepository,
 } from "../ipc/commands";
 
+/** Deux commits comparés (`base` le plus ancien), affichés à la place du détail d'un commit. */
+export interface Comparison {
+  base: CommitInfo;
+  head: CommitInfo;
+}
+
 /** Ce qu'affiche la zone centrale : le graphe, un diff ou l'éditeur de conflit. */
 export type CenterView =
   | { kind: "graph" }
-  | { kind: "diff"; path: string; source: { type: "workdir"; staged: boolean } | { type: "commit"; hash: string } }
+  | {
+      kind: "diff";
+      path: string;
+      source: { type: "workdir"; staged: boolean } | { type: "commit"; hash: string } | { type: "compare"; base: string; head: string };
+    }
   | { kind: "conflict"; path: string };
 
 const RECENT_KEY = "merathon.recent-repos";
@@ -51,6 +61,7 @@ interface RepoStore {
   lfs: LfsStatus | null;
   status: FileStatus[];
   selectedCommit: CommitInfo | null;
+  comparison: Comparison | null;
   searchQuery: string;
   center: CenterView;
   commitDraft: CommitDraft;
@@ -61,6 +72,7 @@ interface RepoStore {
   refresh: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   setSelectedCommit: (commit: CommitInfo | null) => void;
+  setComparison: (comparison: Comparison | null) => void;
   setSearchQuery: (q: string) => void;
   setCenter: (view: CenterView) => void;
   setCommitDraft: (patch: Partial<CommitDraft>) => void;
@@ -91,6 +103,7 @@ export const emptyRepo: RepoState = {
   lfs: null,
   status: [],
   selectedCommit: null,
+  comparison: null,
   searchQuery: "",
   center: { kind: "graph" },
   commitDraft: { summary: "", description: "", amend: false },
@@ -144,7 +157,9 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
     if (get().repoPath === path) set({ info, status });
   },
 
-  setSelectedCommit: (selectedCommit) => set({ selectedCommit }),
+  // Sélectionner un commit referme la comparaison en cours.
+  setSelectedCommit: (selectedCommit) => set({ selectedCommit, comparison: null }),
+  setComparison: (comparison) => set({ comparison }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setCenter: (center) => set({ center }),
   setCommitDraft: (patch) => set((s) => ({ commitDraft: { ...s.commitDraft, ...patch } })),
@@ -160,7 +175,7 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
     return {
       repoPath: s.repoPath, info: s.info, commits: s.commits, branches: s.branches, tags: s.tags, stashes: s.stashes,
       remotes: s.remotes, submodules: s.submodules, lfs: s.lfs, status: s.status, selectedCommit: s.selectedCommit,
-      searchQuery: s.searchQuery, center: s.center, commitDraft: s.commitDraft,
+      comparison: s.comparison, searchQuery: s.searchQuery, center: s.center, commitDraft: s.commitDraft,
     };
   },
 

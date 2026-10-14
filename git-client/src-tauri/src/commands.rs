@@ -133,6 +133,12 @@ pub fn compare_refs(path: String, base: String, head: String) -> Result<git::Ref
     with_repo(&path, |r| git::compare_refs(r, &base, &head))
 }
 
+/// Fichiers modifiés entre deux commits quelconques (comparaison de deux commits du graphe).
+#[tauri::command]
+pub fn diff_commits(path: String, base: String, head: String) -> Result<Vec<git::CommitFile>, GitError> {
+    with_repo(&path, |r| git::diff_commits(r, &base, &head))
+}
+
 #[tauri::command]
 pub fn get_compare_file_diff(path: String, base: String, head: String, file_path: String) -> Result<git::FileDiff, GitError> {
     with_repo(&path, |r| git::get_compare_file_diff(r, &base, &head, &file_path))
@@ -228,6 +234,12 @@ pub fn create_commit(path: String, message: String, amend: bool) -> Result<Strin
     with_repo(&path, |r| git::create_commit(r, &message, amend))
 }
 
+/// Nouveau message pour le dernier commit, contenu inchangé.
+#[tauri::command]
+pub fn reword_head(path: String, message: String) -> Result<String, GitError> {
+    with_repo(&path, |r| git::reword_head(r, &message))
+}
+
 #[tauri::command]
 pub fn get_conflict_content(path: String, file_path: String) -> Result<String, GitError> {
     with_repo(&path, |r| git::get_conflict_content(r, &file_path))
@@ -310,6 +322,18 @@ pub fn set_upstream(path: String, name: String, upstream: Option<String>) -> Res
 #[tauri::command]
 pub fn merge_branch(path: String, branch: String) -> Result<git::MergeResult, GitError> {
     with_repo_lfs(&path, |r| git::merge_branch(r, &branch))
+}
+
+/// Avance la branche courante jusqu'à `branch` sans jamais créer de commit de merge.
+#[tauri::command]
+pub fn fast_forward(path: String, branch: String) -> Result<(), GitError> {
+    with_repo_lfs(&path, |r| git::fast_forward(r, &branch))
+}
+
+/// Avance une branche locale jusqu'à `target` sans la checkout.
+#[tauri::command]
+pub fn fast_forward_branch(path: String, branch: String, target: String) -> Result<(), GitError> {
+    with_repo_lfs(&path, |r| git::fast_forward_branch(r, &branch, &target))
 }
 
 #[tauri::command]

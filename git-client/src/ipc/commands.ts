@@ -1,6 +1,6 @@
 import { Channel, invoke as tauriInvoke, type InvokeArgs } from "@tauri-apps/api/core";
 import type {
-  BranchDivergence, BranchInfo, CommitDetails, PrPush, PrRebase, CommitInfo, FileDiff, FileStatus, Identity, MergeResult,
+  BranchDivergence, BranchInfo, CommitDetails, CommitFile, PrPush, PrRebase, CommitInfo, FileDiff, FileStatus, Identity, MergeResult,
   InteractiveOutcome, LfsStatus, RefComparison, RemoteInfo, RepoInfo, StashInfo, SubmoduleInfo, TagInfo, TodoCommit,
 } from "../types/git";
 import type { DeviceCode, ForgeAccount, Provider, SavedAccount } from "../types/forge";
@@ -39,6 +39,9 @@ export const initRepository = (path: string) => invoke<void>("init_repository", 
 /** `repo` : dépôt à ouvrir directement dans la nouvelle fenêtre. */
 export const openNewWindow = (repo: string | null = null) => invoke<void>("open_new_window", { repo });
 
+/** Notification du système (voir notifications.rs pour Linux). */
+export const notifyDesktop = (title: string, body: string) => invoke<void>("notify_desktop", { title, body });
+
 /** `path` null : identité globale. */
 export const getIdentity = (path: string | null) => invoke<Identity>("get_identity", { path });
 export const setIdentity = (path: string | null, name: string, email: string) =>
@@ -56,6 +59,8 @@ export const getCommitFileDiff = (path: string, hash: string, filePath: string) 
 /** Changements de `head` depuis son ancêtre commun avec `base`, comme le diff d'une pull request. */
 export const compareRefs = (path: string, base: string, head: string) =>
   invoke<RefComparison>("compare_refs", { path, base, head });
+/** Fichiers qui diffèrent entre deux commits quelconques (`git diff base head`). */
+export const diffCommits = (path: string, base: string, head: string) => invoke<CommitFile[]>("diff_commits", { path, base, head });
 export const getCompareFileDiff = (path: string, base: string, head: string, filePath: string) =>
   invoke<FileDiff>("get_compare_file_diff", { path, base, head, filePath });
 
@@ -89,6 +94,8 @@ export const applyLines = (path: string, filePath: string, hunk: number, lines: 
   invoke<void>("apply_lines", { path, filePath, hunk, lines, action });
 export const createCommit = (path: string, message: string, amend = false) =>
   invoke<string>("create_commit", { path, message, amend });
+/** Nouveau message pour le dernier commit, sans y ajouter les fichiers indexés. */
+export const rewordHead = (path: string, message: string) => invoke<string>("reword_head", { path, message });
 export const getConflictContent = (path: string, filePath: string) =>
   invoke<string>("get_conflict_content", { path, filePath });
 export const resolveConflict = (path: string, filePath: string, content: string) =>
@@ -117,6 +124,11 @@ export const renameBranch = (path: string, oldName: string, newName: string) =>
 export const setUpstream = (path: string, name: string, upstream: string | null) =>
   invoke<void>("set_upstream", { path, name, upstream });
 export const mergeBranch = (path: string, branch: string) => invoke<MergeResult>("merge_branch", { path, branch });
+/** Avance la branche courante jusqu'à `branch` ; refusé si elles ont divergé (jamais de commit de merge). */
+export const fastForward = (path: string, branch: string) => invoke<void>("fast_forward", { path, branch });
+/** Avance la branche locale `branch` jusqu'à `target` sans la checkout ; refusé si elles ont divergé. */
+export const fastForwardBranch = (path: string, branch: string, target: string) =>
+  invoke<void>("fast_forward_branch", { path, branch, target });
 export const abortMerge = (path: string) => invoke<void>("abort_merge", { path });
 export const rebaseOnto = (path: string, onto: string) => invoke<MergeResult>("rebase_onto", { path, onto });
 export const continueRebase = (path: string) => invoke<MergeResult>("continue_rebase", { path });

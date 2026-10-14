@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultDisplay, sanitize, stepZoom } from "./useDisplayStore";
+import { defaultDisplay, defaultNotifications, sanitize, stepZoom } from "./useDisplayStore";
 
 describe("stepZoom", () => {
   it("moves to the next or previous step, within bounds", () => {
@@ -14,11 +14,15 @@ describe("stepZoom", () => {
 describe("sanitize", () => {
   it("keeps valid settings and repairs invalid ones", () => {
     expect(sanitize({ zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light" })).toEqual({
-      zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light",
+      zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light", notifications: defaultNotifications,
     });
     expect(sanitize({ zoom: 9, terminalFontSize: 100, density: "énorme", syncInterval: 7, theme: "rose" })).toEqual({
       ...defaultDisplay, terminalFontSize: 24,
     });
     expect(sanitize(null)).toEqual(defaultDisplay);
+  });
+
+  it("complète les réglages de notification incomplets ou invalides", () => {
+    expect(sanitize({ notifications: { enabled: false, ci: "oui" } }).notifications).toEqual({ ...defaultNotifications, enabled: false });
   });
 });

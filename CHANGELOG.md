@@ -2,6 +2,15 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.4.0](https://github.com/J-Dudek/merathon/compare/v2.3.0...v2.4.0) (2026-10-14)
+
+### Nouveautés
+
+- add branch menu (60fa6fe)
+- ajout des notifications (2481f72)
+- ajout icone dans la barre des tâches sur wsl (f2b118a)
+- ajout bouton de synchronisation à côté du nom de la branche (4cc000f)
+
 ## [2.3.0](https://github.com/J-Dudek/merathon/compare/v2.2.0...v2.3.0) (2026-10-13)
 
 ### À savoir

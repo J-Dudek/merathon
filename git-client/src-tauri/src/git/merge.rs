@@ -49,11 +49,7 @@ pub(crate) fn merge_annotated(repo: &Repository, annotated: &AnnotatedCommit, la
     }
 
     if analysis.is_fast_forward() {
-        let target = repo.find_commit(annotated.id())?;
-        // Checkout "safe" d'abord : on ne déplace la branche que si la copie de travail le permet.
-        repo.checkout_tree(target.as_object(), Some(CheckoutBuilder::default().safe()))?;
-        let mut head = repo.head()?;
-        head.set_target(target.id(), &format!("merge {label}: fast-forward"))?;
+        advance_head(repo, annotated, label)?;
         return Ok(MergeResult { conflicted_files: vec![], success: true });
     }
 
@@ -78,6 +74,53 @@ pub(crate) fn merge_annotated(repo: &Repository, annotated: &AnnotatedCommit, la
     repo.cleanup_state()?;
 
     Ok(MergeResult { conflicted_files: vec![], success: true })
+}
+
+/// Avance la branche courante jusqu'à `annotated`, qui doit en être un descendant.
+fn advance_head(repo: &Repository, annotated: &AnnotatedCommit, label: &str) -> Result<(), GitError> {
+    let target = repo.find_commit(annotated.id())?;
+    // Checkout "safe" d'abord : on ne déplace la branche que si la copie de travail le permet.
+    repo.checkout_tree(target.as_object(), Some(CheckoutBuilder::default().safe()))?;
+    let mut head = repo.head()?;
+    head.set_target(target.id(), &format!("merge {label}: fast-forward"))?;
+    Ok(())
+}
+
+/// Fast-forward strict de la branche courante jusqu'à `branch_name` : jamais de commit de merge.
+pub fn fast_forward(repo: &Repository, branch_name: &str) -> Result<(), GitError> {
+    let annotated = resolve_annotated(repo, branch_name)?;
+    let (analysis, _) = repo.merge_analysis(&[&annotated])?;
+    if analysis.is_up_to_date() {
+        return Ok(());
+    }
+    if !analysis.is_fast_forward() {
+        return Err(GitError::Other(format!(
+            "Fast-forward impossible : la branche courante a des commits absents de {branch_name}. Utilise un merge ou un rebase."
+        )));
+    }
+    advance_head(repo, &annotated, branch_name)
+}
+
+/// Avance la branche locale `branch_name` jusqu'à `target` sans la checkout (comme `git fetch . target:branch`).
+/// Si c'est la branche courante, la copie de travail suit, comme pour `fast_forward`.
+pub fn fast_forward_branch(repo: &Repository, branch_name: &str, target: &str) -> Result<(), GitError> {
+    let mut reference = repo.find_branch(branch_name, git2::BranchType::Local)?.into_reference();
+    let head_name = repo.head().ok().and_then(|h| h.name().ok().map(String::from));
+    if head_name.is_some() && head_name.as_deref() == reference.name().ok() {
+        return fast_forward(repo, target);
+    }
+    let current = reference.peel_to_commit()?.id();
+    let to = resolve_annotated(repo, target)?.id();
+    if current == to {
+        return Ok(());
+    }
+    if !repo.graph_descendant_of(to, current)? {
+        return Err(GitError::Other(format!(
+            "Fast-forward impossible : {branch_name} a des commits absents de {target}. Utilise un merge ou un rebase."
+        )));
+    }
+    reference.set_target(to, &format!("fast-forward {branch_name} to {target}"))?;
+    Ok(())
 }
 
 /// Abandonne un merge / cherry-pick / revert en cours.
@@ -246,5 +289,55 @@ mod tests {
         merge_branch(&repo, "feature").unwrap();
         assert_eq!(repo.head().unwrap().target().unwrap(), feature_tip);
         assert!(dir.path().join("feat.txt").exists());
+    }
+
+    #[test]
+    fn fast_forward_moves_branch_or_refuses_diverged_history() {
+        let (dir, repo) = base_repo();
+        let head = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("feature", &head, false).unwrap();
+        switch(&repo, "feature");
+        commit_on(&repo, &dir, "feat.txt", "f", "on feature");
+        let feature_tip = repo.head().unwrap().target().unwrap();
+        switch(&repo, "master");
+
+        fast_forward(&repo, "feature").unwrap();
+        assert_eq!(repo.head().unwrap().target().unwrap(), feature_tip);
+        assert!(dir.path().join("feat.txt").exists());
+
+        // master a maintenant un commit absent de feature2 : pas de fast-forward possible.
+        let base = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("feature2", &base, false).unwrap();
+        switch(&repo, "feature2");
+        commit_on(&repo, &dir, "other.txt", "o", "on feature2");
+        switch(&repo, "master");
+        commit_on(&repo, &dir, "main.txt", "m", "on master");
+        let master_tip = repo.head().unwrap().target().unwrap();
+        assert!(fast_forward(&repo, "feature2").is_err());
+        assert_eq!(repo.head().unwrap().target().unwrap(), master_tip);
+    }
+
+    #[test]
+    fn fast_forward_branch_moves_another_branch_without_checkout() {
+        let (dir, repo) = base_repo();
+        let base = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("old", &base, false).unwrap();
+        commit_on(&repo, &dir, "new.txt", "n", "on master");
+        let master_tip = repo.head().unwrap().target().unwrap();
+
+        fast_forward_branch(&repo, "old", "master").unwrap();
+        let old = repo.find_branch("old", git2::BranchType::Local).unwrap();
+        assert_eq!(old.get().target().unwrap(), master_tip);
+        assert_eq!(repo.head().unwrap().shorthand().ok(), Some("master"));
+
+        // master ne peut pas « avancer » jusqu'à un de ses ancêtres.
+        repo.branch("behind", &base, false).unwrap();
+        assert!(fast_forward_branch(&repo, "behind", "master").is_ok());
+        let first = repo.find_commit(base.id()).unwrap();
+        repo.branch("stale", &first, false).unwrap();
+        switch(&repo, "stale");
+        commit_on(&repo, &dir, "stale.txt", "s", "on stale");
+        switch(&repo, "master");
+        assert!(fast_forward_branch(&repo, "stale", "master").is_err());
     }
 }

@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRepoStore } from "../store/useRepoStore";
-import { useAccountsStore } from "../store/useAccountsStore";
 import { useUiStore, confirmAction, promptText } from "../store/useUiStore";
 import {
-  addRemote, checkoutBranch, checkoutCommit, checkoutRemoteBranch, createBranch, deleteBranch,
-  deleteRemoteBranch, deleteRemoteTag, deleteTag, fetchRemote, lfsPull, lfsTrack, mergeBranch, pull, push, pushTag,
-  openNewWindow, rebaseOnto, removeRemote, renameBranch, setUpstream, stashApply, stashDrop, updateSubmodules,
+  addRemote, checkoutBranch, checkoutCommit, checkoutRemoteBranch, deleteBranch, deleteRemoteTag, deleteTag, fetchRemote,
+  lfsPull, lfsTrack, pushTag, openNewWindow, removeRemote, stashApply, stashDrop, updateSubmodules,
 } from "../ipc/commands";
-import { errorMessage, reportMerge, runGit } from "../lib/actions";
-import { newPullRequestUrl, remoteForAccount } from "../lib/remoteUrl";
+import { errorMessage, runGit } from "../lib/actions";
 import { ContextMenu, useContextMenu, type MenuEntry } from "./ContextMenu";
 import { openRepoAt } from "../lib/repoActions";
-import { PullRequestDialog, type PullRequestTarget } from "./PullRequestDialog";
+import { useBranchMenus } from "./branchMenus";
+import { branchKey, effectiveFilter, EMPTY_FILTER } from "../lib/graphFilter";
+import { useGraphFilterStore } from "../store/useGraphFilterStore";
 import { PullRequestList, checkoutPullRequest, useLinkedForge, usePullRequests } from "./PullRequestList";
 import { prFreshness, seenKey, useSeenPrsStore } from "../store/useSeenPrsStore";
 import { PullRequestReviewDialog } from "./PullRequestReviewDialog";
@@ -55,14 +53,14 @@ export function Sidebar() {
   const lfs = useRepoStore((s) => s.lfs);
   const commits = useRepoStore((s) => s.commits);
   const setSelectedCommit = useRepoStore((s) => s.setSelectedCommit);
-  const accounts = useAccountsStore((s) => s.accounts);
   const busy = useUiStore((s) => s.busy);
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
   // Branches locales sélectionnées (Ctrl / Cmd + clic, Maj + clic pour une plage) pour les supprimer ensemble.
   const [selection, setSelection] = useState<MultiSelection>(EMPTY_SELECTION);
   const picked = selection.items;
   const clearPicked = () => setSelection((s) => ({ ...s, items: [] }));
-  const [pullRequest, setPullRequest] = useState<PullRequestTarget | null>(null);
+  const { localMenu, remoteMenu, newBranchFrom, dialog: pullRequestDialog } = useBranchMenus();
+  const storedFilter = useGraphFilterStore((s) => (repoPath ? s.filters[repoPath] : undefined)) ?? EMPTY_FILTER;
   const forge = useLinkedForge();
   const forgePrs = usePullRequests(forge);
   const seenPrs = useSeenPrsStore((s) => s.seen);
@@ -82,7 +80,13 @@ export function Sidebar() {
   const localTree = branchTree(local, (b) => b.name);
   const remoteBranches = branches.filter((b) => b.is_remote);
   const localOnly = localOnlyBranches(branches);
-  const head = info?.head_branch ?? "HEAD";
+  const graphFilter = effectiveFilter(storedFilter, branches);
+  /** Place de la branche dans le graphe filtré (solo / masquer). */
+  const inGraph = (b: BranchInfo): { dimmed: boolean; solo: boolean } => {
+    const key = branchKey(b);
+    const solo = graphFilter.solo.includes(key);
+    return { solo, dimmed: graphFilter.solo.length ? !solo : graphFilter.hidden.includes(key) };
+  };
   const prsByBranch = pullRequestsByBranch(forgePrs.openPrs);
   const prsOf = (b: BranchInfo): ForgePR[] => {
     const name = forge && branchOnRemote(b, forge.remoteName);
@@ -98,57 +102,6 @@ export function Sidebar() {
   function selectHash(hash: string) {
     const commit = commits.find((c) => c.hash === hash);
     if (commit) setSelectedCommit(commit);
-  }
-
-  /**
-   * Création de PR (GitHub) / MR (GitLab) pour chaque compte dont l'instance héberge un remote du dépôt :
-   * formulaire complet dans l'application, ou page de création dans le navigateur.
-   * Branche locale : projet de sa branche suivie en priorité. Branche distante : projet de son remote.
-   */
-  function pullRequestEntries(b: BranchInfo): MenuEntry[] {
-    const [remoteName, remoteBranch] = b.is_remote ? [b.name.slice(0, b.name.indexOf("/")), b.name.slice(b.name.indexOf("/") + 1)] : [];
-    const upstreamRemote = b.upstream?.slice(0, b.upstream.indexOf("/"));
-    const entries: MenuEntry[] = [];
-    for (const account of accounts) {
-      const candidates = b.is_remote ? remotes.filter((r) => r.name === remoteName) : remotes;
-      const match = remoteForAccount(candidates, account, upstreamRemote);
-      if (!match) continue;
-      const remote = match.remote.name;
-      // Nom de la branche sur le remote : celui de la branche suivie si elle est sur ce remote.
-      const source = remoteBranch
-        ?? (b.upstream?.startsWith(`${remote}/`) ? b.upstream.slice(remote.length + 1) : b.name);
-      const github = account.provider === "github";
-      const forge = github ? "GitHub" : "GitLab";
-      const noun = github ? "pull request" : "merge request";
-      entries.push(
-        {
-          label: `Créer une ${noun} ${forge}…`,
-          hint: match.path,
-          action: () => setPullRequest({
-            account,
-            projectPath: match.path,
-            remoteName: remote,
-            sourceBranch: source,
-            localBranch: b.is_remote ? undefined : b.name,
-            needsPush: !b.is_remote && (!b.upstream?.startsWith(`${remote}/`) || b.ahead > 0),
-          }),
-        },
-        { label: `Ouvrir la création de ${noun} sur ${forge}`, action: () => openUrl(newPullRequestUrl(account, match.path, source)) },
-      );
-    }
-    return entries;
-  }
-
-  async function newBranchFrom(from: string) {
-    const result = await useUiStore.getState().ask({
-      title: "Nouvelle branche",
-      message: `Depuis ${from}`,
-      input: { placeholder: "nom-de-branche" },
-      checkbox: { label: "Basculer sur la nouvelle branche", initial: true },
-      confirmLabel: "Créer",
-    });
-    const name = result?.value.trim();
-    if (name) await runGit(() => createBranch(path, name, from, result!.checked), { success: `Branche ${name} créée` });
   }
 
   function handleLocalClick(e: React.MouseEvent, b: BranchInfo) {
@@ -182,98 +135,6 @@ export function Sidebar() {
       { label: `Supprimer les ${names.length} branches sélectionnées…`, danger: true, action: () => deleteBranches(names) },
       "separator",
       { label: "Annuler la sélection", action: clearPicked },
-    ];
-  }
-
-  function localMenu(b: BranchInfo): MenuEntry[] {
-    const entries: MenuEntry[] = [];
-    if (!b.is_head) {
-      entries.push(
-        { label: "Checkout", action: () => runGit(() => checkoutBranch(path, b.name)) },
-        {
-          label: `Merger ${b.name} dans ${head}`,
-          action: async () => reportMerge(await runGit(() => mergeBranch(path, b.name)), `Merge de ${b.name} terminé`),
-        },
-        {
-          label: `Rebaser ${head} sur ${b.name}`,
-          action: async () => reportMerge(await runGit(() => rebaseOnto(path, b.name)), `Rebase sur ${b.name} terminé`),
-        },
-      );
-    } else if (b.upstream) {
-      entries.push(
-        { label: "Pull", action: async () => reportMerge(await runGit(() => pull(path, false), { busy: "Pull…" }), "Pull terminé") },
-      );
-    }
-    entries.push(
-      {
-        label: b.upstream ? `Push vers ${b.upstream}` : "Push (publier la branche)",
-        action: () => runGit(() => push(path, { branch: b.name }), { busy: "Push…", success: `Push de ${b.name} terminé` }),
-      },
-      ...pullRequestEntries(b),
-      "separator",
-      { label: `Créer une branche depuis ${b.name}…`, action: () => newBranchFrom(b.name) },
-      {
-        label: "Renommer…",
-        action: async () => {
-          const name = await promptText("Renommer la branche", { initial: b.name });
-          if (name && name !== b.name) await runGit(() => renameBranch(path, b.name, name));
-        },
-      },
-      {
-        label: "Définir la branche suivie…",
-        action: async () => {
-          const upstream = await promptText("Branche distante suivie", {
-            initial: b.upstream ?? `origin/${b.name}`,
-            placeholder: "origin/branche",
-          });
-          if (upstream) await runGit(() => setUpstream(path, b.name, upstream));
-        },
-      },
-      ...(b.upstream
-        ? [{ label: "Ne plus suivre de branche distante", action: () => runGit(() => setUpstream(path, b.name, null)) }]
-        : []),
-      { label: "Copier le nom", action: () => navigator.clipboard.writeText(b.name) },
-      "separator",
-      {
-        label: "Supprimer",
-        danger: true,
-        disabled: b.is_head,
-        action: async () => {
-          if (await confirmAction(`Supprimer la branche « ${b.name} » ?`, "Les commits non mergés ailleurs ne seront plus référencés.", true))
-            await runGit(() => deleteBranch(path, b.name));
-        },
-      },
-    );
-    return entries;
-  }
-
-  function remoteMenu(b: BranchInfo): MenuEntry[] {
-    return [
-      {
-        label: "Checkout (branche locale de suivi)",
-        action: () => runGit(() => checkoutRemoteBranch(path, b.name)),
-      },
-      {
-        label: `Merger ${b.name} dans ${head}`,
-        action: async () => reportMerge(await runGit(() => mergeBranch(path, b.name)), `Merge de ${b.name} terminé`),
-      },
-      {
-        label: `Rebaser ${head} sur ${b.name}`,
-        action: async () => reportMerge(await runGit(() => rebaseOnto(path, b.name)), `Rebase sur ${b.name} terminé`),
-      },
-      ...pullRequestEntries(b),
-      "separator",
-      { label: `Créer une branche depuis ${b.name}…`, action: () => newBranchFrom(b.name) },
-      { label: "Copier le nom", action: () => navigator.clipboard.writeText(b.name) },
-      "separator",
-      {
-        label: "Supprimer la branche distante",
-        danger: true,
-        action: async () => {
-          if (await confirmAction(`Supprimer « ${b.name} » sur le serveur ?`, undefined, true))
-            await runGit(() => deleteRemoteBranch(path, b.name), { busy: "Suppression…", success: `${b.name} supprimée` });
-        },
-      },
     ];
   }
 
@@ -374,6 +235,7 @@ export function Sidebar() {
               depth={depth}
               active={b.is_head}
               selected={picked.includes(b.name)}
+              {...inGraph(b)}
               title={`${b.name}\n${branchTitle(b, localOnly.has(b.name))}`}
               onClick={(e) => handleLocalClick(e, b)}
               onDoubleClick={() => !b.is_head && !busy && runGit(() => checkoutBranch(path, b.name))}
@@ -406,6 +268,7 @@ export function Sidebar() {
                   icon="⟳"
                   label={label}
                   depth={depth}
+                  {...inGraph(b)}
                   title={b.name}
                   onClick={() => selectHash(b.target_hash)}
                   onDoubleClick={() => !busy && runGit(() => checkoutRemoteBranch(path, b.name))}
@@ -538,7 +401,7 @@ export function Sidebar() {
       </Group>
 
       {menu && <ContextMenu menu={menu} onClose={closeMenu} />}
-      {pullRequest && <PullRequestDialog target={pullRequest} onClose={() => setPullRequest(null)} />}
+      {pullRequestDialog}
     </aside>
   );
 }
@@ -646,10 +509,14 @@ function rowPadding(depth: number): number {
   return 24 + depth * 12;
 }
 
-function Row({ icon, label, active, selected, depth = 0, title, trailing, onClick, onDoubleClick, onContextMenu }: {
+function Row({ icon, label, active, selected, dimmed, solo, depth = 0, title, trailing, onClick, onDoubleClick, onContextMenu }: {
   icon: string;
   label: string;
   active?: boolean;
+  /** Branche absente du graphe (masquée, ou hors du solo). */
+  dimmed?: boolean;
+  /** Branche en solo dans le graphe. */
+  solo?: boolean;
   /** Fait partie d'une sélection multiple. */
   selected?: boolean;
   /** Profondeur dans l'arbre (dossiers de branches, remotes). */
@@ -663,8 +530,8 @@ function Row({ icon, label, active, selected, depth = 0, title, trailing, onClic
   return (
     <li>
       <div
-        title={title}
-        className={`flex items-center gap-2 pr-2 py-[3px] cursor-default ${rowTone(active, selected)}`}
+        title={dimmed ? `${title ?? label}\nMasquée dans le graphe` : title}
+        className={`flex items-center gap-2 pr-2 py-[3px] cursor-default ${rowTone(active, selected)} ${dimmed ? "opacity-40" : ""}`}
         style={{ paddingLeft: rowPadding(depth) }}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
@@ -672,6 +539,7 @@ function Row({ icon, label, active, selected, depth = 0, title, trailing, onClic
       >
         <span className="shrink-0 opacity-50 text-xs">{icon}</span>
         <span className="truncate text-xs flex-1">{label}</span>
+        {solo && <span className="text-[9px] px-1 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] shrink-0">solo</span>}
         {trailing}
       </div>
     </li>

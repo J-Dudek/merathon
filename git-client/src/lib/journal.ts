@@ -45,6 +45,7 @@ const COMMANDS: Record<string, (a: Args) => string> = {
     return `git apply ${flags[String(a.action)] ?? ""} (${part} de ${quote(a.filePath)})`;
   },
   create_commit: (a) => `git commit ${a.amend ? "--amend " : ""}-m ${quote(firstLine(a.message))}`,
+  reword_head: (a) => `git commit --amend --only -m ${quote(firstLine(a.message))}`,
   resolve_conflict: (a) => `git add ${quote(a.filePath)}  # conflit résolu`,
 
   stash_save: (a) => join("git stash push", a.includeUntracked && "-u", a.message && `-m ${quote(a.message)}`),
@@ -60,6 +61,8 @@ const COMMANDS: Record<string, (a: Args) => string> = {
   set_upstream: (a) =>
     a.upstream ? `git branch --set-upstream-to=${quote(a.upstream)} ${quote(a.name)}` : `git branch --unset-upstream ${quote(a.name)}`,
   merge_branch: (a) => `git merge ${quote(a.branch)}`,
+  fast_forward: (a) => `git merge --ff-only ${quote(a.branch)}`,
+  fast_forward_branch: (a) => `git fetch . ${quote(String(a.target) + ":" + String(a.branch))}`,
   abort_merge: () => "git merge --abort",
   rebase_onto: (a) => `git rebase ${quote(a.onto)}`,
   continue_rebase: () => "git rebase --continue",

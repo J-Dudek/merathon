@@ -4,6 +4,7 @@ mod accounts;
 mod commands;
 mod forge;
 mod http;
+mod notifications;
 mod oauth;
 mod git;
 mod terminal;
@@ -11,14 +12,19 @@ mod window;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    use_x11_under_wsl();
+
     tauri::Builder::default()
         .manage(terminal::Terminals::default())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::open_new_window,
+            notifications::notify_desktop,
             commands::open_repository,
             commands::get_repo_info,
             commands::init_repository,
@@ -30,6 +36,7 @@ pub fn run() {
             commands::get_commit_details,
             commands::get_commit_file_diff,
             commands::compare_refs,
+            commands::diff_commits,
             commands::branch_divergence,
             commands::rebase_pull_request,
             commands::discard_pull_request_rebase,
@@ -45,6 +52,7 @@ pub fn run() {
             commands::ignore_patterns,
             commands::apply_lines,
             commands::create_commit,
+            commands::reword_head,
             commands::get_conflict_content,
             commands::resolve_conflict,
             commands::list_stashes,
@@ -59,6 +67,8 @@ pub fn run() {
             commands::rename_branch,
             commands::set_upstream,
             commands::merge_branch,
+            commands::fast_forward,
+            commands::fast_forward_branch,
             commands::abort_merge,
             commands::rebase_onto,
             commands::continue_rebase,
@@ -113,4 +123,36 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Sous WSLg, une fenêtre Wayland n'a pas d'icône dans la barre des tâches Windows (pingouin par défaut) :
+/// en X11 (XWayland), l'icône de la fenêtre est transmise. Un `GDK_BACKEND` déjà défini est respecté.
+#[cfg(target_os = "linux")]
+fn use_x11_under_wsl() {
+    if std::env::var_os("GDK_BACKEND").is_some() {
+        return;
+    }
+    let osrelease = std::fs::read_to_string("/proc/sys/kernel/osrelease").unwrap_or_default();
+    if std::env::var_os("WSL_DISTRO_NAME").is_some() || is_wsl_kernel(&osrelease) {
+        // Appelé avant le démarrage de Tauri, quand aucun autre thread ne lit l'environnement.
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
+}
+
+/// Noyau de WSL : « 5.15.167.4-microsoft-standard-WSL2 », « 4.4.0-19041-Microsoft » (WSL 1).
+#[cfg(target_os = "linux")]
+fn is_wsl_kernel(osrelease: &str) -> bool {
+    osrelease.to_lowercase().contains("microsoft")
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod wsl_tests {
+    use super::is_wsl_kernel;
+
+    #[test]
+    fn detects_wsl_kernels() {
+        assert!(is_wsl_kernel("5.15.167.4-microsoft-standard-WSL2\n"));
+        assert!(is_wsl_kernel("4.4.0-19041-Microsoft"));
+        assert!(!is_wsl_kernel("7.0.0-38-generic"));
+    }
 }

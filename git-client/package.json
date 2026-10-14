@@ -1,7 +1,7 @@
 {
   "name": "merathon",
   "private": true,
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Merathon — Git Repository Manager : client Git graphique de bureau",
   "author": "Julien Dudek",
   "license": "MIT",
@@ -22,6 +22,7 @@
     "@tailwindcss/vite": "^4.3.1",
     "@tauri-apps/api": "~2.12",
     "@tauri-apps/plugin-dialog": "~2.8",
+    "@tauri-apps/plugin-notification": "~2.5.0",
     "@tauri-apps/plugin-opener": "~2.7",
     "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-updater": "^2.13.1",
