@@ -195,10 +195,12 @@ pub fn rebase_todo(repo: &Repository, base: &str) -> Result<Vec<TodoCommit>, Git
     Ok(todo)
 }
 
-/// Aucune modification des fichiers suivis (les fichiers non suivis sont tolérés).
+/// Aucune modification des fichiers suivis (les fichiers non suivis sont tolérés). Comme pour
+/// `git rebase`, les sous-modules sont ignorés : libgit2 ne les met pas à jour au checkout, leur
+/// pointeur diffère donc dès qu'une étape le change.
 fn workdir_is_clean(repo: &Repository) -> Result<bool, GitError> {
     let mut opts = StatusOptions::new();
-    opts.include_untracked(false);
+    opts.include_untracked(false).exclude_submodules(true);
     Ok(!repo
         .statuses(Some(&mut opts))?
         .iter()
@@ -273,6 +275,12 @@ fn validate(todo: &[TodoCommit], steps: &[RebaseStep], mode: RebaseMode) -> Resu
                 .map(|s| s.hash.as_str())
                 .chain(todo.iter().map(|c| c.hash.as_str()).filter(|h| !seen.contains(h)))
                 .collect();
+            if let Some(root) = todo.iter().find(|c| c.parents.is_empty() && dropped.contains(c.hash.as_str())) {
+                return Err(err(format!(
+                    "{} est un commit racine (historique fusionné sans ancêtre commun) : en préservant les merges, il ne peut pas être supprimé",
+                    short(&root.hash)
+                )));
+            }
             for step in steps.iter().filter(|s| matches!(s.action, RebaseAction::Squash | RebaseAction::Fixup)) {
                 let commit = by_hash[step.hash.as_str()];
                 let parent = commit.parents.first().and_then(|p| by_hash.get(p.as_str()));
@@ -360,18 +368,26 @@ fn plan_step<'r>(repo: &'r Repository, state: &SavedRebase, step: &RebaseStep, o
     }
 
     // Mode préservé : chaque parent est remplacé par sa version réécrite.
-    let mut parents: Vec<Commit> = Vec::new();
-    for pid in original.parent_ids() {
-        let mapped = repo.find_commit(state.mapped(pid)?)?;
-        // Un parent devenu ancêtre d'un autre (branche supprimée) est redondant.
-        let redundant = parents
-            .iter()
-            .any(|p| p.id() == mapped.id() || repo.graph_descendant_of(p.id(), mapped.id()).unwrap_or(false));
-        if !redundant {
-            parents.retain(|p| !repo.graph_descendant_of(mapped.id(), p.id()).unwrap_or(false));
-            parents.push(mapped);
-        }
-    }
+    let olds: Vec<Oid> = original.parent_ids().collect();
+    let news: Vec<Oid> = olds.iter().map(|&p| state.mapped(p)).collect::<Result<_, _>>()?;
+    let is_ancestor = |a: Oid, b: Oid| repo.graph_descendant_of(b, a).unwrap_or(false);
+    // Un parent devenu ancêtre d'un autre (branche supprimée) est redondant. Un parent qui l'était
+    // déjà dans l'historique d'origine est conservé : c'est le merge `--no-ff` d'une branche partie
+    // du dernier commit (merge de PR classique).
+    let redundant = |i: usize| {
+        (0..news.len()).any(|j| {
+            j != i
+                && if news[i] == news[j] {
+                    j < i
+                } else {
+                    is_ancestor(news[i], news[j]) && !is_ancestor(olds[i], olds[j])
+                }
+        })
+    };
+    let parents: Vec<Commit> = (0..news.len())
+        .filter(|&i| !redundant(i))
+        .map(|i| repo.find_commit(news[i]))
+        .collect::<Result<_, _>>()?;
     let onto = parents[0].clone();
     let replay = if original.parent_count() < 2 || parents.len() < 2 {
         Replay::Pick
@@ -407,9 +423,29 @@ fn replay_in_memory(repo: &Repository, original: &Commit, planned: &Planned) -> 
     }
 }
 
-/// Rejoue l'étape dans la copie de travail (pour présenter les conflits à l'utilisateur).
+/// Rejoue l'étape dans la copie de travail (pour présenter les conflits à l'utilisateur). En cas
+/// d'échec (fichier non suivi qui serait écrasé…), HEAD et la copie de travail sont remis où ils
+/// étaient : l'état enregistré du rebase reste cohérent et l'on peut réessayer ou annuler.
 fn replay_in_workdir(repo: &Repository, original: &Commit, planned: &Planned) -> Result<(), GitError> {
+    let head = repo.head()?;
+    let branch = if repo.head_detached()? { None } else { head.name().ok().map(str::to_string) };
+    let previous = head.peel_to_commit()?;
     materialize(repo, &planned.onto)?;
+    apply_in_workdir(repo, original, planned).or_else(|e| {
+        let _ = repo.cleanup_state();
+        repo.checkout_tree(previous.as_object(), Some(CheckoutBuilder::default().safe()))?;
+        match &branch {
+            Some(name) => repo.set_head(name)?,
+            None => repo.set_head_detached(previous.id())?,
+        }
+        Err(err(format!(
+            "Impossible de présenter le conflit de {} dans la copie de travail ({e}) : un fichier non suivi serait probablement écrasé, déplace-le puis réessaie",
+            short(&original.id().to_string())
+        )))
+    })
+}
+
+fn apply_in_workdir(repo: &Repository, original: &Commit, planned: &Planned) -> Result<(), GitError> {
     match planned.replay {
         Replay::Remerge => {
             let other = repo.find_annotated_commit(planned.parents[1].id())?;
@@ -460,10 +496,21 @@ fn commit_step<'r>(
     Ok(repo.find_commit(id)?)
 }
 
-/// Enregistre le commit produit par une étape.
-fn record(state: &mut SavedRebase, original: &Commit, planned: &Planned, produced: &Commit) -> Result<(), GitError> {
+/// Commit racine (historique fusionné avec `--allow-unrelated-histories`) en mode préservé : il
+/// n'a aucun parent à réécrire et reste une racine.
+fn replay_root<'r>(repo: &'r Repository, step: &RebaseStep, original: &Commit<'r>) -> Result<Commit<'r>, GitError> {
+    if step.action != RebaseAction::Reword {
+        return Ok(original.clone());
+    }
+    let message = step.message.clone().unwrap_or_default().trim().to_string();
+    let id = repo.commit(None, &original.author(), &signature(repo)?, &message, &original.tree()?, &[])?;
+    Ok(repo.find_commit(id)?)
+}
+
+/// Enregistre le commit produit par une étape (`squashed` : fusionné dans le commit précédent).
+fn record(state: &mut SavedRebase, original: &Commit, squashed: bool, produced: &Commit) -> Result<(), GitError> {
     let new = produced.id().to_string();
-    if planned.squash_target.is_some() && state.mode == RebaseMode::Preserve {
+    if squashed && state.mode == RebaseMode::Preserve {
         // Le commit fusionné remplace aussi celui dans lequel on a fusionné.
         state.mapping.insert(original.parent_id(0)?.to_string(), new.clone());
     }
@@ -539,36 +586,41 @@ fn run(repo: &Repository, mut state: SavedRebase) -> Result<InteractiveOutcome, 
             continue;
         }
 
-        let planned = plan_step(repo, &state, &step, &original)?;
-        let parents_unchanged = planned.squash_target.is_none()
-            && planned.parents.iter().map(|p| p.id()).eq(original.parent_ids());
-
-        let produced = if matches!(step.action, RebaseAction::Pick | RebaseAction::Edit) && parents_unchanged {
-            // Commit inchangé et déjà à sa place : on le garde tel quel (même hash).
-            original.clone()
-        } else if original.parent_count() > 1 && planned.parents.len() < 2 {
-            // Merge dont la branche fusionnée a été supprimée : il n'a plus de raison d'être
-            // (le rejouer réintroduirait le contenu des commits supprimés).
-            state.mapping.insert(step.hash.clone(), planned.onto.id().to_string());
-            state.tip = planned.onto.id().to_string();
-            state.next = index + 1;
-            continue;
+        let (produced, squashed) = if state.mode == RebaseMode::Preserve && original.parent_count() == 0 {
+            (replay_root(repo, &step, &original)?, false)
         } else {
-            let mut index_mem = replay_in_memory(repo, &original, &planned)?;
-            if index_mem.has_conflicts() {
-                replay_in_workdir(repo, &original, &planned)?;
-                return stop(repo, &mut state, index, StopReason::Conflict);
-            }
-            let tree = repo.find_tree(index_mem.write_tree_to(repo)?)?;
-            if becomes_empty(&original, &planned, &tree)? {
-                skip(&mut state, &original, &planned);
+            let planned = plan_step(repo, &state, &step, &original)?;
+            let parents_unchanged = planned.squash_target.is_none()
+                && planned.parents.iter().map(|p| p.id()).eq(original.parent_ids());
+
+            let produced = if matches!(step.action, RebaseAction::Pick | RebaseAction::Edit) && parents_unchanged {
+                // Commit inchangé et déjà à sa place : on le garde tel quel (même hash).
+                original.clone()
+            } else if original.parent_count() > 1 && planned.parents.len() < 2 {
+                // Merge dont la branche fusionnée a été supprimée : il n'a plus de raison d'être
+                // (le rejouer réintroduirait le contenu des commits supprimés).
+                state.mapping.insert(step.hash.clone(), planned.onto.id().to_string());
+                state.tip = planned.onto.id().to_string();
                 state.next = index + 1;
                 continue;
-            }
-            commit_step(repo, &step, &original, &planned, &tree)?
+            } else {
+                let mut index_mem = replay_in_memory(repo, &original, &planned)?;
+                if index_mem.has_conflicts() {
+                    replay_in_workdir(repo, &original, &planned)?;
+                    return stop(repo, &mut state, index, StopReason::Conflict);
+                }
+                let tree = repo.find_tree(index_mem.write_tree_to(repo)?)?;
+                if becomes_empty(&original, &planned, &tree)? {
+                    skip(&mut state, &original, &planned);
+                    state.next = index + 1;
+                    continue;
+                }
+                commit_step(repo, &step, &original, &planned, &tree)?
+            };
+            (produced, planned.squash_target.is_some())
         };
 
-        record(&mut state, &original, &planned, &produced)?;
+        record(&mut state, &original, squashed, &produced)?;
         state.next = index + 1;
 
         if step.action == RebaseAction::Edit {
@@ -629,7 +681,7 @@ pub fn continue_interactive(repo: &Repository) -> Result<InteractiveOutcome, Git
                     let produced = commit_step(repo, &step, &original, &planned, &tree)?;
                     repo.cleanup_state()?;
                     repo.set_head_detached(produced.id())?;
-                    record(&mut state, &original, &planned, &produced)?;
+                    record(&mut state, &original, planned.squash_target.is_some(), &produced)?;
                     state.next = index + 1;
                     if step.action == RebaseAction::Edit {
                         return stop(repo, &mut state, index, StopReason::Edit);
@@ -647,7 +699,7 @@ pub fn continue_interactive(repo: &Repository) -> Result<InteractiveOutcome, Git
                     }
                     _ => head,
                 };
-                record(&mut state, &original, &planned, &produced)?;
+                record(&mut state, &original, planned.squash_target.is_some(), &produced)?;
                 state.next = index + 1;
             }
         }
@@ -1449,5 +1501,275 @@ mod tests {
         assert_eq!(head(&f.repo).id(), c4);
         assert_eq!(f.repo.head().unwrap().shorthand().ok(), Some("master"));
         assert!(interactive_status(&f.repo).is_none(), "aucun rebase ne doit rester en cours");
+    }
+
+    // ------------------------------------------------------------ Merge --no-ff (PR)
+
+    /// base → M ← feat (branche partie de base, master n'a pas bougé : merge `--no-ff`), puis c2.
+    fn no_ff_fixture() -> (TempDir, Repository, String, String, String, String) {
+        let (dir, repo) = new_repo();
+        let base = commit_file(&repo, &dir, "base.txt", "base\n", "base");
+        repo.set_head_detached(Oid::from_str(&base).unwrap()).unwrap();
+        let feat = commit_file(&repo, &dir, "a.txt", "a\n", "feat");
+        repo.set_head("refs/heads/master").unwrap();
+        repo.checkout_head(Some(CheckoutBuilder::default().force())).unwrap();
+        let merge = merge_commit(&repo, &dir, &feat, "Merge feat", None);
+        let c2 = commit_file(&repo, &dir, "b.txt", "b\n", "c2");
+        (dir, repo, base, feat, merge, c2)
+    }
+
+    #[test]
+    fn preserve_keeps_no_ff_merge_when_rewording_after_it() {
+        let (_dir, repo, base, feat, merge, c2) = no_ff_fixture();
+        let steps = vec![
+            step(&feat, RebaseAction::Pick, None),
+            step(&merge, RebaseAction::Pick, None),
+            step(&c2, RebaseAction::Reword, Some("c2 renamed")),
+        ];
+        assert!(interactive_rebase(&repo, &base, &steps, RebaseMode::Preserve).unwrap().done);
+        let tip = head(&repo);
+        assert_eq!(tip.message().ok(), Some("c2 renamed"));
+        assert_eq!(tip.parent_id(0).unwrap().to_string(), merge, "le merge est conservé tel quel");
+        workdir_clean_and_on_master(&repo);
+    }
+
+    #[test]
+    fn preserve_keeps_no_ff_merge_when_rewording_the_merged_branch() {
+        let (_dir, repo, base, feat, merge, c2) = no_ff_fixture();
+        let steps = vec![
+            step(&feat, RebaseAction::Reword, Some("feat renamed")),
+            step(&merge, RebaseAction::Pick, None),
+            step(&c2, RebaseAction::Pick, None),
+        ];
+        assert!(interactive_rebase(&repo, &base, &steps, RebaseMode::Preserve).unwrap().done);
+        let merge = head(&repo).parent(0).unwrap();
+        assert_eq!(merge.parent_count(), 2, "le merge est recréé");
+        assert_eq!(merge.parent_id(0).unwrap().to_string(), base);
+        assert_eq!(merge.parent(1).unwrap().message().ok(), Some("feat renamed"));
+        assert!(merge.tree().unwrap().get_name("a.txt").is_some());
+        workdir_clean_and_on_master(&repo);
+    }
+
+    #[test]
+    fn preserve_dropping_the_only_merged_commit_removes_no_ff_merge() {
+        let (dir, repo, base, feat, merge, c2) = no_ff_fixture();
+        let steps = vec![
+            step(&feat, RebaseAction::Drop, None),
+            step(&merge, RebaseAction::Pick, None),
+            step(&c2, RebaseAction::Pick, None),
+        ];
+        assert!(interactive_rebase(&repo, &base, &steps, RebaseMode::Preserve).unwrap().done);
+        let tip = head(&repo);
+        assert_eq!(tip.parent_id(0).unwrap().to_string(), base, "le merge devenu vide disparaît");
+        assert!(!dir.path().join("a.txt").exists());
+        workdir_clean_and_on_master(&repo);
+    }
+
+    // ------------------------------------------------------------ Fichier non suivi sur un conflit
+
+    /// base(f=v0) → c1(f=v1) → c2(f=v2, +g.txt) → c3(-g.txt) → c4(i.txt) → c5(j.txt).
+    /// Rejouer c2 avant c1 entre en conflit et recrée g.txt.
+    fn untracked_conflict_fixture() -> (TempDir, Repository, String, Vec<String>) {
+        let (dir, repo, base, c1, _) = conflicting();
+        // c2 du fixture `conflicting` est remplacé : on repart de c1.
+        let c1_commit = repo.find_commit(Oid::from_str(&c1).unwrap()).unwrap();
+        repo.reset(c1_commit.as_object(), ResetType::Hard, None).unwrap();
+        drop(c1_commit);
+        fs::write(dir.path().join("g.txt"), "g\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("g.txt")).unwrap();
+        index.write().unwrap();
+        let c2 = commit_file(&repo, &dir, "f.txt", "v2\n", "c2");
+        fs::remove_file(dir.path().join("g.txt")).unwrap();
+        let mut index = repo.index().unwrap();
+        index.remove_path(std::path::Path::new("g.txt")).unwrap();
+        index.write().unwrap();
+        crate::git::create_commit(&repo, "c3", false).unwrap();
+        let c3 = head(&repo).id().to_string();
+        let c4 = commit_file(&repo, &dir, "i.txt", "i\n", "c4");
+        let c5 = commit_file(&repo, &dir, "j.txt", "j\n", "c5");
+        (dir, repo, base, vec![c1, c2, c3, c4, c5])
+    }
+
+    #[test]
+    fn untracked_file_blocking_a_conflict_at_start_leaves_branch_checked_out() {
+        let (dir, repo, base, c) = untracked_conflict_fixture();
+        fs::write(dir.path().join("g.txt"), "untracked\n").unwrap();
+        let steps = vec![
+            step(&c[1], RebaseAction::Pick, None),
+            step(&c[0], RebaseAction::Pick, None),
+            step(&c[2], RebaseAction::Pick, None),
+        ];
+        let e = interactive_rebase(&repo, &base, &steps, RebaseMode::Linear).unwrap_err();
+        assert!(e.to_string().contains("non suivi"), "{e}");
+        assert_eq!(head(&repo).id().to_string(), c[4], "HEAD revient sur la branche");
+        assert_eq!(fs::read_to_string(dir.path().join("g.txt")).unwrap(), "untracked\n");
+        assert_eq!(fs::read_to_string(dir.path().join("f.txt")).unwrap(), "v2\n");
+        workdir_clean_and_on_master(&repo);
+    }
+
+    #[test]
+    fn untracked_file_blocking_a_conflict_during_continue_keeps_the_stop() {
+        let (dir, repo, base, c) = untracked_conflict_fixture();
+        // c4 en edit, c5 rejoué proprement, puis c2 en conflit (et recrée g.txt).
+        let steps = vec![
+            step(&c[3], RebaseAction::Edit, None),
+            step(&c[4], RebaseAction::Pick, None),
+            step(&c[1], RebaseAction::Pick, None),
+            step(&c[0], RebaseAction::Pick, None),
+            step(&c[2], RebaseAction::Pick, None),
+        ];
+        let outcome = interactive_rebase(&repo, &base, &steps, RebaseMode::Linear).unwrap();
+        assert_eq!(outcome.stopped.unwrap().reason, StopReason::Edit);
+        let edited = head(&repo).id();
+        fs::write(dir.path().join("g.txt"), "untracked\n").unwrap();
+
+        assert!(continue_interactive(&repo).is_err());
+        assert_eq!(head(&repo).id(), edited, "HEAD reste sur le commit en cours de modification");
+        assert!(repo.head_detached().unwrap());
+        assert_eq!(repo.state(), RepositoryState::Clean);
+        assert_eq!(interactive_status(&repo).unwrap().reason, StopReason::Edit);
+        assert!(!dir.path().join("j.txt").exists(), "la copie de travail est revenue sur le commit arrêté");
+
+        // Le fichier gênant déplacé, on peut reprendre…
+        fs::remove_file(dir.path().join("g.txt")).unwrap();
+        let stop = continue_interactive(&repo).unwrap().stopped.unwrap();
+        assert_eq!((stop.reason, stop.hash), (StopReason::Conflict, c[1].clone()));
+        // …ou annuler proprement.
+        abort_interactive(&repo).unwrap();
+        assert_eq!(head(&repo).id().to_string(), c[4]);
+        workdir_clean_and_on_master(&repo);
+    }
+
+    // ------------------------------------------------------------ Sous-modules
+
+    /// Dépôt avec un sous-module `sub` : c1 l'ajoute en s1, c2 le passe en s2, c3 ajoute un fichier.
+    fn submodule_fixture() -> (TempDir, Repository, String, Vec<String>) {
+        let (dir, repo) = new_repo();
+        let base = commit_file(&repo, &dir, "base.txt", "base\n", "base");
+        let lib_dir = TempDir::new().unwrap();
+        let lib = Repository::init(lib_dir.path()).unwrap();
+        let s1 = commit_file(&lib, &lib_dir, "lib.txt", "1\n", "s1");
+        let mut sm = repo.submodule(lib_dir.path().to_str().unwrap(), std::path::Path::new("sub"), true).unwrap();
+        let sub = sm.clone(None).unwrap();
+        sub.set_head_detached(Oid::from_str(&s1).unwrap()).unwrap();
+        sm.add_finalize().unwrap();
+        drop(sm);
+        crate::git::create_commit(&repo, "add sub @s1", false).unwrap();
+        let c1 = head(&repo).id().to_string();
+
+        let sub_dir = dir.path().join("sub");
+        fs::write(sub_dir.join("lib.txt"), "2\n").unwrap();
+        let mut sub_index = sub.index().unwrap();
+        sub_index.add_path(std::path::Path::new("lib.txt")).unwrap();
+        sub_index.write().unwrap();
+        let tree = sub.find_tree(sub_index.write_tree().unwrap()).unwrap();
+        let sig = git2::Signature::now("Test", "test@test.com").unwrap();
+        let parent = sub.find_commit(Oid::from_str(&s1).unwrap()).unwrap();
+        let s2 = sub.commit(Some("HEAD"), &sig, &sig, "s2", &tree, &[&parent]).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("sub")).unwrap();
+        index.write().unwrap();
+        crate::git::create_commit(&repo, "sub @s2", false).unwrap();
+        let c2 = head(&repo).id().to_string();
+        assert_eq!(head(&repo).tree().unwrap().get_name("sub").unwrap().id(), s2);
+        let c3 = commit_file(&repo, &dir, "c.txt", "c\n", "c3");
+        assert!(workdir_is_clean(&repo).unwrap());
+        // Le dépôt du sous-module doit survivre au test (il sert d'URL au sous-module).
+        std::mem::forget(lib_dir);
+        (dir, repo, base, vec![c1, c2, c3])
+    }
+
+    #[test]
+    fn edit_stop_on_older_submodule_pointer_can_continue() {
+        let (_dir, repo, base, c) = submodule_fixture();
+        let steps = vec![
+            step(&c[0], RebaseAction::Edit, None),
+            step(&c[1], RebaseAction::Pick, None),
+            step(&c[2], RebaseAction::Reword, Some("c3 renamed")),
+        ];
+        let outcome = interactive_rebase(&repo, &base, &steps, RebaseMode::Linear).unwrap();
+        assert_eq!(outcome.stopped.unwrap().reason, StopReason::Edit);
+        // Le sous-module est toujours sur s2 alors que le commit arrêté pointe s1.
+        assert!(continue_interactive(&repo).unwrap().done);
+        assert_eq!(head(&repo).message().ok(), Some("c3 renamed"));
+        workdir_clean_and_on_master(&repo);
+    }
+
+    #[test]
+    fn untracked_file_inside_submodule_does_not_block_the_rebase() {
+        let (dir, repo, base, c) = submodule_fixture();
+        fs::write(dir.path().join("sub/scratch.tmp"), "x\n").unwrap();
+        let steps = vec![
+            step(&c[0], RebaseAction::Pick, None),
+            step(&c[1], RebaseAction::Pick, None),
+            step(&c[2], RebaseAction::Reword, Some("c3 renamed")),
+        ];
+        assert!(interactive_rebase(&repo, &base, &steps, RebaseMode::Linear).unwrap().done);
+        assert_eq!(head(&repo).message().ok(), Some("c3 renamed"));
+    }
+
+    // ------------------------------------------------------------ Commit racine dans la plage
+
+    /// base → a → M ← x, où x est un commit racine (merge `--allow-unrelated-histories`).
+    fn unrelated_fixture() -> (TempDir, Repository, String, String, String, String) {
+        let (dir, repo) = new_repo();
+        let base = commit_file(&repo, &dir, "base.txt", "base\n", "base");
+        let a = commit_file(&repo, &dir, "a.txt", "a\n", "a");
+        let (x, merge) = {
+            let sig = git2::Signature::now("Test", "test@test.com").unwrap();
+            let mut builder = repo.treebuilder(None).unwrap();
+            builder.insert("x.txt", repo.blob(b"x\n").unwrap(), 0o100644).unwrap();
+            let x_tree = repo.find_tree(builder.write().unwrap()).unwrap();
+            let x = repo.commit(None, &sig, &sig, "x", &x_tree, &[]).unwrap();
+            fs::write(dir.path().join("x.txt"), "x\n").unwrap();
+            let mut index = repo.index().unwrap();
+            index.add_path(std::path::Path::new("x.txt")).unwrap();
+            index.write().unwrap();
+            let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+            let parent = head(&repo);
+            let x_commit = repo.find_commit(x).unwrap();
+            (x, repo.commit(Some("HEAD"), &sig, &sig, "Merge x", &tree, &[&parent, &x_commit]).unwrap())
+        };
+        (dir, repo, base, a, x.to_string(), merge.to_string())
+    }
+
+    #[test]
+    fn preserve_with_root_commit_in_range() {
+        let (_dir, repo, base, a, x, merge) = unrelated_fixture();
+        let todo = rebase_todo(&repo, &base).unwrap();
+        let steps: Vec<_> = todo
+            .iter()
+            .map(|c| match c.hash.as_str() {
+                h if h == a => step(h, RebaseAction::Reword, Some("a renamed")),
+                h if h == x => step(h, RebaseAction::Reword, Some("x renamed")),
+                h => step(h, RebaseAction::Pick, None),
+            })
+            .collect();
+        assert!(steps.iter().any(|s| s.hash == merge));
+        assert!(interactive_rebase(&repo, &base, &steps, RebaseMode::Preserve).unwrap().done);
+
+        let tip = head(&repo);
+        assert_eq!(tip.parent_count(), 2);
+        assert_eq!(tip.parent(0).unwrap().message().ok(), Some("a renamed"));
+        let root = tip.parent(1).unwrap();
+        assert_eq!(root.message().ok(), Some("x renamed"));
+        assert_eq!(root.parent_count(), 0, "x reste une racine");
+        assert!(tip.tree().unwrap().get_name("x.txt").is_some());
+        workdir_clean_and_on_master(&repo);
+    }
+
+    #[test]
+    fn preserve_rejects_dropping_a_root_commit() {
+        let (_dir, repo, base, _a, x, merge) = unrelated_fixture();
+        let todo = rebase_todo(&repo, &base).unwrap();
+        let steps: Vec<_> = todo
+            .iter()
+            .map(|c| step(&c.hash, if c.hash == x { RebaseAction::Drop } else { RebaseAction::Pick }, None))
+            .collect();
+        let e = interactive_rebase(&repo, &base, &steps, RebaseMode::Preserve).unwrap_err();
+        assert!(e.to_string().contains("racine"), "{e}");
+        assert_eq!(head(&repo).id().to_string(), merge);
+        workdir_clean_and_on_master(&repo);
     }
 }

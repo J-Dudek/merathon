@@ -283,7 +283,11 @@ export function CommitGraph() {
   }, [hasCommits]);
 
   const layout = useMemo(() => computeGraphLayout(visibleCommits), [visibleCommits]);
-  const graphWidth = H_PADDING * 2 + layout.laneCount * LANE_WIDTH + INFO_OFFSET;
+  // Largeur de toutes les voies, bornée par celle choisie avec la poignée : les voies au-delà sont coupées.
+  const fullGraphWidth = H_PADDING * 2 + layout.laneCount * LANE_WIDTH + INFO_OFFSET;
+  const graphWidthLimit = useUiStore((s) => s.graphWidth);
+  const graphWidth = graphWidthLimit === null ? fullGraphWidth : Math.min(fullGraphWidth, graphWidthLimit);
+  const graphTruncated = graphWidth < fullGraphWidth;
 
   // Fait défiler jusqu'au commit sélectionné (ex. clic sur une branche dans la barre latérale).
   useEffect(() => {
@@ -456,54 +460,99 @@ export function CommitGraph() {
     <div className="flex flex-col h-full">
       {filterBar}
       {wipRow}
-      <div
-        ref={containerRef}
-        className="relative flex-1 overflow-y-auto overflow-x-hidden select-none"
-        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-      >
-        <div className="relative" style={{ height: visibleCommits.length * rowHeight }}>
-          <GraphCanvas
-            layout={layout}
-            selectedHash={selectedCommit?.hash ?? null}
-            headHash={info?.head_hash ?? null}
-            onSelectRow={(row) => selectOne(layout.nodes[row]?.commit ?? null)}
-            width={graphWidth}
-            rowHeight={rowHeight}
-            scrollTop={scrollTop}
-            viewportHeight={size.height}
-          />
-
-          {layout.nodes.slice(firstRow, lastRow).map((node) => (
-            <CommitRow
-              key={node.commit.hash}
-              commit={node.commit}
-              row={node.row}
+      <div className="relative flex-1 min-h-0 flex flex-col">
+        <div
+          ref={containerRef}
+          className="relative flex-1 overflow-y-auto overflow-x-hidden select-none"
+          onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+        >
+          <div className="relative" style={{ height: visibleCommits.length * rowHeight }}>
+            <GraphCanvas
+              layout={layout}
+              selectedHash={selectedCommit?.hash ?? null}
+              headHash={info?.head_hash ?? null}
+              onSelectRow={(row) => selectOne(layout.nodes[row]?.commit ?? null)}
+              width={graphWidth}
               rowHeight={rowHeight}
-              graphWidth={graphWidth}
-              isSelected={node.commit.hash === selectedCommit?.hash || multi.includes(node.commit.hash)}
-              containerWidth={size.width}
-              localOnly={localOnly}
-              onClick={(e) => handleRowClick(e, node.commit)}
-              onContextMenu={(e) => {
-                if (multi.length > 1 && multi.includes(node.commit.hash)) return openMenu(e, multiMenu(multi));
-                selectOne(node.commit);
-                openMenu(e, commitMenu(node.commit));
-              }}
-              onRefMenu={(e, ref) => {
-                const items = refMenu(ref);
-                if (!items) return;
-                e.preventDefault();
-                e.stopPropagation();
-                selectOne(node.commit);
-                openMenu(e, items);
-              }}
+              scrollTop={scrollTop}
+              viewportHeight={size.height}
             />
-          ))}
-        </div>
 
-        {menu && <ContextMenu menu={menu} onClose={closeMenu} />}
-        {pullRequestDialog}
+            {layout.nodes.slice(firstRow, lastRow).map((node) => (
+              <CommitRow
+                key={node.commit.hash}
+                commit={node.commit}
+                row={node.row}
+                rowHeight={rowHeight}
+                graphWidth={graphWidth}
+                isSelected={node.commit.hash === selectedCommit?.hash || multi.includes(node.commit.hash)}
+                containerWidth={size.width}
+                localOnly={localOnly}
+                onClick={(e) => handleRowClick(e, node.commit)}
+                onContextMenu={(e) => {
+                  if (multi.length > 1 && multi.includes(node.commit.hash)) return openMenu(e, multiMenu(multi));
+                  selectOne(node.commit);
+                  openMenu(e, commitMenu(node.commit));
+                }}
+                onRefMenu={(e, ref) => {
+                  const items = refMenu(ref);
+                  if (!items) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  selectOne(node.commit);
+                  openMenu(e, items);
+                }}
+              />
+            ))}
+          </div>
+
+          {menu && <ContextMenu menu={menu} onClose={closeMenu} />}
+          {pullRequestDialog}
+        </div>
+        {graphTruncated && (
+          <div
+            className="absolute inset-y-0 w-4 pointer-events-none bg-gradient-to-r from-transparent to-[var(--color-bg-primary)]"
+            style={{ left: graphWidth - 16 }}
+          />
+        )}
+        <GraphResizer graphWidth={graphWidth} fullWidth={fullGraphWidth} />
       </div>
+    </div>
+  );
+}
+
+/** Poignée entre l'arbre des branches et les commits : tirer pour le rétrécir, double-clic pour tout afficher. */
+function GraphResizer({ graphWidth, fullWidth }: { graphWidth: number; fullWidth: number }) {
+  const setGraphWidth = useUiStore((s) => s.setGraphWidth);
+
+  function startResize(e: React.PointerEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    // Au-delà de la largeur de toutes les voies, plus de limite : l'arbre suit à nouveau le nombre de voies.
+    const move = (ev: PointerEvent) => {
+      const width = graphWidth + ev.clientX - startX;
+      setGraphWidth(width >= fullWidth ? null : width);
+    };
+    const up = () => {
+      document.body.style.cursor = "";
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
+  return (
+    <div
+      className="group absolute inset-y-0 w-1 -ml-0.5 cursor-col-resize z-10 hover:bg-sky-400/40 active:bg-sky-400/60"
+      style={{ left: graphWidth }}
+      onPointerDown={startResize}
+      onDoubleClick={() => setGraphWidth(null)}
+      title="Redimensionner l'arbre des branches (double-clic : tout afficher)"
+    >
+      {/* Fine bordure toujours visible pour repérer la poignée, comme celle des panneaux latéraux. */}
+      <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-overlay/10 group-hover:bg-transparent" />
     </div>
   );
 }

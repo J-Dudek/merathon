@@ -2,6 +2,17 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.6.0](https://github.com/J-Dudek/merathon/compare/v2.5.2...v2.6.0) (2026-10-15)
+
+### Nouveautés
+
+- ajout actions sur dossier en mode contextuel (ab4d1d9)
+- ajout redimensionnement sur la partie graph (48b7241)
+
+### Corrections
+
+- correctif sur rebase interactif (ec70b04)
+
 ## [2.5.2](https://github.com/J-Dudek/merathon/compare/v2.5.1...v2.5.2) (2026-10-15)
 
 ### Corrections

@@ -11,7 +11,7 @@ import { errorMessage, reportInteractive, reportMerge, runGit } from "../lib/act
 import { ContextMenu, useContextMenu, type MenuEntry } from "./ContextMenu";
 import { plural } from "../lib/strings";
 import { fileTree, visibleFiles, type FileNode } from "../lib/fileTree";
-import { ignoreExtensionPattern, ignoreFilePattern, ignoreFolderPattern } from "../lib/gitignore";
+import { ignoreDirPattern, ignoreExtensionPattern, ignoreFilePattern, ignoreFolderPattern } from "../lib/gitignore";
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
 import type { FileStatus, InteractiveStop, RepoState } from "../types/git";
 
@@ -184,6 +184,7 @@ export function StagingPanel() {
         depth={0}
         isOpen={isOpen(section)}
         onToggle={(p) => toggleFolder(`${section}:${p}`)}
+        onFolderMenu={(e, dir, files) => openMenu(e, folderMenu(dir, files))}
         row={row}
         folderActions={folderActions}
       />
@@ -213,8 +214,8 @@ export function StagingPanel() {
     if (ok) await runGit(() => discardFiles(path, files.map((f) => f.path)));
   }
 
-  /** Menu d'une sélection de plusieurs fichiers d'une même section. */
-  function filesMenu(files: FileStatus[]): MenuEntry[] {
+  /** Indexer / désindexer / annuler plusieurs fichiers d'une même section. */
+  function stageEntries(files: FileStatus[]): MenuEntry[] {
     const n = plural(files.length, "fichier");
     const section = sectionOf(files[0]);
     return [
@@ -222,12 +223,35 @@ export function StagingPanel() {
         ? { label: `Désindexer ${n}`, action: () => runGit(() => unstageFiles(path, pathsOf(files))) }
         : { label: section === "c" ? `Marquer ${n} comme résolus (indexer)` : `Indexer ${n}`, action: () => runGit(() => stageFiles(path, pathsOf(files))) },
       ...(section === "u" ? [{ label: `Annuler les modifications de ${n}…`, danger: true, action: () => discard(files) }] : []),
+    ];
+  }
+
+  /** Menu d'une sélection de plusieurs fichiers d'une même section. */
+  function filesMenu(files: FileStatus[]): MenuEntry[] {
+    const n = plural(files.length, "fichier");
+    return [
+      ...stageEntries(files),
       ...(files.every((f) => f.status === "untracked")
         ? ["separator" as const, { label: `Ajouter ${n} au .gitignore`, action: () => ignore(files.map((f) => ignoreFilePattern(f.path))) }]
         : []),
       "separator",
       { label: "Copier les chemins", action: () => navigator.clipboard.writeText(pathsOf(files).join("\n")) },
       { label: "Annuler la sélection", action: clearSelection },
+    ];
+  }
+
+  /** Menu d'un dossier de l'arborescence : actions sur tous ses fichiers d'une même section, sous-dossiers compris. */
+  function folderMenu(dir: string, files: FileStatus[]): MenuEntry[] {
+    const pattern = ignoreDirPattern(dir);
+    return [
+      { header: `${dir}/` },
+      ...stageEntries(files),
+      ...(files.every((f) => f.status === "untracked")
+        ? ["separator" as const, { label: "Ignorer ce dossier", hint: pattern, action: () => ignore([pattern]) }]
+        : []),
+      "separator",
+      { label: "Copier le chemin", action: () => navigator.clipboard.writeText(dir) },
+      { label: "Afficher dans le gestionnaire de fichiers", action: () => revealItemInDir(`${path}/${dir}`).catch((e) => notify("error", errorMessage(e))) },
     ];
   }
 
@@ -599,11 +623,13 @@ function SelectionActions({ files, onClear, fallback, children }: {
 const treePadding = (depth: number) => 12 + depth * 12;
 
 /** Arbre de fichiers : un dossier pliable par niveau de chemin, récursivement. */
-function FileTree({ nodes, depth, isOpen, onToggle, row, folderActions }: {
+function FileTree({ nodes, depth, isOpen, onToggle, onFolderMenu, row, folderActions }: {
   nodes: FileNode<FileStatus>[];
   depth: number;
   isOpen: (path: string) => boolean;
   onToggle: (path: string) => void;
+  /** Clic droit sur un dossier, avec tous ses fichiers (sous-dossiers compris). */
+  onFolderMenu: (e: React.MouseEvent, path: string, files: FileStatus[]) => void;
   row: (f: FileStatus, depth: number) => React.ReactNode;
   folderActions?: (files: FileStatus[]) => React.ReactNode;
 }) {
@@ -616,6 +642,7 @@ function FileTree({ nodes, depth, isOpen, onToggle, row, folderActions }: {
           className="flex items-center gap-1 pr-3 py-[3px] cursor-pointer group hover:bg-overlay/5"
           style={{ paddingLeft: treePadding(depth) }}
           onClick={() => onToggle(node.path)}
+          onContextMenu={(e) => onFolderMenu(e, node.path, node.files)}
           title={node.path}
         >
           <span className="w-3 shrink-0 text-[9px] text-[var(--color-muted)]">{open ? "▾" : "▸"}</span>
@@ -626,7 +653,15 @@ function FileTree({ nodes, depth, isOpen, onToggle, row, folderActions }: {
           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">{folderActions?.(node.files)}</div>
         </div>
         {open && (
-          <FileTree nodes={node.children} depth={depth + 1} isOpen={isOpen} onToggle={onToggle} row={row} folderActions={folderActions} />
+          <FileTree
+            nodes={node.children}
+            depth={depth + 1}
+            isOpen={isOpen}
+            onToggle={onToggle}
+            onFolderMenu={onFolderMenu}
+            row={row}
+            folderActions={folderActions}
+          />
         )}
       </div>
     );

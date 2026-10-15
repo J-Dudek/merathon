@@ -85,6 +85,24 @@ function loadSideWidths(): SideWidths {
   }
 }
 
+const GRAPH_KEY = "merathon.graph-width";
+/** Largeur minimale de la colonne de l'arbre des branches : une voie. */
+export const MIN_GRAPH_WIDTH = 48;
+
+/** Largeur maximale de l'arbre choisie par l'utilisateur ; null (ou valeur invalide) : largeur de toutes les voies. */
+export function clampGraphWidth(width: unknown): number | null {
+  if (typeof width !== "number" || !Number.isFinite(width)) return null;
+  return Math.round(Math.max(MIN_GRAPH_WIDTH, width));
+}
+
+function loadGraphWidth(): number | null {
+  try {
+    return clampGraphWidth(JSON.parse(localStorage.getItem(GRAPH_KEY) ?? "null"));
+  } catch {
+    return null;
+  }
+}
+
 interface PendingDialog extends DialogOptions {
   resolve: (result: DialogResult | null) => void;
 }
@@ -98,6 +116,8 @@ interface UiStore {
   interactiveRebaseBase: string | null;
   panel: BottomPanelState;
   sideWidths: SideWidths;
+  /** Largeur maximale de l'arbre des branches dans le graphe ; au-delà, les voies sont coupées. null : pas de limite. */
+  graphWidth: number | null;
   /** Fenêtre des préférences ouverte. */
   preferencesOpen: boolean;
   /** Rubrique affichée à l'ouverture des préférences. */
@@ -113,6 +133,7 @@ interface UiStore {
   setInteractiveRebaseBase: (hash: string | null) => void;
   setPanel: (patch: Partial<BottomPanelState>) => void;
   setSideWidth: (side: Side, width: number) => void;
+  setGraphWidth: (width: number | null) => void;
   setPreferencesOpen: (open: boolean, section?: PreferencesSection) => void;
   setMemoOpen: (open: boolean) => void;
 }
@@ -126,6 +147,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   interactiveRebaseBase: null,
   panel: loadPanel(),
   sideWidths: loadSideWidths(),
+  graphWidth: loadGraphWidth(),
   preferencesOpen: false,
   preferencesSection: "appearance",
   memoOpen: false,
@@ -170,6 +192,17 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set({ sideWidths });
     try {
       localStorage.setItem(SIDES_KEY, JSON.stringify(sideWidths));
+    } catch {
+      // stockage indisponible : réglage gardé pour la session
+    }
+  },
+
+  setGraphWidth: (width) => {
+    const graphWidth = clampGraphWidth(width);
+    set({ graphWidth });
+    try {
+      if (graphWidth === null) localStorage.removeItem(GRAPH_KEY);
+      else localStorage.setItem(GRAPH_KEY, JSON.stringify(graphWidth));
     } catch {
       // stockage indisponible : réglage gardé pour la session
     }

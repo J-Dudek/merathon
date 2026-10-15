@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ignoreExtensionPattern, ignoreFilePattern, ignoreFolderPattern } from "./gitignore";
+import { ignoreDirPattern, ignoreExtensionPattern, ignoreFilePattern, ignoreFolderPattern } from "./gitignore";
 
 describe("ignoreFilePattern", () => {
   it("ancre le chemin à la racine du dépôt", () => {
@@ -9,6 +9,16 @@ describe("ignoreFilePattern", () => {
   it("échappe les caractères spéciaux", () => {
     expect(ignoreFilePattern("a[1]*.txt")).toBe("/a\\[1\\]\\*.txt");
     expect(ignoreFilePattern("fin ")).toBe("/fin\\ ");
+  });
+});
+
+describe("ignoreDirPattern", () => {
+  it("ancre le dossier à la racine du dépôt", () => {
+    expect(ignoreDirPattern("build/out")).toBe("/build/out/");
+  });
+
+  it("échappe les caractères spéciaux", () => {
+    expect(ignoreDirPattern("tmp[1]")).toBe("/tmp\\[1\\]/");
   });
 });
 

@@ -12,10 +12,15 @@ export function ignoreFilePattern(path: string): string {
   return `/${escapePath(path)}`;
 }
 
+/** Motif .gitignore désignant ce dossier (ancré à la racine du dépôt). */
+export function ignoreDirPattern(dir: string): string {
+  return `/${escapePath(dir)}/`;
+}
+
 /** Motif .gitignore du dossier contenant le fichier, ou null s'il est à la racine. */
 export function ignoreFolderPattern(path: string): string | null {
   const end = path.lastIndexOf("/");
-  return end > 0 ? `/${escapePath(path.slice(0, end))}/` : null;
+  return end > 0 ? ignoreDirPattern(path.slice(0, end)) : null;
 }
 
 /** Motif .gitignore de tous les fichiers de même extension (« *.log »), ou null sans extension. */
