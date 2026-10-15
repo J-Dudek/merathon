@@ -28,6 +28,7 @@ pub fn run() {
             notifications::close_desktop_notification,
             notifications::is_wsl,
             commands::open_repository,
+            commands::trust_repository,
             commands::get_repo_info,
             commands::init_repository,
             commands::get_identity,

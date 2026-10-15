@@ -18,7 +18,7 @@ pub mod lfs;
 
 pub use error::GitError;
 pub use auth::Credentials;
-pub use repository::{open_repo, repo_info, get_identity, set_identity, RepoInfo, Identity};
+pub use repository::{open_repo, trust_repo, repo_info, get_identity, set_identity, RepoInfo, Identity};
 pub use history::{get_commits, get_branches, get_tags, get_commit_details, compare_refs, diff_commits, CommitInfo, BranchInfo, TagInfo, CommitDetails, CommitFile, RefComparison};
 pub use status::{get_status, stage_paths, stage_all, unstage_paths, unstage_all, discard_paths, ignore_patterns, FileStatus};
 pub use diff::{get_diff, get_commit_file_diff, get_compare_file_diff, FileDiff};

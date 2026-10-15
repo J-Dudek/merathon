@@ -43,6 +43,13 @@ Sous Linux, les versions plus anciennes ne sont pas prises en charge : Ubuntu 20
 
 Les versions jusqu'à la 2.0.0 incluse demandent glibc ≥ 2.39 (Ubuntu 24.04, Debian 13) : sur un système plus ancien, le paquet s'installe mais l'application ne démarre pas (« version `GLIBC_2.39' not found »).
 
+### Dépôts WSL ouverts depuis la version Windows
+
+> [!WARNING]
+> La version Windows peut ouvrir un dépôt situé dans WSL (`\\wsl.localhost\<distribution>\…`), mais elle y sera **nettement plus lente** que sur un disque Windows. C'est normal : chaque lecture de fichier traverse la frontière entre Windows et la machine virtuelle WSL (protocole 9P), et afficher l'état d'un dépôt demande d'examiner chacun de ses fichiers. Pour des dépôts WSL, préférez la version Linux lancée dans WSL : elle lit le disque directement.
+
+Ces dépôts appartiennent, vus de Windows, à un autre utilisateur : Git refuse de les ouvrir tant qu'ils ne sont pas déclarés sûrs (`safe.directory`). À la première ouverture, Merathon propose de leur faire confiance et ajoute l'entrée dans la configuration Git globale (`%USERPROFILE%\.gitconfig`).
+
 ## Fonctionnalités
 
 - **Dépôts et onglets** : ouvrir, initialiser, cloner (avec la liste des dépôts de tes comptes), dépôts récents. Chaque dépôt s'ouvre dans un **onglet** ; pull, push, fetch… s'appliquent à l'onglet affiché, qui garde son état (sélection, diff, message de commit en cours) quand on passe à un autre. Un dépôt déjà ouvert est simplement réaffiché, et les onglets sont rouverts au démarrage. Plusieurs fenêtres restent possibles.

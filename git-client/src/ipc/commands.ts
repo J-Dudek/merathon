@@ -34,6 +34,10 @@ async function invoke<T>(cmd: string, args?: InvokeArgs): Promise<T> {
 // ---------------------------------------------------------------- Dépôt
 
 export const openRepository = (path: string) => invoke<RepoInfo>("open_repository", { path });
+/** Ajoute le dépôt à `safe.directory` (dépôt appartenant à un autre utilisateur, ex. WSL vu depuis Windows). */
+export const trustRepository = (path: string) => invoke<void>("trust_repository", { path });
+/** Préfixe de l'erreur renvoyée par `open_repository` pour un dépôt absent de `safe.directory`. */
+export const UNTRUSTED_REPO_ERROR = "Untrusted repository";
 export const getRepoInfo = (path: string) => invoke<RepoInfo>("get_repo_info", { path });
 export const initRepository = (path: string) => invoke<void>("init_repository", { path });
 /** `repo` : dépôt à ouvrir directement dans la nouvelle fenêtre. */

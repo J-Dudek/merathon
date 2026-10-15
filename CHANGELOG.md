@@ -2,6 +2,17 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.5.1](https://github.com/J-Dudek/merathon/compare/v2.5.0...v2.5.1) (2026-10-15)
+
+### À savoir
+
+- Ouvrir avec la version Windows un dépôt situé dans WSL est désormais possible : Merathon propose de lui faire confiance à la première ouverture. Attention, ce sera nettement plus lent que sur un disque Windows, et c'est normal : chaque lecture de fichier traverse la frontière entre Windows et WSL, et l'état du dépôt demande d'examiner tous ses fichiers. Pour vos dépôts WSL, préférez la version Linux lancée dans WSL.
+
+### Corrections
+
+- run git commands off the main thread (a4eb350)
+- open WSL repositories from the Windows build (78833b4)
+
 ## [2.5.0](https://github.com/J-Dudek/merathon/compare/v2.4.1...v2.5.0) (2026-10-15)
 
 ### Nouveautés

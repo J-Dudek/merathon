@@ -6,6 +6,10 @@ pub enum GitError {
     Git(#[from] git2::Error),
     #[error("Repository not found at: {0}")]
     NotFound(String),
+    /// Dépôt appartenant à un autre utilisateur (ex. `\\wsl.localhost\…` vu depuis Windows) et
+    /// absent de `safe.directory`. Le frontend reconnaît ce message à son préfixe.
+    #[error("Untrusted repository (owned by another user): {0}")]
+    Untrusted(String),
     #[error("Conflict: {0}")]
     Conflict(String),
     #[error("{0}")]

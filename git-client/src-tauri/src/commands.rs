@@ -1,7 +1,9 @@
 //! Commandes exposées au frontend.
 //!
-//! Les opérations locales sont synchrones (rapides). Les opérations réseau (clone, fetch,
-//! pull, push) sont `async` et s'exécutent dans un thread dédié pour ne pas figer l'UI.
+//! Les opérations Git locales sont synchrones mais déclarées `#[tauri::command(async)]` : Tauri
+//! exécute sinon les commandes synchrones sur le thread principal, et l'UI se fige dès que le
+//! disque est lent (dépôt WSL ouvert depuis Windows via `\\wsl.localhost\…`). Les opérations
+//! réseau (clone, fetch, pull, push) sont `async` et s'exécutent dans un thread dédié.
 
 use git2::Repository;
 use tauri::{AppHandle, Manager};
@@ -56,22 +58,28 @@ async fn network<T: Send + 'static>(
 
 // ---------------------------------------------------------------- Dépôt
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_repository(path: String) -> Result<git::RepoInfo, GitError> {
     with_repo(&path, git::repo_info)
 }
 
-#[tauri::command]
+/// Ajoute un dépôt appartenant à un autre utilisateur à `safe.directory` pour pouvoir l'ouvrir.
+#[tauri::command(async)]
+pub fn trust_repository(path: String) -> Result<(), GitError> {
+    git::trust_repo(&path)
+}
+
+#[tauri::command(async)]
 pub fn get_repo_info(path: String) -> Result<git::RepoInfo, GitError> {
     with_repo(&path, git::repo_info)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn init_repository(path: String) -> Result<(), GitError> {
     git::init_repo(&path)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_identity(path: Option<String>) -> Result<git::Identity, GitError> {
     match path {
         Some(p) => with_repo(&p, git::get_identity),
@@ -86,7 +94,7 @@ pub fn get_identity(path: Option<String>) -> Result<git::Identity, GitError> {
 }
 
 /// `path` absent : configuration globale de l'utilisateur.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_identity(path: Option<String>, name: String, email: String) -> Result<(), GitError> {
     match path {
         Some(p) => with_repo(&p, |r| git::set_identity(Some(r), &name, &email)),
@@ -102,62 +110,62 @@ pub fn open_new_window(app: AppHandle, repo: Option<String>) -> Result<(), Strin
 
 // ---------------------------------------------------------------- Historique
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_commits(path: String, limit: usize) -> Result<Vec<git::CommitInfo>, GitError> {
     with_repo(&path, |r| git::get_commits(r, limit))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_branches(path: String) -> Result<Vec<git::BranchInfo>, GitError> {
     with_repo(&path, git::get_branches)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_tags(path: String) -> Result<Vec<git::TagInfo>, GitError> {
     with_repo(&path, git::get_tags)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_commit_details(path: String, hash: String) -> Result<git::CommitDetails, GitError> {
     with_repo(&path, |r| git::get_commit_details(r, &hash))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_commit_file_diff(path: String, hash: String, file_path: String) -> Result<git::FileDiff, GitError> {
     with_repo(&path, |r| git::get_commit_file_diff(r, &hash, &file_path))
 }
 
 /// Fichiers modifiés par `head` depuis son ancêtre commun avec `base` (diff d'une pull request).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn compare_refs(path: String, base: String, head: String) -> Result<git::RefComparison, GitError> {
     with_repo(&path, |r| git::compare_refs(r, &base, &head))
 }
 
 /// Fichiers modifiés entre deux commits quelconques (comparaison de deux commits du graphe).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn diff_commits(path: String, base: String, head: String) -> Result<Vec<git::CommitFile>, GitError> {
     with_repo(&path, |r| git::diff_commits(r, &base, &head))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_compare_file_diff(path: String, base: String, head: String, file_path: String) -> Result<git::FileDiff, GitError> {
     with_repo(&path, |r| git::get_compare_file_diff(r, &base, &head, &file_path))
 }
 
 // ---------------------------------------------------------------- Mise à jour d'une branche de PR
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn branch_divergence(path: String, base: String, head: String) -> Result<git::BranchDivergence, GitError> {
     with_repo(&path, |r| git::branch_divergence(r, &base, &head))
 }
 
 /// Rebase en mémoire : la copie de travail n'est pas touchée.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rebase_pull_request(path: String, onto: String, head: String, branch: String) -> Result<git::PrRebase, GitError> {
     with_repo(&path, |r| git::rebase_pull_request(r, &onto, &head, &branch))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn discard_pull_request_rebase(path: String, branch: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::discard_pull_request_rebase(r, &branch))
 }
@@ -176,49 +184,49 @@ pub async fn force_push_pull_request(
 
 // ---------------------------------------------------------------- Copie de travail
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_status(path: String) -> Result<Vec<git::FileStatus>, GitError> {
     with_repo(&path, git::get_status)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_diff(path: String, file_path: String, staged: bool) -> Result<git::FileDiff, GitError> {
     with_repo(&path, |r| git::get_diff(r, &file_path, staged))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stage_files(path: String, paths: Vec<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::stage_paths(r, &paths))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stage_all(path: String) -> Result<(), GitError> {
     with_repo(&path, git::stage_all)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn unstage_files(path: String, paths: Vec<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::unstage_paths(r, &paths))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn unstage_all(path: String) -> Result<(), GitError> {
     with_repo(&path, git::unstage_all)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn discard_files(path: String, paths: Vec<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::discard_paths(r, &paths))
 }
 
 /// Ajoute des motifs au .gitignore racine du dépôt.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ignore_patterns(path: String, patterns: Vec<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::ignore_patterns(r, &patterns))
 }
 
 /// Indexe / désindexe / annule un bloc (`lines` absent) ou des lignes d'un bloc.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn apply_lines(
     path: String,
     file_path: String,
@@ -229,40 +237,40 @@ pub fn apply_lines(
     with_repo(&path, |r| git::apply_lines(r, &file_path, hunk, lines, action))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_commit(path: String, message: String, amend: bool) -> Result<String, GitError> {
     with_repo(&path, |r| git::create_commit(r, &message, amend))
 }
 
 /// Nouveau message pour le dernier commit, contenu inchangé.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reword_head(path: String, message: String) -> Result<String, GitError> {
     with_repo(&path, |r| git::reword_head(r, &message))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_conflict_content(path: String, file_path: String) -> Result<String, GitError> {
     with_repo(&path, |r| git::get_conflict_content(r, &file_path))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn resolve_conflict(path: String, file_path: String, content: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::resolve_conflict(r, &file_path, &content))
 }
 
 // ---------------------------------------------------------------- Stash
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_stashes(path: String) -> Result<Vec<git::StashInfo>, GitError> {
     with_repo_mut(&path, git::list_stashes)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stash_save(path: String, message: Option<String>, include_untracked: bool) -> Result<(), GitError> {
     with_repo_mut(&path, |r| git::stash_save(r, message.as_deref(), include_untracked))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stash_apply(path: String, index: usize, pop: bool) -> Result<(), GitError> {
     with_repo_mut(&path, |r| {
         git::stash_apply(r, index, pop)?;
@@ -271,29 +279,29 @@ pub fn stash_apply(path: String, index: usize, pop: bool) -> Result<(), GitError
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stash_drop(path: String, index: usize) -> Result<(), GitError> {
     with_repo_mut(&path, |r| git::stash_drop(r, index))
 }
 
 // ---------------------------------------------------------------- Branches & commits
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn checkout_branch(path: String, name: String) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| git::checkout_branch(r, &name))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn checkout_remote_branch(path: String, name: String) -> Result<String, GitError> {
     with_repo_lfs(&path, |r| git::checkout_remote_branch(r, &name))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn checkout_commit(path: String, hash: String) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| git::checkout_commit(r, &hash))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_branch(path: String, name: String, from_ref: String, checkout: bool) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| {
         git::create_branch(r, &name, &from_ref)?;
@@ -304,65 +312,65 @@ pub fn create_branch(path: String, name: String, from_ref: String, checkout: boo
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_branch(path: String, name: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::delete_branch(r, &name))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_branch(path: String, old_name: String, new_name: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::rename_branch(r, &old_name, &new_name))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_upstream(path: String, name: String, upstream: Option<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::set_upstream(r, &name, upstream.as_deref()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn merge_branch(path: String, branch: String) -> Result<git::MergeResult, GitError> {
     with_repo_lfs(&path, |r| git::merge_branch(r, &branch))
 }
 
 /// Avance la branche courante jusqu'à `branch` sans jamais créer de commit de merge.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fast_forward(path: String, branch: String) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| git::fast_forward(r, &branch))
 }
 
 /// Avance une branche locale jusqu'à `target` sans la checkout.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fast_forward_branch(path: String, branch: String, target: String) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| git::fast_forward_branch(r, &branch, &target))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn abort_merge(path: String) -> Result<(), GitError> {
     with_repo_lfs(&path, git::abort_merge)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rebase_onto(path: String, onto: String) -> Result<git::RebaseResult, GitError> {
     with_repo_lfs(&path, |r| git::rebase_onto(r, &onto))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn continue_rebase(path: String) -> Result<git::RebaseResult, GitError> {
     with_repo_lfs(&path, git::continue_rebase)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn abort_rebase(path: String) -> Result<(), GitError> {
     with_repo_lfs(&path, git::abort_rebase)
 }
 
 /// Commits réécrits par un rebase interactif sur `base`, du plus ancien au plus récent.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rebase_todo(path: String, base: String) -> Result<Vec<git::TodoCommit>, GitError> {
     with_repo(&path, |r| git::rebase_todo(r, &base))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn interactive_rebase(
     path: String,
     base: String,
@@ -372,54 +380,54 @@ pub fn interactive_rebase(
     with_repo_lfs(&path, |r| git::interactive_rebase(r, &base, &steps, mode))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn continue_interactive_rebase(path: String) -> Result<git::InteractiveOutcome, GitError> {
     with_repo_lfs(&path, git::continue_interactive)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn abort_interactive_rebase(path: String) -> Result<(), GitError> {
     with_repo_lfs(&path, git::abort_interactive)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reset_to(path: String, hash: String, mode: String) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| git::reset_to(r, &hash, &mode))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cherry_pick(path: String, hash: String) -> Result<git::MergeResult, GitError> {
     with_repo_lfs(&path, |r| git::cherry_pick(r, &hash))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn revert_commit(path: String, hash: String) -> Result<git::MergeResult, GitError> {
     with_repo_lfs(&path, |r| git::revert_commit(r, &hash))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_tag(path: String, name: String, target: String, message: Option<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::create_tag(r, &name, &target, message.as_deref()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_tag(path: String, name: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::delete_tag(r, &name))
 }
 
 // ---------------------------------------------------------------- Remotes
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_remotes(path: String) -> Result<Vec<git::RemoteInfo>, GitError> {
     with_repo(&path, git::list_remotes)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn add_remote(path: String, name: String, url: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::add_remote(r, &name, &url))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_remote(path: String, name: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::remove_remote(r, &name))
 }
@@ -442,7 +450,7 @@ pub async fn clone_repository(app: AppHandle, url: String, path: String) -> Resu
     .await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_submodules(path: String) -> Result<Vec<git::SubmoduleInfo>, GitError> {
     with_repo(&path, git::list_submodules)
 }
@@ -550,7 +558,7 @@ pub async fn delete_remote_tag(app: AppHandle, path: String, remote: String, tag
 
 // ---------------------------------------------------------------- LFS
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn lfs_status(path: String) -> Result<git::lfs::LfsStatus, GitError> {
     with_repo(&path, git::lfs::lfs_status)
 }
@@ -572,7 +580,7 @@ pub async fn lfs_pull(app: AppHandle, path: String) -> Result<(), GitError> {
 }
 
 /// Suit (ou ne suit plus, si `untrack`) un motif de fichiers avec LFS.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn lfs_track(path: String, pattern: String, untrack: bool) -> Result<(), GitError> {
     with_repo(&path, |r| git::lfs::lfs_track(r, &pattern, untrack))
 }

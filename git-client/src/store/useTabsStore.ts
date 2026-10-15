@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { emptyRepo, useRepoStore, type RepoState } from "./useRepoStore";
 import { useUiStore } from "./useUiStore";
+import { trustRepository, UNTRUSTED_REPO_ERROR } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
 import { trimEndChars } from "../lib/strings";
 
@@ -47,12 +48,34 @@ function samePath(a: string | null, b: string | null): boolean {
 /** Charge un dépôt dans l'onglet actif ; renvoie faux (erreur notifiée) s'il n'a pas pu être ouvert. */
 async function loadRepo(path: string): Promise<boolean> {
   try {
-    await useRepoStore.getState().openRepo(path);
+    try {
+      await useRepoStore.getState().openRepo(path);
+    } catch (e) {
+      if (!errorMessage(e).startsWith(UNTRUSTED_REPO_ERROR) || !(await confirmTrust(path))) throw e;
+      await trustRepository(path);
+      await useRepoStore.getState().openRepo(path);
+    }
     return true;
   } catch (e) {
     useUiStore.getState().notify("error", `Impossible d'ouvrir ${path} : ${errorMessage(e)}`);
     return false;
   }
+}
+
+/**
+ * Dépôt appartenant à un autre utilisateur (typiquement un dépôt WSL ouvert depuis Windows) :
+ * propose de l'ajouter à `safe.directory` dans la configuration Git globale.
+ */
+async function confirmTrust(path: string): Promise<boolean> {
+  const result = await useUiStore.getState().ask({
+    title: "Faire confiance à ce dépôt ?",
+    message:
+      `${path}\nappartient à un autre utilisateur (c'est le cas des dépôts WSL ouverts depuis Windows). ` +
+      "Git refuse de l'ouvrir tant qu'il n'est pas déclaré sûr.\n\n" +
+      "L'ajouter à safe.directory dans votre configuration Git globale ?",
+    confirmLabel: "Faire confiance",
+  });
+  return result !== null;
 }
 
 export const useTabsStore = create<TabsStore>((set, get) => {

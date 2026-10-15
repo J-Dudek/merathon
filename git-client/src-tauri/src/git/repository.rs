@@ -1,4 +1,4 @@
-use git2::{Repository, RepositoryState};
+use git2::{Config, ErrorCode, Repository, RepositoryState};
 use serde::Serialize;
 use super::error::GitError;
 
@@ -23,7 +23,48 @@ pub struct Identity {
 }
 
 pub fn open_repo(path: &str) -> Result<Repository, GitError> {
-    Repository::open(path).map_err(|_| GitError::NotFound(path.to_string()))
+    Repository::open(path).map_err(|e| match e.code() {
+        ErrorCode::NotFound => GitError::NotFound(path.to_string()),
+        ErrorCode::Owner => GitError::Untrusted(path.to_string()),
+        _ => GitError::Git(e),
+    })
+}
+
+/// Valeur `safe.directory` d'un dépôt, telle que libgit2 et Git for Windows la comparent :
+/// séparateurs `/`, sans `/` final, et préfixe `%(prefix)/` pour les chemins commençant par `/`
+/// (dont les chemins UNC `//wsl.localhost/…`).
+fn safe_directory_entry(path: &str) -> String {
+    let normalized = path.replace('\\', "/");
+    let trimmed = normalized.trim_end_matches('/');
+    let trimmed = if trimmed.is_empty() { "/" } else { trimmed };
+    if trimmed.starts_with('/') {
+        format!("%(prefix)/{trimmed}")
+    } else {
+        trimmed.to_string()
+    }
+}
+
+/// Ajoute le dépôt à `safe.directory` dans la configuration Git globale de l'utilisateur
+/// (même effet que `git config --global --add safe.directory …`).
+pub fn trust_repo(path: &str) -> Result<(), GitError> {
+    let file = match Config::find_global() {
+        Ok(file) => file,
+        // Pas encore de ~/.gitconfig : on le crée.
+        Err(_) => std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+            .map(|home| std::path::PathBuf::from(home).join(".gitconfig"))
+            .ok_or_else(|| GitError::Other("configuration Git globale introuvable".into()))?,
+    };
+    add_safe_directory(&mut Config::open(&file)?, &safe_directory_entry(path))
+}
+
+fn add_safe_directory(config: &mut Config, entry: &str) -> Result<(), GitError> {
+    let mut present = false;
+    config.multivar("safe.directory", None)?.for_each(|e| present |= e.value().is_ok_and(|v| v == entry))?;
+    if !present {
+        // Regex qui ne correspond à aucune valeur : ajoute une entrée au lieu d'en remplacer.
+        config.set_multivar("safe.directory", "a^", entry)?;
+    }
+    Ok(())
 }
 
 pub fn repo_info(repo: &Repository) -> Result<RepoInfo, GitError> {
@@ -122,6 +163,29 @@ mod tests {
     fn open_missing_repo_returns_error() {
         let result = open_repo("/nonexistent/path");
         assert!(matches!(result, Err(GitError::NotFound(_))));
+    }
+
+    #[test]
+    fn safe_directory_entry_matches_libgit2_format() {
+        assert_eq!(
+            safe_directory_entry(r"\\wsl.localhost\dev\home\me\repo\"),
+            "%(prefix)///wsl.localhost/dev/home/me/repo"
+        );
+        assert_eq!(safe_directory_entry("/home/me/repo/"), "%(prefix)//home/me/repo");
+        assert_eq!(safe_directory_entry(r"C:\work\repo"), "C:/work/repo");
+    }
+
+    #[test]
+    fn add_safe_directory_skips_duplicates() {
+        let dir = TempDir::new().unwrap();
+        let mut config = Config::open(&dir.path().join(".gitconfig")).unwrap();
+        add_safe_directory(&mut config, "C:/a").unwrap();
+        add_safe_directory(&mut config, "C:/b").unwrap();
+        add_safe_directory(&mut config, "C:/a").unwrap();
+        let mut values = Vec::new();
+        config.multivar("safe.directory", None).unwrap()
+            .for_each(|e| values.push(e.value().unwrap().to_string())).unwrap();
+        assert_eq!(values, ["C:/a", "C:/b"]);
     }
 
     #[test]
