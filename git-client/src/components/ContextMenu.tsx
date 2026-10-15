@@ -77,7 +77,7 @@ export function ContextMenu({ menu, onClose }: Props) {
       ref={ref}
       style={style}
       role="menu"
-      className="min-w-48 max-w-96 max-h-[80vh] overflow-y-auto p-1 rounded-lg border border-overlay/10 bg-[var(--color-bg-elevated)]/95 backdrop-blur-md shadow-2xl shadow-black/50 ring-1 ring-shade/40 select-none"
+      className="min-w-48 max-w-[min(40rem,calc(100vw-8px))] max-h-[80vh] overflow-y-auto p-1 rounded-lg border border-overlay/10 bg-[var(--color-bg-elevated)]/95 backdrop-blur-md shadow-2xl shadow-black/50 ring-1 ring-shade/40 select-none"
     >
       {menu.items.map((entry, i) => {
         if (entry === "separator") return <div key={i} className="my-1 mx-1 h-px bg-overlay/10" />;
@@ -105,10 +105,11 @@ export function ContextMenu({ menu, onClose }: Props) {
             }}
           >
             {Icon && <Icon size={14} strokeWidth={1.75} className="shrink-0 opacity-70 group-hover:opacity-100" />}
-            <span className="flex-1 min-w-0">
-              <span className="block truncate">{entry.label}</span>
+            {/* Libellés renvoyés à la ligne plutôt que tronqués : les noms de branches longs restent lisibles. */}
+            <span className="flex-1 min-w-0 [overflow-wrap:anywhere]">
+              <span className="block">{entry.label}</span>
               {entry.hint && (
-                <span className="block truncate text-[10px] text-[var(--color-muted)] font-mono">{entry.hint}</span>
+                <span className="block text-[10px] text-[var(--color-muted)] font-mono">{entry.hint}</span>
               )}
             </span>
             {entry.shortcut && <Kbd keys={entry.shortcut} className="ml-4" />}
