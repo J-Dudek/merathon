@@ -11,6 +11,7 @@ import type {
 import { Button, Modal, inputClass } from "./Modal";
 import { PullRequestFiles } from "./PullRequestFiles";
 import { PullRequestBranchSync } from "./PullRequestBranchSync";
+import { fieldLabel } from "../lib/fieldLabel";
 
 const labelClass = "text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]";
 
@@ -234,6 +235,7 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
               <textarea
                 className={`${inputClass} h-20 resize-y font-mono`}
                 placeholder="Commentaire (Markdown) — accompagne aussi l'approbation ou la demande de changements"
+                {...fieldLabel("Commentaire de la conversation (Markdown)")}
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
                 onKeyDown={(e) => {

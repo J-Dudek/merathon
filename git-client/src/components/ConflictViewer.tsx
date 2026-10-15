@@ -131,7 +131,7 @@ export function ConflictViewer({ path }: { path: string }) {
         >
           ← Graphe
         </button>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">⚠ Conflit</span>
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-red-400">⚠ Conflit</h2>
         <span className="text-xs font-mono text-[var(--color-text)] truncate flex-1">{path}</span>
         <span className="text-[11px] text-[var(--color-muted)]">
           {sections.length} bloc{sections.length > 1 ? "s" : ""} — clique sur la version à garder

@@ -18,6 +18,7 @@ import { useBranchMenus } from "../components/branchMenus";
 import { localOnlyBranches } from "../lib/branches";
 import { squashPlan } from "../lib/squash";
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
+import { dispatchContextMenu, isContextMenuKey, listKeyIndex } from "../lib/keyboardContextMenu";
 import type { BranchInfo, CommitInfo, MergeResult, RefLabel } from "../types/git";
 
 const INFO_OFFSET = 20;
@@ -76,6 +77,24 @@ export function CommitGraph() {
     const next = clickSelection(order, selection, commit.hash, clickModifiers(e), { current: selectedCommit?.hash ?? null });
     setSelection(next.selection);
     setSelectedCommit(commit);
+  }
+
+  // Clavier : flèches, Origine / Fin, Page préc. / suiv. ; touche Menu ou Maj+F10 pour le menu du commit sélectionné.
+  function handleListKey(e: React.KeyboardEvent) {
+    if (isContextMenuKey(e)) {
+      const row = selectedCommit && document.getElementById(rowId(selectedCommit.hash));
+      if (row) {
+        e.preventDefault();
+        dispatchContextMenu(row);
+      }
+      return;
+    }
+    const current = selectedCommit ? layout.nodes.findIndex((n) => n.commit.hash === selectedCommit.hash) : -1;
+    const page = Math.max(1, Math.floor(size.height / rowHeight) - 1);
+    const next = listKeyIndex(e.key, current, layout.nodes.length, page);
+    if (next === null) return;
+    e.preventDefault();
+    selectOne(layout.nodes[next].commit);
   }
 
   async function squashSelected(hashes: string[]) {
@@ -434,7 +453,7 @@ export function CommitGraph() {
         {filterLabel(graphFilter)}
       </span>
       <button
-        className="ml-auto shrink-0 text-[var(--color-accent)] hover:underline"
+        className="ml-auto shrink-0 text-[var(--color-accent-text)] hover:underline"
         onClick={() => useGraphFilterStore.getState().clear(repoPath)}
       >
         Tout afficher
@@ -463,8 +482,14 @@ export function CommitGraph() {
       <div className="relative flex-1 min-h-0 flex flex-col">
         <div
           ref={containerRef}
-          className="relative flex-1 overflow-y-auto overflow-x-hidden select-none"
+          role="listbox"
+          tabIndex={0}
+          aria-label="Historique des commits"
+          aria-multiselectable
+          aria-activedescendant={selectedCommit ? rowId(selectedCommit.hash) : undefined}
+          className="relative flex-1 overflow-y-auto overflow-x-hidden select-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
           onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+          onKeyDown={handleListKey}
         >
           <div className="relative" style={{ height: visibleCommits.length * rowHeight }}>
             <GraphCanvas
@@ -483,6 +508,7 @@ export function CommitGraph() {
                 key={node.commit.hash}
                 commit={node.commit}
                 row={node.row}
+                count={layout.nodes.length}
                 rowHeight={rowHeight}
                 graphWidth={graphWidth}
                 isSelected={node.commit.hash === selectedCommit?.hash || multi.includes(node.commit.hash)}
@@ -565,9 +591,14 @@ function filterLabel(filter: GraphFilter): string {
   return n > 1 ? `${n} branches masquées : ${names(filter.hidden)}` : `Branche masquée : ${names(filter.hidden)}`;
 }
 
+/** Identifiant DOM d'une ligne du graphe (descendant actif de la liste). */
+const rowId = (hash: string) => `commit-row-${hash}`;
+
 interface CommitRowProps {
   commit: CommitInfo;
   row: number;
+  /** Nombre total de lignes : la liste est virtualisée, seules les lignes visibles existent. */
+  count: number;
   rowHeight: number;
   graphWidth: number;
   isSelected: boolean;
@@ -580,7 +611,7 @@ interface CommitRowProps {
 }
 
 function CommitRow({
-  commit, row, rowHeight, graphWidth, isSelected, containerWidth, localOnly, onClick, onContextMenu, onRefMenu,
+  commit, row, count, rowHeight, graphWidth, isSelected, containerWidth, localOnly, onClick, onContextMenu, onRefMenu,
 }: CommitRowProps) {
   const date = new Date(commit.timestamp * 1000).toLocaleDateString("fr-FR", {
     day: "2-digit",
@@ -590,6 +621,11 @@ function CommitRow({
 
   return (
     <div
+      id={rowId(commit.hash)}
+      role="option"
+      aria-selected={isSelected}
+      aria-posinset={row + 1}
+      aria-setsize={count}
       className={`absolute flex items-center gap-3 px-2 cursor-pointer transition-colors duration-100 ${
         isSelected ? "bg-overlay/10" : "hover:bg-overlay/5"
       }`}
@@ -622,8 +658,8 @@ function CommitRow({
 }
 
 const REF_STYLES: Record<RefLabel["kind"], string> = {
-  head: "bg-[var(--color-accent)] text-white border-[var(--color-accent)]",
-  local: "bg-[var(--color-accent)]/15 text-[var(--color-accent)] border-[var(--color-accent)]/40",
+  head: "bg-[var(--color-accent-solid)] text-white border-[var(--color-accent-solid)]",
+  local: "bg-[var(--color-accent)]/15 text-[var(--color-accent-text)] border-[var(--color-accent)]/40",
   remote: "bg-sky-500/15 text-sky-300 border-sky-400/40",
   tag: "bg-amber-500/15 text-amber-300 border-amber-400/40",
 };
@@ -643,7 +679,7 @@ function RefBadge({ label, localOnly, onContextMenu }: {
       onContextMenu={onContextMenu}
     >
       {REF_ICONS[label.kind]} {label.name}
-      {localOnly && <span className="ml-1 opacity-70 italic">local</span>}
+      {localOnly && <span className="ml-1 italic">local</span>}
     </span>
   );
 }

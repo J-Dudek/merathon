@@ -16,6 +16,8 @@ import { CloneDialog } from "./components/CloneDialog";
 import { Welcome } from "./components/Welcome";
 import { Dialog } from "./components/Dialog";
 import { Toasts } from "./components/Toasts";
+import { Celebration, DevCelebrationButton } from "./components/Celebration";
+import { openContextMenuFromKeyboard } from "./lib/keyboardContextMenu";
 import { InteractiveRebaseDialog } from "./components/InteractiveRebaseDialog";
 import { useRepoStore } from "./store/useRepoStore";
 import { useAccountsStore } from "./store/useAccountsStore";
@@ -69,6 +71,12 @@ export default function App() {
     }
     window.addEventListener("contextmenu", onContextMenu);
     return () => window.removeEventListener("contextmenu", onContextMenu);
+  }, []);
+
+  // Touche Menu ou Maj+F10 : menu contextuel de l'élément qui a le focus.
+  useEffect(() => {
+    window.addEventListener("keydown", openContextMenuFromKeyboard);
+    return () => window.removeEventListener("keydown", openContextMenuFromKeyboard);
   }, []);
 
   useEffect(() => {
@@ -150,6 +158,8 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
+      {/* Titre de niveau 1 pour les technologies d'assistance : les panneaux ont des titres de niveau 2. */}
+      <h1 className="sr-only">Merathon</h1>
       <Toolbar onClone={() => setShowClone(true)} />
       <TabBar />
 
@@ -186,6 +196,8 @@ export default function App() {
       {rebaseBase && repoPath && <InteractiveRebaseDialog base={rebaseBase} onClose={() => setRebaseBase(null)} />}
       <Dialog />
       <Toasts />
+      <Celebration />
+      {import.meta.env.DEV && <DevCelebrationButton />}
     </div>
   );
 }

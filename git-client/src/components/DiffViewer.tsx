@@ -102,6 +102,7 @@ export function DiffViewer({ diff, loading, staging, annotations }: Props) {
               )}
             </div>
             <table className="w-full border-collapse">
+              <DiffHeader annotations={!!annotations} />
               <tbody>
                 {hunk.lines.map((line, j) => (
                   <DiffLineRow
@@ -158,6 +159,22 @@ function HunkBtn({ onClick, disabled, danger, children }: {
   );
 }
 
+/** En-têtes des colonnes, annoncés par les lecteurs d'écran (RGAA 5.6) ; ligne sans hauteur à l'écran. */
+function DiffHeader({ annotations }: { annotations: boolean }) {
+  const columns = ["Sélection", ...(annotations ? ["Commentaire"] : []), "Ancienne ligne", "Nouvelle ligne", "Contenu"];
+  return (
+    <thead>
+      <tr className="h-0">
+        {columns.map((c) => (
+          <th key={c} scope="col" className="p-0 h-0 font-normal">
+            <span className="sr-only">{c}</span>
+          </th>
+        ))}
+      </tr>
+    </thead>
+  );
+}
+
 function DiffLineRow({ line, selectable, selected, onToggle, annotations }: {
   line: DiffLine;
   selectable: boolean;
@@ -194,10 +211,10 @@ function DiffLineRow({ line, selectable, selected, onToggle, annotations }: {
             )}
           </td>
         )}
-        <td className="w-10 text-right pr-2 select-none text-[var(--color-muted)] opacity-50 border-r border-overlay/5">
+        <td className="w-10 text-right pr-2 select-none text-[var(--color-muted)] border-r border-overlay/5">
           {line.old_lineno ?? ""}
         </td>
-        <td className="w-10 text-right pr-2 select-none text-[var(--color-muted)] opacity-50 border-r border-overlay/5">
+        <td className="w-10 text-right pr-2 select-none text-[var(--color-muted)] border-r border-overlay/5">
           {line.new_lineno ?? ""}
         </td>
         <td className={`pl-2 pr-4 whitespace-pre ${text}`}>

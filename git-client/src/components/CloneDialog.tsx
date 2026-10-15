@@ -8,6 +8,7 @@ import { errorMessage } from "../lib/actions";
 import type { ForgeRepo } from "../types/forge";
 import { Button, Modal, inputClass } from "./Modal";
 import { trimEndChars } from "../lib/strings";
+import { fieldLabel } from "../lib/fieldLabel";
 
 function repoNameFromUrl(url: string): string {
   return trimEndChars(url.trim()).split(/[/:]/).pop()?.replace(/\.git$/, "") || "repo";
@@ -85,6 +86,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
               <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Depuis un compte</span>
               <select
                 className={`${inputClass} w-auto! shrink-0`}
+                {...fieldLabel("Compte depuis lequel cloner")}
                 value={accountId ?? ""}
                 onChange={(e) => setAccountId(e.target.value)}
               >
@@ -92,7 +94,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
                   <option key={a.id} value={a.id}>{a.label}</option>
                 ))}
               </select>
-              <input className={inputClass} placeholder="Filtrer…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+              <input className={inputClass} placeholder="Filtrer…" {...fieldLabel("Filtrer les dépôts du compte")} value={filter} onChange={(e) => setFilter(e.target.value)} />
             </div>
             <div className="h-44 overflow-y-auto border border-overlay/10 rounded">
               {reposLoading && <p className="p-2 text-xs text-[var(--color-muted)] animate-pulse">Chargement…</p>}

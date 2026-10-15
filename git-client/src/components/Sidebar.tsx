@@ -37,7 +37,7 @@ function submoduleTitle(sm: SubmoduleInfo): string {
 }
 
 function rowTone(active?: boolean, selected?: boolean): string {
-  if (active) return "text-[var(--color-accent)] bg-overlay/5 font-semibold";
+  if (active) return "text-[var(--color-accent-text)] bg-overlay/5 font-semibold";
   if (selected) return "text-[var(--color-text)] bg-[var(--color-accent)]/20";
   return "text-[var(--color-text)] hover:bg-overlay/5";
 }
@@ -104,7 +104,7 @@ export function Sidebar() {
     if (commit) setSelectedCommit(commit);
   }
 
-  function handleLocalClick(e: React.MouseEvent, b: BranchInfo) {
+  function handleLocalClick(e: ClickKeys, b: BranchInfo) {
     // Ordre visuel de l'arbre, pour que Maj + clic sélectionne la plage affichée.
     const order = flattenTree(localTree).map((l) => l.name);
     // La branche courante ne peut pas être supprimée : elle n'entre pas dans la sélection.
@@ -240,12 +240,8 @@ export function Sidebar() {
               onClick={(e) => handleLocalClick(e, b)}
               onDoubleClick={() => !b.is_head && !busy && runGit(() => checkoutBranch(path, b.name))}
               onContextMenu={(e) => openMenu(e, picked.length > 1 && picked.includes(b.name) ? pickedMenu(picked) : localMenu(b))}
-              trailing={
-                <>
-                  {prBadge(b)}
-                  {localOnly.has(b.name) ? <LocalOnlyBadge /> : <AheadBehind ahead={b.ahead} behind={b.behind} />}
-                </>
-              }
+              trailing={localOnly.has(b.name) ? <LocalOnlyBadge /> : <AheadBehind ahead={b.ahead} behind={b.behind} />}
+              action={prBadge(b)}
             />
           )}
         />
@@ -273,7 +269,7 @@ export function Sidebar() {
                   onClick={() => selectHash(b.target_hash)}
                   onDoubleClick={() => !busy && runGit(() => checkoutRemoteBranch(path, b.name))}
                   onContextMenu={(e) => openMenu(e, remoteMenu(b))}
-                  trailing={prBadge(b)}
+                  action={prBadge(b)}
                 />
               )}
             />
@@ -419,14 +415,18 @@ function Group({ title, count, children, defaultOpen = true, onAdd, addTitle, ad
   return (
     <div className="mb-1">
       <div className="flex items-center group">
-        <button
-          className="flex-1 flex items-center gap-1 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)] hover:text-[var(--color-text)]"
-          onClick={() => setOpen((v) => !v)}
-        >
-          <span className="w-2">{open ? "▾" : "▸"}</span>
-          {title}
-          <span className="ml-1 font-normal opacity-60">{count}</span>
-        </button>
+        {/* Titre de section dépliable : la navigation par titres y mène, le bouton indique l'état. */}
+        <h2 className="flex-1 flex">
+          <button
+            className="flex-1 flex items-center gap-1 min-h-6 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)] hover:text-[var(--color-text)]"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+          >
+            <span className="w-2" aria-hidden>{open ? "▾" : "▸"}</span>
+            {title}
+            <span className="ml-1 font-normal opacity-60">{count}</span>
+          </button>
+        </h2>
         {onAdd && (
           <button
             className="px-2 text-[var(--color-muted)] hover:text-[var(--color-text)] opacity-0 group-hover:opacity-100"
@@ -451,11 +451,11 @@ function SubGroup({ title, children, onContextMenu }: {
   return (
     <li>
       <button
-        className="w-full flex items-center gap-1 px-4 py-[3px] text-xs text-[var(--color-text)] hover:bg-overlay/5"
+        className="w-full flex items-center gap-1 min-h-6 px-4 py-[3px] text-xs text-[var(--color-text)] hover:bg-overlay/5"
         onClick={() => setOpen((v) => !v)}
         onContextMenu={onContextMenu}
       >
-        <span className="w-2 text-[9px] text-[var(--color-muted)]">{open ? "▾" : "▸"}</span>
+        <span className="w-2 text-[9px] text-[var(--color-muted)]" aria-hidden>{open ? "▾" : "▸"}</span>
         <span className="opacity-60">☁</span>
         {title}
       </button>
@@ -491,11 +491,11 @@ function BranchFolder({ name, count, depth, children }: {
   return (
     <li>
       <button
-        className="w-full flex items-center gap-1 pr-2 py-[3px] text-xs text-[var(--color-text)] hover:bg-overlay/5"
+        className="w-full flex items-center gap-1 min-h-6 pr-2 py-[3px] text-xs text-[var(--color-text)] hover:bg-overlay/5"
         style={{ paddingLeft: rowPadding(depth) - 12 }}
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="w-2 text-[9px] text-[var(--color-muted)]">{open ? "▾" : "▸"}</span>
+        <span className="w-2 text-[9px] text-[var(--color-muted)]" aria-hidden>{open ? "▾" : "▸"}</span>
         <span className="truncate">{name}</span>
         <span className="ml-1 text-[10px] opacity-50">{count}</span>
       </button>
@@ -509,7 +509,14 @@ function rowPadding(depth: number): number {
   return 24 + depth * 12;
 }
 
-function Row({ icon, label, active, selected, dimmed, solo, depth = 0, title, trailing, onClick, onDoubleClick, onContextMenu }: {
+/** Touches de modification d'un clic, ou de la barre d'espace qui le remplace au clavier. */
+type ClickKeys = Pick<React.MouseEvent, "ctrlKey" | "metaKey" | "shiftKey">;
+
+/**
+ * Ligne de la barre latérale, utilisable au clavier : Espace la sélectionne (comme un clic, Ctrl / Maj compris),
+ * Entrée fait l'action du double clic (extraire une branche, appliquer un stash…), la touche Menu ou Maj+F10 ouvre son menu.
+ */
+function Row({ icon, label, active, selected, dimmed, solo, depth = 0, title, trailing, action, onClick, onDoubleClick, onContextMenu }: {
   icon: string;
   label: string;
   active?: boolean;
@@ -522,26 +529,45 @@ function Row({ icon, label, active, selected, dimmed, solo, depth = 0, title, tr
   /** Profondeur dans l'arbre (dossiers de branches, remotes). */
   depth?: number;
   title?: string;
+  /** Indications à droite (non interactives). */
   trailing?: React.ReactNode;
-  onClick?: (e: React.MouseEvent) => void;
+  /** Bouton à droite, hors de la ligne : un bouton ne peut pas en contenir un autre. */
+  action?: React.ReactNode;
+  onClick?: (e: ClickKeys) => void;
   onDoubleClick?: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === " ") {
+      e.preventDefault();
+      onClick?.(e);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (onDoubleClick) onDoubleClick();
+      else onClick?.(e);
+    }
+  }
+
   return (
-    <li>
+    <li className={`flex items-center pr-2 ${rowTone(active, selected)} ${dimmed ? "opacity-40" : ""}`}>
       <div
+        role="button"
+        tabIndex={0}
+        aria-current={active ? "true" : undefined}
         title={dimmed ? `${title ?? label}\nMasquée dans le graphe` : title}
-        className={`flex items-center gap-2 pr-2 py-[3px] cursor-default ${rowTone(active, selected)} ${dimmed ? "opacity-40" : ""}`}
+        className="flex-1 min-w-0 min-h-6 flex items-center gap-2 py-[3px] cursor-default outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
         style={{ paddingLeft: rowPadding(depth) }}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
+        onKeyDown={onKeyDown}
       >
         <span className="shrink-0 opacity-50 text-xs">{icon}</span>
         <span className="truncate text-xs flex-1">{label}</span>
-        {solo && <span className="text-[9px] px-1 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] shrink-0">solo</span>}
+        {solo && <span className="text-[9px] px-1 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent-text)] shrink-0">solo</span>}
         {trailing}
       </div>
+      {action}
     </li>
   );
 }
@@ -572,7 +598,7 @@ function PrBadge({ prs, gitlab, fresh, onOpen }: { prs: ForgePR[]; gitlab: boole
 
 function LocalOnlyBadge() {
   return (
-    <span className="shrink-0 px-1 text-[9px] italic rounded border border-dashed border-[var(--color-accent)]/50 text-[var(--color-accent)]">
+    <span className="shrink-0 px-1 text-[9px] italic rounded border border-dashed border-[var(--color-accent)]/50 text-[var(--color-accent-text)]">
       local
     </span>
   );

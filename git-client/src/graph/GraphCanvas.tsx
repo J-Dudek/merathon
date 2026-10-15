@@ -33,6 +33,15 @@ export function GraphCanvas({ layout, selectedHash, headHash, onSelectRow, width
   // Au défilement, le point sous le curseur change : l'infobulle reviendra au prochain mouvement.
   useEffect(() => setHover(null), [scrollTop]);
 
+  // Échap masque l'infobulle jusqu'au prochain mouvement de la souris (WCAG 1.4.13).
+  const hoverShown = hover !== null;
+  useEffect(() => {
+    if (!hoverShown) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setHover(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hoverShown]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -92,9 +101,11 @@ export function GraphCanvas({ layout, selectedHash, headHash, onSelectRow, width
         onMouseMove={handleMove}
         onMouseLeave={() => setHover(null)}
         className="cursor-pointer"
+        aria-hidden
       />
       {hover && (
         <div
+          aria-hidden
           className="fixed z-50 pointer-events-none px-1.5 py-0.5 rounded text-[11px] bg-black/85 text-white border border-overlay/10 whitespace-nowrap"
           style={{ left: hover.x + 12, top: hover.y + 12 }}
         >

@@ -4,7 +4,7 @@ import { useTabsStore } from "../store/useTabsStore";
 import { useUiStore, type BottomPanelState } from "../store/useUiStore";
 import { useJournalStore, type JournalEntry } from "../store/useJournalStore";
 import { errorMessage } from "../lib/actions";
-import { attachTerminal, restartTerminal } from "../lib/terminals";
+import { attachTerminal, LEAVE_TERMINAL_HINT, restartTerminal } from "../lib/terminals";
 
 const HEADER_HEIGHT = 28;
 const MIN_HEIGHT = 120;
@@ -63,8 +63,15 @@ export function BottomPanel() {
             title="Redimensionner"
           />
         )}
-        <PanelTab active={panel.open && panel.tab === "terminal"} onClick={() => select("terminal")}>Terminal</PanelTab>
-        <PanelTab active={journalVisible} onClick={() => select("journal")}>
+        <PanelTab
+          name="terminal"
+          active={panel.open && panel.tab === "terminal"}
+          onClick={() => select("terminal")}
+          title={`Terminal (${LEAVE_TERMINAL_HINT})`}
+        >
+          Terminal
+        </PanelTab>
+        <PanelTab name="journal" active={journalVisible} onClick={() => select("journal")}>
           Journal
           {newErrors > 0 && <span className="ml-1.5 text-[9px] px-1 rounded-full bg-red-500/80 text-white leading-4">{newErrors}</span>}
         </PanelTab>
@@ -175,7 +182,7 @@ function JournalView({ repo }: { repo: string | null }) {
                 )}
                 <span className={`shrink-0 w-3 text-center ${status.color}`}>{status.icon}</span>
                 <span className="text-[var(--color-text)] truncate" title={e.command}>
-                  <span className="text-[var(--color-accent)]">$ </span>
+                  <span className="text-[var(--color-accent-text)]">$ </span>
                   {e.command}
                 </span>
                 {e.durationMs !== undefined && (
@@ -195,9 +202,18 @@ function JournalView({ repo }: { repo: string | null }) {
   );
 }
 
-function PanelTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function PanelTab({ name, active, onClick, title, children }: {
+  /** Repère de l'onglet (le terminal y rend le focus quand on en sort). */
+  name: string;
+  active: boolean;
+  onClick: () => void;
+  title?: string;
+  children: React.ReactNode;
+}) {
   return (
     <button
+      data-panel-tab={name}
+      title={title}
       onClick={onClick}
       className={`flex items-center h-full px-3 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors ${
         active

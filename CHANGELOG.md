@@ -2,6 +2,16 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.7.0](https://github.com/J-Dudek/merathon/compare/v2.6.0...v2.7.0) (2026-10-15)
+
+### Nouveautés
+
+- RGAA (844cdfd)
+
+### Autres changements
+
+- design issue (cadc31c)
+
 ## [2.6.0](https://github.com/J-Dudek/merathon/compare/v2.5.2...v2.6.0) (2026-10-15)
 
 ### Nouveautés

@@ -12,6 +12,7 @@ import { useLinkedForge } from "./PullRequestList";
 import { MyPullRequestsSection } from "./MyPullRequests";
 import { PanelSection as Section } from "./PanelSection";
 import type { DeviceCode, ForgeAccount, ForgeIssue, Provider } from "../types/forge";
+import { fieldLabel } from "../lib/fieldLabel";
 
 type Kind = "github" | "gitlab" | "gitlab-self";
 
@@ -96,8 +97,8 @@ function IdentitySection() {
       {editing && (
         <div className="px-3 pb-2 flex flex-col gap-1.5">
           {!current?.name && <p className="text-[11px] text-amber-300">Requis pour commiter.</p>}
-          <input className={inputClass} placeholder="Nom" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className={inputClass} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input className={inputClass} placeholder="Nom" {...fieldLabel("Nom de l'identité Git")} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className={inputClass} placeholder="Email" {...fieldLabel("E-mail de l'identité Git")} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           {repoPath && (
             <label className="flex items-center gap-2 text-[11px] text-[var(--color-muted)]">
               <input type="checkbox" checked={repoOnly} onChange={(e) => setRepoOnly(e.target.checked)} />
@@ -287,7 +288,7 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
         ))}
       </div>
       {kind === "gitlab-self" && (
-        <input className={inputClass} placeholder="https://gitlab.mon-entreprise.fr" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+        <input className={inputClass} placeholder="https://gitlab.mon-entreprise.fr" {...fieldLabel("Adresse de l'instance GitLab")} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
       )}
 
       <div className="grid grid-cols-2 gap-1">
@@ -322,7 +323,7 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
         </p>
       )}
 
-      <input className={inputClass} placeholder="Nom affiché (optionnel)" value={label} onChange={(e) => setLabel(e.target.value)} />
+      <input className={inputClass} placeholder="Nom affiché (optionnel)" {...fieldLabel("Nom affiché du compte (optionnel)")} value={label} onChange={(e) => setLabel(e.target.value)} />
       {error && <p className="text-[11px] text-red-400 break-words">{error}</p>}
       <div className="flex gap-2">
         <SmallButton primary type="submit" disabled={!valid || saving}>
@@ -372,6 +373,7 @@ function TokenFields({ kind, url, token, onToken }: {
         type="password"
         autoComplete="off"
         placeholder="Token d'accès personnel"
+        {...fieldLabel("Token d'accès personnel")}
         value={token}
         onChange={(e) => onToken(e.target.value)}
       />
@@ -401,6 +403,7 @@ function ClientIdFields({ kind, url, clientId, onClientId, onUseDefault }: {
       <input
         className={inputClass}
         placeholder="Identifiant client de l'application OAuth"
+        {...fieldLabel("Identifiant client de l'application OAuth")}
         value={clientId}
         onChange={(e) => onClientId(e.target.value)}
       />

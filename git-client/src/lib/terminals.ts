@@ -102,6 +102,16 @@ function start(s: Session) {
     });
 }
 
+export const LEAVE_TERMINAL_SHORTCUT = "Ctrl+Maj+J";
+export const LEAVE_TERMINAL_HINT = `${LEAVE_TERMINAL_SHORTCUT} pour en sortir`;
+
+/** Rend le focus à l'onglet « Terminal » du panneau du bas, d'où la tabulation reprend dans l'application. */
+export function leaveTerminal(): void {
+  const tab = document.querySelector<HTMLElement>("[data-panel-tab=terminal]");
+  if (tab) tab.focus();
+  else (document.activeElement as HTMLElement | null)?.blur();
+}
+
 function createSession(path: string): Session {
   const term = new Terminal({
     fontFamily: "ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace",
@@ -109,6 +119,8 @@ function createSession(path: string): Session {
     cursorBlink: true,
     scrollback: 5000,
     allowProposedApi: false,
+    // Restitue la sortie aux lecteurs d'écran (zone invisible tenue à jour par xterm.js).
+    screenReaderMode: true,
     theme: terminalTheme(),
   });
   const fit = new FitAddon();
@@ -118,9 +130,14 @@ function createSession(path: string): Session {
   const s: Session = { path, term, fit, host, ptyId: null, generation: 0, starting: false, exited: false, disposed: false, awaitingRefresh: false };
 
   // Copier / coller façon terminal Linux : Ctrl+Maj+C / Ctrl+Maj+V (Ctrl+C reste l'interruption).
+  // Ctrl+Maj+J sort du terminal au clavier : toutes les autres touches vont au shell (sans quoi le focus y serait piégé).
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== "keydown" || !e.ctrlKey || !e.shiftKey) return true;
     const key = e.key.toLowerCase();
+    if (key === "j") {
+      leaveTerminal();
+      return false;
+    }
     if (key === "c") {
       const text = term.getSelection();
       if (text) navigator.clipboard.writeText(text).catch(() => {});
@@ -178,7 +195,11 @@ export function attachTerminal(tabId: number, path: string, container: HTMLEleme
   }
   const session = s;
   container.appendChild(session.host);
-  if (!session.term.element) session.term.open(session.host);
+  if (!session.term.element) {
+    session.term.open(session.host);
+    // Nom annoncé à l'arrivée dans le terminal, avec la touche pour en sortir.
+    session.term.textarea?.setAttribute("aria-label", `Terminal. ${LEAVE_TERMINAL_HINT}`);
+  }
   fitSafe(session);
   if (session.ptyId === null && !session.starting && !session.exited) start(session);
 

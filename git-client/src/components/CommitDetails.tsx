@@ -47,9 +47,9 @@ export function CommitDetails({ commit }: { commit: CommitInfo }) {
   return (
     <div className="flex flex-col h-full bg-[var(--color-bg-secondary)] text-sm">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-overlay/10 shrink-0">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Commit</span>
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Commit</h2>
         <button
-          className="font-mono text-[11px] text-[var(--color-accent)] hover:underline"
+          className="font-mono text-[11px] text-[var(--color-accent-text)] hover:underline"
           title="Copier le hash complet"
           onClick={() => navigator.clipboard.writeText(commit.hash)}
         >
@@ -94,7 +94,7 @@ export function CommitDetails({ commit }: { commit: CommitInfo }) {
                   return (
                     <button
                       key={p}
-                      className="font-mono text-[var(--color-accent)] hover:underline disabled:no-underline disabled:text-[var(--color-muted)]"
+                      className="font-mono text-[var(--color-accent-text)] hover:underline disabled:no-underline disabled:text-[var(--color-muted)]"
                       disabled={!parent}
                       onClick={() => parent && setSelectedCommit(parent)}
                     >
@@ -106,14 +106,14 @@ export function CommitDetails({ commit }: { commit: CommitInfo }) {
             )}
           </div>
 
-          <div className="px-3 pt-2 pb-1 flex items-center text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">
+          <h3 className="px-3 pt-2 pb-1 flex items-center text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">
             {details.files.length} fichier{details.files.length > 1 ? "s" : ""}
             {totals && (
               <span className="ml-auto font-mono normal-case tracking-normal font-normal">
                 <span className="text-green-400">+{totals.add}</span> <span className="text-red-400">−{totals.del}</span>
               </span>
             )}
-          </div>
+          </h3>
           {details.files.map((f) => (
             <CommitFileRow
               key={f.path}

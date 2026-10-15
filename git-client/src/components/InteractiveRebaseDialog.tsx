@@ -4,6 +4,7 @@ import { interactiveRebase, rebaseTodo, type RebaseAction, type RebaseMode } fro
 import { errorMessage, reportInteractive } from "../lib/actions";
 import { Button, Modal, inputClass } from "./Modal";
 import type { TodoCommit } from "../types/git";
+import { fieldLabel } from "../lib/fieldLabel";
 
 interface Row {
   commit: TodoCommit;
@@ -193,15 +194,16 @@ export function InteractiveRebaseDialog({ base, onClose }: { base: string; onClo
                         >
                           ⠿
                         </span>
-                        <div className="flex flex-col">
-                          <button className="text-[9px] leading-3 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" disabled={i === 0} onClick={() => setRows((p) => moveItem(p, i, i - 1))} aria-label="Monter">▲</button>
-                          <button className="text-[9px] leading-3 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" disabled={i === rows.length - 1} onClick={() => setRows((p) => moveItem(p, i, i + 1))} aria-label="Descendre">▼</button>
+                        <div className="flex">
+                          <button className="h-6 w-6 text-[9px] leading-3 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" disabled={i === 0} onClick={() => setRows((p) => moveItem(p, i, i - 1))} aria-label="Monter">▲</button>
+                          <button className="h-6 w-6 text-[9px] leading-3 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" disabled={i === rows.length - 1} onClick={() => setRows((p) => moveItem(p, i, i + 1))} aria-label="Descendre">▼</button>
                         </div>
                       </>
                     )}
                     <select
                       className="w-28 shrink-0 bg-shade/30 border border-overlay/10 rounded px-1.5 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/60"
                       value={row.action}
+                      aria-label={`Action pour le commit ${row.commit.short_hash}`}
                       title={ACTIONS.find((a) => a.value === row.action)?.hint}
                       onChange={(e) => {
                         const action = e.target.value as RebaseAction;
@@ -213,7 +215,7 @@ export function InteractiveRebaseDialog({ base, onClose }: { base: string; onClo
                         <option key={a.value} value={a.value}>{a.label}</option>
                       ))}
                     </select>
-                    <span className="font-mono text-[11px] text-[var(--color-accent)]">{row.commit.short_hash}</span>
+                    <span className="font-mono text-[11px] text-[var(--color-accent-text)]">{row.commit.short_hash}</span>
                     {isMerge && (
                       <span className="text-[9px] px-1 rounded border border-sky-400/40 text-sky-300 shrink-0">merge</span>
                     )}
@@ -227,6 +229,7 @@ export function InteractiveRebaseDialog({ base, onClose }: { base: string; onClo
                       rows={row.action === "squash" ? 3 : 2}
                       className={`${inputClass} resize-y ${canReorder ? "ml-[10rem]" : "ml-[7.5rem]"} w-auto!`}
                       placeholder={row.action === "squash" ? "Message du commit fusionné (vide : messages combinés)" : "Nouveau message"}
+                      {...fieldLabel(`${row.action === "squash" ? "Message du commit fusionné" : "Nouveau message"} pour ${row.commit.short_hash}`)}
                       value={row.message}
                       onChange={(e) => update(i, { message: e.target.value })}
                     />

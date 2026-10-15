@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, searchForWorkspaceRoot } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -35,5 +35,8 @@ export default defineConfig(async () => ({
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
+    // La grille RGAA publiée (docs/accessibilite, hors de git-client) est relue par les tests de lib/accessibility.
+    // @ts-expect-error process is a nodejs global
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), "../docs/accessibilite"] },
   },
 }));

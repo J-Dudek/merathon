@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRepoStore } from "../store/useRepoStore";
 import { confirmAction, useUiStore } from "../store/useUiStore";
+import { useCelebrationStore } from "../store/useCelebrationStore";
 import { forgeClient } from "../api/forge";
 import { push } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
 import { pullRequestTitle } from "../lib/branches";
 import type { ForgeAccount, ForgeMilestone, ForgeUser, PrTemplate, PullRequestOptions } from "../types/forge";
 import { Button, Modal, inputClass } from "./Modal";
+import { fieldLabel } from "../lib/fieldLabel";
 
 /** Pull request à préparer : branche source, projet visé et, pour une branche locale, de quoi la pousser avant. */
 export interface PullRequestTarget {
@@ -154,6 +156,7 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
       });
       const ref = isGitHub ? `#${pr.number}` : `!${pr.number}`;
       notify("success", `${isGitHub ? "Pull request" : "Merge request"} ${ref} créée`);
+      useCelebrationStore.getState().track("pr");
       if (warnings.length) notify("error", `${ref} créée, mais échec pour ${warnings.join(" ; ")}`);
       if (openAfter && pr.url) openUrl(pr.url);
       onClose();
@@ -346,7 +349,7 @@ function TagPicker({ label, choices, value, onChange, action }: {
       <div className="flex items-center">
         <span className={labelClass}>{label}</span>
         {action && (
-          <button className="ml-auto text-[10px] text-[var(--color-accent)] hover:underline" onClick={action.run}>
+          <button className="ml-auto text-[10px] text-[var(--color-accent-text)] hover:underline" onClick={action.run}>
             {action.label}
           </button>
         )}
@@ -367,6 +370,7 @@ function TagPicker({ label, choices, value, onChange, action }: {
       <input
         className={inputClass}
         placeholder={choices.length ? "Rechercher…" : "Aucun choix disponible"}
+        {...fieldLabel(`${label} : ajouter`)}
         disabled={!choices.length}
         value={query}
         onChange={(e) => setQuery(e.target.value)}

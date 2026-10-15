@@ -2,6 +2,7 @@ import { useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { Modal, inputClass } from "./Modal";
 import { filterMemo, GIT_MEMO, type MemoEntry } from "../lib/gitMemo";
+import { fieldLabel } from "../lib/fieldLabel";
 
 /** Mémo des opérations git : à quoi elles servent, un cas d'usage, et comment les faire dans l'application. */
 export function GitMemoDialog({ onClose }: { onClose: () => void }) {
@@ -18,6 +19,7 @@ export function GitMemoDialog({ onClose }: { onClose: () => void }) {
           <input
             className={`${inputClass} mb-1.5`}
             placeholder="Rechercher…"
+            {...fieldLabel("Rechercher dans le mémo Git")}
             value={query}
             autoFocus
             onChange={(e) => setQuery(e.target.value)}
@@ -48,7 +50,7 @@ export function GitMemoDialog({ onClose }: { onClose: () => void }) {
           {groups.length === 0 && <p className="text-[var(--color-muted)] italic">Aucune opération ne correspond à « {query.trim()} ».</p>}
           {groups.map((group) => (
             <section key={group.id} className="mb-6 last:mb-0">
-              <h2 className="mb-3 text-base font-semibold">{group.label}</h2>
+              <h3 className="mb-3 text-base font-semibold">{group.label}</h3>
               <div className="flex flex-col gap-3">
                 {group.entries.map((entry) => <MemoCard key={entry.title} entry={entry} />)}
               </div>
@@ -64,8 +66,8 @@ function MemoCard({ entry }: { entry: MemoEntry }) {
   return (
     <article className="rounded-lg border border-overlay/10 p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h3 className="text-sm font-semibold">{entry.title}</h3>
-        <code className="font-mono text-[11px] text-[var(--color-accent)] select-text">{entry.command}</code>
+        <h4 className="text-sm font-semibold">{entry.title}</h4>
+        <code className="font-mono text-[11px] text-[var(--color-accent-text)] select-text">{entry.command}</code>
       </div>
       <p className="mt-1.5 leading-relaxed">{entry.summary}</p>
 

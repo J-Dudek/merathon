@@ -40,7 +40,7 @@ export function CompareDetails({ comparison }: { comparison: Comparison }) {
   return (
     <div className="flex flex-col h-full bg-[var(--color-bg-secondary)] text-sm">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-overlay/10 shrink-0">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Comparaison</span>
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Comparaison</h2>
         <button className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs" title="Fermer la comparaison" onClick={close}>
           ✕
         </button>
@@ -56,14 +56,14 @@ export function CompareDetails({ comparison }: { comparison: Comparison }) {
 
       {files && (
         <div className="flex-1 overflow-y-auto">
-          <div className="px-3 pt-2 pb-1 flex items-center text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">
+          <h3 className="px-3 pt-2 pb-1 flex items-center text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">
             {files.length} fichier{files.length > 1 ? "s" : ""}
             {totals && (
               <span className="ml-auto font-mono normal-case tracking-normal font-normal">
                 <span className="text-green-400">+{totals.add}</span> <span className="text-red-400">−{totals.del}</span>
               </span>
             )}
-          </div>
+          </h3>
           {files.length === 0 && <p className="px-3 py-1 text-xs text-[var(--color-muted)] italic">Contenu identique</p>}
           {files.map((f) => (
             <CommitFileRow
@@ -84,7 +84,7 @@ function CommitLine({ label, commit }: { label: string; commit: CommitInfo }) {
     <div className="flex items-center gap-2 min-w-0">
       <span className="w-5 shrink-0 text-[var(--color-muted)]">{label}</span>
       <button
-        className="font-mono text-[var(--color-accent)] hover:underline shrink-0"
+        className="font-mono text-[var(--color-accent-text)] hover:underline shrink-0"
         title="Copier le hash complet"
         onClick={() => navigator.clipboard.writeText(commit.hash)}
       >

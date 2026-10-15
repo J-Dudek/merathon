@@ -4,7 +4,9 @@
  * Thèmes : `data-theme` (« dark » ou « light ») est posé sur <html> d'après les préférences (voir lib/theme.ts).
  * Les composants n'utilisent que ces variables, jamais de couleur en dur :
  * - surfaces : --color-bg-primary (fond), --color-bg-secondary (panneaux), --color-bg-elevated (fenêtres, menus) ;
- * - texte : --color-text, --color-muted ; accent : --color-accent ;
+ * - texte : --color-text, --color-muted ; accent : --color-accent (fonds, bordures, icônes),
+ *   --color-accent-text (texte en couleur d'accent), --color-accent-solid (fond plein sous du texte blanc) ;
+ * - tout texte atteint 4,5:1 sur toutes les surfaces (WCAG AA), y compris survolées ou sélectionnées ;
  * - overlay : voile de survol, bordures et séparateurs (blanc en sombre, encre en clair), toujours avec opacité ;
  * - shade : creux des champs et blocs de code (noir en sombre, blanc en clair), toujours avec opacité.
  */
@@ -14,10 +16,12 @@
   --color-bg-secondary: #16213e;
   --color-bg-elevated: #1e2030;
   --color-bg-info: #1e2a3a;
-  --color-info: #5b8dd9;
+  --color-info: #6b9ae0;
   --color-accent: #e94560;
   --color-text: #e2e8f0;
-  --color-muted: #718096;
+  --color-muted: #9ca8ba;
+  --color-accent-text: #fa8296;
+  --color-accent-solid: color-mix(in srgb, var(--color-accent) 80%, black);
   --overlay: #ffffff;
   --shade: #000000;
   /* Contrôles natifs (select, scrollbars…) */
@@ -32,7 +36,8 @@
   --color-info: #2f62b4;
   --color-accent: #d6335a;
   --color-text: #1e2333;
-  --color-muted: #5f6b80;
+  --color-muted: #515c70;
+  --color-accent-text: #ad1f44;
   --overlay: #1e2333;
   --shade: #ffffff;
   color-scheme: light;
@@ -44,7 +49,7 @@
   --color-red-100: oklch(44.4% 0.177 26.899); /* red-800 */
   --color-red-200: oklch(44.4% 0.177 26.899); /* red-800 */
   --color-red-300: oklch(50.5% 0.213 27.518); /* red-700 */
-  --color-red-400: oklch(57.7% 0.245 27.325); /* red-600 */
+  --color-red-400: oklch(50.5% 0.213 27.518); /* red-700 */
   --color-red-900: oklch(80.8% 0.114 19.571); /* red-300 */
   --color-red-950: oklch(88.5% 0.062 18.334); /* red-200 */
   --color-orange-100: oklch(47% 0.157 37.304); /* orange-800 */
@@ -67,14 +72,14 @@
   --color-yellow-950: oklch(94.5% 0.129 101.54); /* yellow-200 */
   --color-green-100: oklch(44.8% 0.119 151.328); /* green-800 */
   --color-green-200: oklch(44.8% 0.119 151.328); /* green-800 */
-  --color-green-300: oklch(52.7% 0.154 150.069); /* green-700 */
-  --color-green-400: oklch(52.7% 0.154 150.069); /* green-700 */
+  --color-green-300: oklch(44.8% 0.119 151.328); /* green-800 */
+  --color-green-400: oklch(44.8% 0.119 151.328); /* green-800 */
   --color-green-900: oklch(87.1% 0.15 154.449); /* green-300 */
   --color-green-950: oklch(92.5% 0.084 155.995); /* green-200 */
   --color-sky-100: oklch(44.3% 0.11 240.79); /* sky-800 */
   --color-sky-200: oklch(44.3% 0.11 240.79); /* sky-800 */
   --color-sky-300: oklch(50% 0.134 242.749); /* sky-700 */
-  --color-sky-400: oklch(58.8% 0.158 241.966); /* sky-600 */
+  --color-sky-400: oklch(50% 0.134 242.749); /* sky-700 */
   --color-sky-900: oklch(82.8% 0.111 230.318); /* sky-300 */
   --color-sky-950: oklch(90.1% 0.058 230.902); /* sky-200 */
   --color-blue-100: oklch(42.4% 0.199 265.638); /* blue-800 */
@@ -139,4 +144,70 @@ body {
 }
 .pref-slider:focus-visible::-webkit-slider-thumb {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+/* Célébrations des paliers (components/Celebration.tsx) ; --celebrate-ms : durée totale, posée par le composant. */
+@keyframes celebrate-banner {
+  0% { opacity: 0; transform: translate(-50%, -24px) scale(0.9); }
+  8% { opacity: 1; transform: translate(-50%, 4px) scale(1.03); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  88% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -12px) scale(0.97); }
+}
+@keyframes celebrate-trophy {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2) rotate(-25deg); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.25) rotate(8deg); }
+  30%, 75% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -80%) scale(0.8); }
+}
+@keyframes celebrate-timer {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+@keyframes celebrate-fill {
+  0%, 15% { width: 0; }
+  45%, 100% { width: var(--fill); }
+}
+@keyframes celebrate-bounce {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  30% { transform: translateY(-5px) rotate(-10deg); }
+  60% { transform: translateY(0) rotate(8deg); }
+}
+@keyframes celebrate-gold {
+  0%, 100% { box-shadow: 0 0 18px 2px rgb(251 191 36 / 0.35), 0 25px 50px -12px rgb(0 0 0 / 0.4); }
+  50% { box-shadow: 0 0 32px 6px rgb(251 191 36 / 0.6), 0 25px 50px -12px rgb(0 0 0 / 0.4); }
+}
+.celebrate-banner {
+  transform: translateX(-50%);
+  animation: celebrate-banner var(--celebrate-ms, 4.5s) ease-out forwards;
+}
+.celebrate-trophy {
+  animation: celebrate-trophy var(--celebrate-ms, 4.5s) ease-out forwards;
+  filter: drop-shadow(0 8px 24px rgb(0 0 0 / 0.35));
+}
+.celebrate-emoji {
+  font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+}
+.celebrate-bounce {
+  display: inline-block;
+  animation: celebrate-bounce 1.2s ease-in-out 0.3s 2;
+}
+.celebrate-timer {
+  transform-origin: left;
+  animation: celebrate-timer var(--celebrate-ms, 4.5s) linear forwards;
+}
+.celebrate-fill {
+  width: var(--fill);
+  animation: celebrate-fill var(--celebrate-ms, 4.5s) ease-out forwards;
+}
+.celebrate-glow {
+  box-shadow: 0 0 22px 2px color-mix(in srgb, var(--color-accent) 35%, transparent), 0 25px 50px -12px rgb(0 0 0 / 0.4);
+}
+.celebrate-gold {
+  animation: celebrate-banner var(--celebrate-ms, 4.5s) ease-out forwards, celebrate-gold 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .celebrate-banner, .celebrate-trophy, .celebrate-bounce, .celebrate-fill, .celebrate-gold { animation: none; }
+  .celebrate-trophy { transform: translate(-50%, -50%); }
+  .celebrate-timer { display: none; }
 }

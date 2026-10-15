@@ -60,7 +60,7 @@ export interface SideWidths {
 export type Side = keyof SideWidths;
 
 /** Rubriques de la fenêtre des préférences. */
-export type PreferencesSection = "appearance" | "terminal" | "sync" | "shortcuts" | "about";
+export type PreferencesSection = "appearance" | "terminal" | "sync" | "shortcuts" | "activity" | "accessibility" | "about";
 
 const SIDES_KEY = "merathon.side-widths";
 export const defaultSideWidths: SideWidths = { left: 240, right: 320 };

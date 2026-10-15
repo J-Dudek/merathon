@@ -3,7 +3,7 @@ export function PanelSection({ title, action, children }: { title: string; actio
   return (
     <div className="border-b border-overlay/10 pb-1">
       <div className="flex items-center px-3 pt-2 pb-1">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">{title}</span>
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">{title}</h2>
         <div className="ml-auto">{action}</div>
       </div>
       {children}

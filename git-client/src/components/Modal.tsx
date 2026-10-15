@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Maximize2, Minimize2, X } from "lucide-react";
 
@@ -47,6 +47,7 @@ function saveSize(key: string, size: ModalSize) {
 }
 
 export function Modal({ title, onClose, children, width = "w-[420px]", height = "", resizeKey }: Props) {
+  const titleId = useId();
   const [size, setSize] = useState(() => loadSize(resizeKey));
   const boxRef = useRef<HTMLDivElement>(null);
   const custom = size.width !== undefined;
@@ -116,6 +117,9 @@ export function Modal({ title, onClose, children, width = "w-[420px]", height = 
     >
       <div
         ref={boxRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className={`${boxClass} relative flex flex-col bg-[var(--color-bg-elevated)] border border-overlay/10 rounded-lg shadow-2xl`}
         style={boxStyle}
       >
@@ -123,7 +127,7 @@ export function Modal({ title, onClose, children, width = "w-[420px]", height = 
           className="flex items-center justify-between gap-2 pl-4 pr-2 py-2 border-b border-overlay/10"
           onDoubleClick={resizeKey ? toggleMaximized : undefined}
         >
-          <span className="text-sm font-semibold text-[var(--color-text)] truncate">{title}</span>
+          <h2 id={titleId} className="text-sm font-semibold text-[var(--color-text)] truncate">{title}</h2>
           <div className="flex items-center shrink-0">
             {resizeKey && (
               <HeaderIcon

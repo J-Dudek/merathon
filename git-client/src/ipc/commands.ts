@@ -6,6 +6,8 @@ import type {
 import type { DeviceCode, ForgeAccount, Provider, SavedAccount } from "../types/forge";
 import { describeCommand } from "../lib/journal";
 import { useJournalStore } from "../store/useJournalStore";
+import { milestoneForCommand } from "../lib/milestones";
+import { useCelebrationStore } from "../store/useCelebrationStore";
 
 function errorText(e: unknown): string {
   if (typeof e === "string") return e;
@@ -23,7 +25,11 @@ async function invoke<T>(cmd: string, args?: InvokeArgs): Promise<T> {
     const result = await tauriInvoke<T>(cmd, args);
     const conflicts = (result as { conflicted_files?: string[] } | null)?.conflicted_files;
     if (conflicts?.length) journal.finish(id, "warning", `Conflits : ${conflicts.join(", ")}`);
-    else journal.finish(id, "success");
+    else {
+      journal.finish(id, "success");
+      const milestone = milestoneForCommand(cmd, args);
+      if (milestone) useCelebrationStore.getState().track(milestone);
+    }
     return result;
   } catch (e) {
     journal.finish(id, "error", errorText(e));

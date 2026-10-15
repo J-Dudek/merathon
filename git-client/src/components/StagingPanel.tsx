@@ -14,6 +14,7 @@ import { fileTree, visibleFiles, type FileNode } from "../lib/fileTree";
 import { ignoreDirPattern, ignoreExtensionPattern, ignoreFilePattern, ignoreFolderPattern } from "../lib/gitignore";
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
 import type { FileStatus, InteractiveStop, RepoState } from "../types/git";
+import { fieldLabel } from "../lib/fieldLabel";
 
 const STATE_LABELS: Record<Exclude<RepoState, "clean">, string> = {
   merge: "Merge en cours",
@@ -496,6 +497,7 @@ export function StagingPanel() {
         <input
           className={commitInput}
           placeholder="Résumé du commit"
+          {...fieldLabel("Résumé du commit")}
           value={summary}
           maxLength={200}
           onChange={(e) => setSummary(e.target.value)}
@@ -505,6 +507,7 @@ export function StagingPanel() {
           className={`${commitInput} resize-none`}
           rows={3}
           placeholder="Description (optionnelle)"
+          {...fieldLabel("Description du commit (optionnelle)")}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && handleCommit()}
@@ -578,9 +581,9 @@ function FileSection({ title, count, actions, children }: {
   return (
     <div className="mb-1">
       <div className="flex items-center gap-1 px-3 pt-2 pb-1">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">
           {title} <span className="font-normal opacity-60">{count}</span>
-        </span>
+        </h2>
         <div className="ml-auto flex gap-1">{actions}</div>
       </div>
       {children}
@@ -612,7 +615,7 @@ function SelectionActions({ files, onClear, fallback, children }: {
   if (files.length === 0) return fallback;
   return (
     <>
-      <span className="text-[10px] text-[var(--color-accent)] self-center">{plural(files.length, "sélectionné")}</span>
+      <span className="text-[10px] text-[var(--color-accent-text)] self-center">{plural(files.length, "sélectionné")}</span>
       {children}
       <HeaderBtn title="Annuler la sélection" onClick={onClear}>✕</HeaderBtn>
     </>

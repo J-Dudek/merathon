@@ -163,7 +163,7 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
         </button>
       </Tooltip>
       {info && (
-        <span className="text-xs font-mono text-[var(--color-accent)] truncate max-w-48" title="Branche courante">
+        <span className="text-xs font-mono text-[var(--color-accent-text)] truncate max-w-48" title="Branche courante">
           {headLabel(info)}
         </span>
       )}
@@ -292,12 +292,12 @@ function ToolBtn({ label, icon, badge, disabled, onClick, onMenu }: {
         <span className="opacity-80">{icon}</span>
         {label}
         {!!badge && (
-          <span className="text-[9px] px-1 rounded-full bg-[var(--color-accent)]/80 text-white leading-4">{badge}</span>
+          <span className="text-[9px] px-1 rounded-full bg-[var(--color-accent-solid)] text-white leading-4">{badge}</span>
         )}
       </button>
       {onMenu && (
         <button
-          className="text-[9px] px-1 rounded-r hover:bg-overlay/10 disabled:opacity-40 text-[var(--color-muted)]"
+          className="text-[9px] min-w-6 px-1 rounded-r hover:bg-overlay/10 disabled:opacity-40 text-[var(--color-muted)]"
           disabled={disabled}
           onClick={onMenu}
           aria-label={`Options ${label}`}

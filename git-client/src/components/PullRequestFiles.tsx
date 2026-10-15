@@ -13,6 +13,7 @@ import type {
 } from "../types/forge";
 import { DiffViewer, type DiffAnnotations } from "./DiffViewer";
 import { Button, inputClass } from "./Modal";
+import { fieldLabel } from "../lib/fieldLabel";
 
 const STATUS_LETTERS: Record<CommitFile["status"], { letter: string; color: string }> = {
   added: { letter: "A", color: "text-green-400" },
@@ -460,6 +461,7 @@ function Thread({ thread, busy, onReply, onResolve }: {
             value={reply}
             onChange={(e) => setReply(e.target.value)}
             placeholder="Réponse (Markdown)"
+            {...fieldLabel("Réponse au commentaire (Markdown)")}
           />
           <div className="flex justify-end gap-2">
             <Button onClick={() => setReply(null)} disabled={busy}>Annuler</Button>
@@ -476,7 +478,7 @@ function Thread({ thread, busy, onReply, onResolve }: {
         </div>
       ) : (
         <div className="flex items-center gap-3 text-[11px]">
-          <button className="text-[var(--color-accent)] hover:underline" onClick={() => setReply("")}>Répondre</button>
+          <button className="text-[var(--color-accent-text)] hover:underline" onClick={() => setReply("")}>Répondre</button>
           {thread.resolved !== null && (
             <button
               className="text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-40"
@@ -522,6 +524,7 @@ function Composer({ text, busy, onChange, onCancel, onDraft, onPublish }: {
         autoFocus
         className={`${inputClass} h-20 resize-y font-mono`}
         placeholder="Commentaire (Markdown) · Ctrl+Entrée : ajouter à la revue"
+        {...fieldLabel("Commentaire sur la ligne (Markdown)")}
         value={text}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
@@ -571,6 +574,7 @@ function SubmitReview({ account, details, drafts, busy, onCancel, onSubmit }: {
         autoFocus
         className={`${inputClass} h-16 resize-y font-mono`}
         placeholder="Commentaire général de la revue (Markdown, facultatif)"
+        {...fieldLabel("Commentaire général de la revue (Markdown, facultatif)")}
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useUiStore } from "../store/useUiStore";
 import { Button, Modal, inputClass } from "./Modal";
+import { fieldLabel } from "../lib/fieldLabel";
 
 /** Rend la boîte de dialogue demandée via `useUiStore.ask()`. */
 export function Dialog() {
@@ -51,6 +52,7 @@ export function Dialog() {
             rows={4}
             className={`${inputClass} resize-none`}
             placeholder={dialog.input.placeholder}
+            {...fieldLabel(dialog.title)}
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
@@ -61,6 +63,7 @@ export function Dialog() {
             type={dialog.input.secret ? "password" : "text"}
             autoComplete={dialog.input.secret ? "off" : undefined}
             placeholder={dialog.input.placeholder}
+            {...fieldLabel(dialog.title)}
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
