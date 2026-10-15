@@ -43,6 +43,7 @@ export const openNewWindow = (repo: string | null = null) => invoke<void>("open_
 export const notifyDesktop = (title: string, body: string) => invoke<number | null>("notify_desktop", { title, body });
 /** Retire une notification de la liste du système. */
 export const closeDesktopNotification = (id: number) => invoke<void>("close_desktop_notification", { id });
+export const isWsl = () => invoke<boolean>("is_wsl");
 
 /** `path` null : identité globale. */
 export const getIdentity = (path: string | null) => invoke<Identity>("get_identity", { path });

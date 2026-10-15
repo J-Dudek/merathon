@@ -11,15 +11,53 @@ export function downloadLabel(received: number, total: number): string {
 }
 
 /**
- * Notes de version tirées du texte de la release (champ `notes` de latest.json) :
- * rubriques du changelog seulement, sans le titre ni les sections Téléchargements / SmartScreen / empreintes.
+ * Sépare, dans le champ `notes` de latest.json, le texte de la release du CHANGELOG.md complet ajouté par la CI.
+ * Placé après « ### Téléchargements », ce CHANGELOG est ignoré par les versions qui ne le connaissent pas.
+ */
+export const CHANGELOG_MARKER = "<!-- merathon:changelog -->";
+
+/**
+ * Notes de version à afficher avant la mise à jour : celles de toutes les versions publiées depuis `currentVersion`,
+ * la plus récente d'abord, d'après le CHANGELOG joint aux notes. Rubriques préfixées par leur version s'il y en a
+ * plusieurs. Sans CHANGELOG joint : notes de la dernière release seulement.
+ */
+export function releaseNoteSections(body: string | undefined, currentVersion?: string): DialogSection[] {
+  if (!body) return [];
+  const [release, changelog] = body.split(CHANGELOG_MARKER);
+  const latest = () => markdownSections(release.split("### Téléchargements")[0]);
+  if (changelog === undefined || !currentVersion) return latest();
+  const missed = changelogVersions(changelog).filter((v) => compareVersions(v.version, currentVersion) > 0);
+  if (missed.length === 0) return latest();
+  if (missed.length === 1) return missed[0].sections;
+  return missed.flatMap((v) => v.sections.map((s) => ({ ...s, title: `${v.version} — ${s.title}` })));
+}
+
+/** Versions de CHANGELOG.md (titres « ## [x.y.z](…) (date) » ou « ## x.y.z (date) ») et leurs rubriques. */
+function changelogVersions(changelog: string): { version: string; sections: DialogSection[] }[] {
+  const versions: { version: string; sections: DialogSection[] }[] = [];
+  for (const block of changelog.split(/^## /m).slice(1)) {
+    const version = /^\[?(\d+\.\d+\.\d+)/.exec(block)?.[1];
+    const sections = markdownSections(block);
+    if (version && sections.length) versions.push({ version, sections });
+  }
+  return versions;
+}
+
+/** Ordre de deux versions « x.y.z » : négatif, nul ou positif. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+  return 0;
+}
+
+/**
+ * Rubriques « ### » d'un texte Markdown et leurs éléments de liste.
  * Markdown simplifié en texte : liens et références de commit retirés, gras supprimé.
  */
-export function releaseNoteSections(body: string | undefined): DialogSection[] {
-  if (!body) return [];
-  const changelog = body.split("### Téléchargements")[0];
+function markdownSections(markdown: string): DialogSection[] {
   const sections: DialogSection[] = [];
-  for (const line of changelog.split("\n")) {
+  for (const line of markdown.split("\n")) {
     if (line.startsWith("### ")) {
       sections.push({ title: line.slice(4).trim(), items: [] });
       continue;
@@ -77,7 +115,7 @@ export async function checkForUpdates(manual = false) {
   const answer = await ui.ask({
     title: `Merathon ${update.version} est disponible`,
     message: `Version installée : ${update.currentVersion}. L'application redémarrera après l'installation.`,
-    sections: releaseNoteSections(update.body),
+    sections: releaseNoteSections(update.body, update.currentVersion),
     confirmLabel: "Installer et redémarrer",
   });
   if (!answer) return;

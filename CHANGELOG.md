@@ -2,6 +2,18 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.5.0](https://github.com/J-Dudek/merathon/compare/v2.4.1...v2.5.0) (2026-10-15)
+
+### Nouveautés
+
+- list the changes of every missed version in the update dialog (cad258d)
+- show the PR count badge on the taskbar icon under WSL (26b8cef)
+- show Windows notifications under WSL when no Linux notification server is available (0b5a247)
+
+### Corrections
+
+- show the PR count badge on the Windows taskbar (c4200bf)
+
 ## [2.4.1](https://github.com/J-Dudek/merathon/compare/v2.4.0...v2.4.1) (2026-10-14)
 
 ### Corrections

@@ -26,6 +26,7 @@ pub fn run() {
             commands::open_new_window,
             notifications::notify_desktop,
             notifications::close_desktop_notification,
+            notifications::is_wsl,
             commands::open_repository,
             commands::get_repo_info,
             commands::init_repository,
@@ -133,11 +134,17 @@ fn use_x11_under_wsl() {
     if std::env::var_os("GDK_BACKEND").is_some() {
         return;
     }
-    let osrelease = std::fs::read_to_string("/proc/sys/kernel/osrelease").unwrap_or_default();
-    if std::env::var_os("WSL_DISTRO_NAME").is_some() || is_wsl_kernel(&osrelease) {
+    if is_wsl() {
         // Appelé avant le démarrage de Tauri, quand aucun autre thread ne lit l'environnement.
         std::env::set_var("GDK_BACKEND", "x11");
     }
+}
+
+/// Merathon tourne dans WSL (1 ou 2).
+#[cfg(target_os = "linux")]
+pub(crate) fn is_wsl() -> bool {
+    let osrelease = std::fs::read_to_string("/proc/sys/kernel/osrelease").unwrap_or_default();
+    std::env::var_os("WSL_DISTRO_NAME").is_some() || is_wsl_kernel(&osrelease)
 }
 
 /// Noyau de WSL : « 5.15.167.4-microsoft-standard-WSL2 », « 4.4.0-19041-Microsoft » (WSL 1).

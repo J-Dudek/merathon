@@ -1,6 +1,6 @@
 [package]
 name = "merathon"
-version = "2.4.1"
+version = "2.5.0"
 description = "Merathon — Git Repository Manager : client Git graphique de bureau"
 authors = ["Julien Dudek"]
 license = "MIT"
@@ -48,3 +48,5 @@ tempfile = "3"
 # Notifications Linux par une connexion D-Bus gardée ouverte (voir src/notifications.rs).
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = "5"
+# Sous WSL, notification Windows par `powershell.exe -EncodedCommand` (voir src/notifications.rs).
+base64 = "0.22"
