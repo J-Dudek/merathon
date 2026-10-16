@@ -4,6 +4,7 @@ import { ArrowRight, Check, CircleDashed, CircleX, ExternalLink, MinusCircle, Ro
 import { forgeClient } from "../api/forge";
 import { useUiStore, confirmAction } from "../store/useUiStore";
 import { seenKey, useSeenPrsStore } from "../store/useSeenPrsStore";
+import { useCelebrationStore } from "../store/useCelebrationStore";
 import { errorMessage } from "../lib/actions";
 import type {
   DraftComment, ForgeAccount, ForgeCheck, ForgeComment, ForgePR, MergeMethod, PullRequestDetails, ReviewEvent,
@@ -141,7 +142,11 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
     if (!(await confirmAction(...prompts[mode], true))) return;
     const auto = mode === "auto";
     run(auto ? "auto" : "merge",
-      () => client().merge(projectPath, number, { method, sha: details.headSha, removeSourceBranch: removeSource, autoMerge: auto }),
+      async () => {
+        await client().merge(projectPath, number, { method, sha: details.headSha, removeSourceBranch: removeSource, autoMerge: auto });
+        // Fusion faite sur la forge : comptée dans « Mon activité » comme un merge local. Un auto-merge n'est que programmé.
+        if (!auto) useCelebrationStore.getState().track("merge");
+      },
       auto ? `Auto-merge programmé pour ${ref}` : `${ref} mergée`, !auto);
   }
 

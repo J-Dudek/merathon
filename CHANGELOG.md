@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.7.2](https://github.com/J-Dudek/merathon/compare/v2.7.1...v2.7.2) (2026-10-16)
+
+### Corrections
+
+- count fusion when fusion by MR/PR details window (bda5fdd)
+
 ## [2.7.1](https://github.com/J-Dudek/merathon/compare/v2.7.0...v2.7.1) (2026-10-16)
 
 ### Corrections
