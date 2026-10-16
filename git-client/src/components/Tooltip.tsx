@@ -40,9 +40,11 @@ export function Tooltip({ title, lines = [], align = "left", children }: {
     >
       {children}
       {/* Marge intérieure plutôt qu'extérieure : pas d'espace entre l'élément et l'infobulle, la souris peut y passer. */}
+      {/* Masquée aux technologies d'assistance : le nom de l'élément porte déjà l'information utile. */}
       <div
         role="tooltip"
-        className={`pointer-events-none absolute top-full pt-1.5 z-50 w-max max-w-[420px] opacity-0 transition-opacity delay-200 ${
+        aria-hidden
+        className={`pointer-events-none absolute top-full pt-1.5 z-50 w-max max-w-[min(420px,calc(100vw-16px))] opacity-0 transition-opacity delay-200 ${
           align === "left" ? "left-0" : "right-0"
         } ${hidden ? "" : "group-hover:opacity-100 group-hover:pointer-events-auto group-has-[:focus-visible]:opacity-100"}`}
       >

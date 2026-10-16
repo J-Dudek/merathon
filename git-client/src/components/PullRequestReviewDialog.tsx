@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Check, CircleDashed, CircleX, ExternalLink, MinusCircle } from "lucide-react";
+import { ArrowRight, Check, CircleDashed, CircleX, ExternalLink, MinusCircle, RotateCw } from "lucide-react";
 import { forgeClient } from "../api/forge";
 import { useUiStore, confirmAction } from "../store/useUiStore";
 import { seenKey, useSeenPrsStore } from "../store/useSeenPrsStore";
@@ -183,7 +183,7 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
       resizeKey="pull-request-review"
     >
       {loadError && <p className="p-4 text-xs text-red-400 break-words">{loadError}</p>}
-      {!details && !loadError && <p className="p-4 text-xs text-[var(--color-muted)] animate-pulse">Chargement…</p>}
+      {!details && !loadError && <p className="p-4 text-xs text-[var(--color-muted)]">Chargement…</p>}
       {details && (
         <div className={`p-4 flex flex-col gap-4 ${tab === "files" ? "h-full" : ""}`}>
           <Header details={details} account={account} forgeName={forgeName} onCheckout={onCheckout && (() => onCheckout(details.pr))} />
@@ -223,14 +223,14 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
             {details.checks.length > 0 && <Checks checks={details.checks} />}
 
             <section className="flex flex-col gap-1">
-              <span className={labelClass}>Description</span>
+              <h3 className={labelClass}>Description</h3>
               {details.description.trim()
                 ? <p className="text-xs text-[var(--color-text)] whitespace-pre-wrap break-words font-mono bg-shade/20 rounded p-2">{details.description}</p>
                 : <p className="text-xs text-[var(--color-muted)] italic">Aucune description</p>}
             </section>
 
             <section className="flex flex-col gap-2">
-              <span className={labelClass}>Conversation ({comments.length})</span>
+              <h3 className={labelClass}>Conversation ({comments.length})</h3>
               {comments.map((c) => <Comment key={c.id} comment={c} />)}
               <textarea
                 className={`${inputClass} h-20 resize-y font-mono`}
@@ -297,6 +297,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       className={`px-3 py-1.5 text-xs border-b-2 -mb-px ${
         active ? "border-[var(--color-accent)] text-[var(--color-text)]" : "border-transparent text-[var(--color-muted)] hover:text-[var(--color-text)]"
       }`}
@@ -325,12 +326,13 @@ function Header({ details, account, forgeName, onCheckout }: {
       </div>
       <div className="flex items-center gap-2 min-w-0">
         <span className="font-mono text-xs text-[var(--color-text)] truncate">{pr.sourceBranch}</span>
-        <span className="text-[var(--color-muted)]">→</span>
+        <ArrowRight size={12} className="text-[var(--color-muted)] shrink-0" />
+        <span className="sr-only">vers</span>
         <span className="font-mono text-xs text-[var(--color-text)] truncate">{pr.targetBranch}</span>
         <div className="ml-auto flex gap-2 shrink-0">
           {pr.state === "open" && onCheckout && <Button onClick={onCheckout}>Checkout</Button>}
           <Button onClick={() => openUrl(pr.url)} title={`Ouvrir sur ${forgeName}`}>
-            <span className="inline-flex items-center gap-1"><ExternalLink size={12} /> {forgeName}</span>
+            <span className="inline-flex items-center gap-1"><ExternalLink size={12} /> Ouvrir sur {forgeName}</span>
           </Button>
         </div>
       </div>
@@ -350,21 +352,21 @@ function People({ details }: { details: PullRequestDetails }) {
   const { pr, approvedBy, changesRequestedBy, approvalsLeft, names } = details;
   const reviewers = [...new Set([...pr.reviewers, ...approvedBy, ...changesRequestedBy])];
   const verdict = (login: string) => {
-    if (approvedBy.includes(login)) return <Check size={12} className="text-green-400" aria-label="a approuvé" />;
-    if (changesRequestedBy.includes(login)) return <CircleX size={12} className="text-amber-400" aria-label="demande des changements" />;
-    return <CircleDashed size={12} className="text-[var(--color-muted)]" aria-label="en attente" />;
+    if (approvedBy.includes(login)) return <Check size={12} className="text-green-400" role="img" aria-label="a approuvé" />;
+    if (changesRequestedBy.includes(login)) return <CircleX size={12} className="text-amber-400" role="img" aria-label="demande des changements" />;
+    return <CircleDashed size={12} className="text-[var(--color-muted)]" role="img" aria-label="en attente" />;
   };
   return (
     <div className="grid grid-cols-2 gap-3">
       <section className="flex flex-col gap-1 min-w-0">
-        <span className={labelClass}>Relecteurs{approvalsLeft ? ` · ${approvalsRequired(approvalsLeft)}` : ""}</span>
+        <h3 className={labelClass}>Relecteurs{approvalsLeft ? ` · ${approvalsRequired(approvalsLeft)}` : ""}</h3>
         {reviewers.length === 0 && <span className="text-xs text-[var(--color-muted)] italic">Aucun</span>}
         {reviewers.map((login) => (
           <span key={login} title={login} className="flex items-center gap-1.5 text-xs text-[var(--color-text)]">{verdict(login)} {names[login] ?? login}</span>
         ))}
       </section>
       <section className="flex flex-col gap-1 min-w-0">
-        <span className={labelClass}>Assignés</span>
+        <h3 className={labelClass}>Assignés</h3>
         {pr.assignees.length === 0 && <span className="text-xs text-[var(--color-muted)] italic">Aucun</span>}
         {pr.assignees.map((login) => <span key={login} title={login} className="text-xs text-[var(--color-text)]">{names[login] ?? login}</span>)}
       </section>
@@ -373,6 +375,8 @@ function People({ details }: { details: PullRequestDetails }) {
 }
 
 const approvalsRequired = (n: number) => (n > 1 ? `${n} approbations requises` : "1 approbation requise");
+
+const CHECK_LABELS: Record<ForgeCheck["status"], string> = { success: "réussi", failure: "en échec", pending: "en cours", skipped: "ignoré" };
 
 const CHECK_ICONS: Record<ForgeCheck["status"], React.ReactNode> = {
   success: <Check size={12} className="text-green-400 shrink-0" />,
@@ -390,21 +394,30 @@ function Checks({ checks }: { checks: ForgeCheck[] }) {
   ].filter(Boolean).join(" · ");
   return (
     <section className="flex flex-col gap-1">
-      <span className={labelClass}>CI · {summary || "aucun résultat"}</span>
-      <div className="flex flex-col max-h-36 overflow-y-auto rounded bg-shade/20 py-1">
-        {checks.map((c, i) => (
-          <button
-            key={`${c.name}-${i}`}
-            className="flex items-center gap-2 px-2 py-0.5 text-left text-xs text-[var(--color-text)] hover:bg-overlay/5 disabled:cursor-default"
-            disabled={!c.url}
-            onClick={() => c.url && openUrl(c.url)}
-            title={c.url ? "Ouvrir le détail dans le navigateur" : undefined}
-          >
-            {CHECK_ICONS[c.status]}
-            <span className="truncate">{c.name}</span>
-          </button>
-        ))}
-      </div>
+      <h3 className={labelClass}>CI · {summary || "aucun résultat"}</h3>
+      <ul className="flex flex-col max-h-36 overflow-y-auto rounded bg-shade/20 py-1">
+        {checks.map((c, i) => {
+          const content = (
+            <>
+              {CHECK_ICONS[c.status]}
+              <span className="truncate">{c.name}</span>
+              <span className="sr-only"> : {CHECK_LABELS[c.status]}</span>
+            </>
+          );
+          const row = "flex items-center gap-2 px-2 py-0.5 text-left text-xs text-[var(--color-text)]";
+          return (
+            <li key={`${c.name}-${i}`}>
+              {c.url ? (
+                <button className={`${row} w-full hover:bg-overlay/5`} onClick={() => openUrl(c.url!)} title="Ouvrir le détail dans le navigateur">
+                  {content}
+                </button>
+              ) : (
+                <span className={row}>{content}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
@@ -480,6 +493,7 @@ function MergeBox({ details, isGitHub, method, onMethod, removeSource, onRemoveS
   onDraft: (draft: boolean) => void;
   onRefresh: () => void;
 }) {
+  const closeLabel = `Fermer la ${isGitHub ? "PR" : "MR"}`;
   const updateLabel = isGitHub ? "Mettre à jour la branche" : "Rebaser";
   const mergeLabel = details.canAutoMerge ? "Merger immédiatement" : "Merger";
   return (
@@ -491,8 +505,9 @@ function MergeBox({ details, isGitHub, method, onMethod, removeSource, onRemoveS
           onClick={onRefresh}
           disabled={!!pending}
           title="Actualiser le statut"
+          aria-label="Actualiser le statut"
         >
-          ↻
+          <RotateCw size={12} />
         </button>
         {details.canUpdateBranch && (
           <Button onClick={onUpdateBranch} disabled={!!pending}>
@@ -525,11 +540,11 @@ function MergeBox({ details, isGitHub, method, onMethod, removeSource, onRemoveS
         <div className="ml-auto flex gap-2">
           {!details.pr.draft && (
             <Button onClick={() => onDraft(true)} disabled={!!pending} title="Repasser en brouillon">
-              {pending === "draft" ? "Envoi…" : "Brouillon"}
+              {pending === "draft" ? "Envoi…" : "Repasser en brouillon"}
             </Button>
           )}
           <Button variant="danger" onClick={onClose} disabled={!!pending}>
-            {pending === "state" ? "Fermeture…" : "Fermer"}
+            {pending === "state" ? "Fermeture…" : closeLabel}
           </Button>
           {details.canForceMerge && (
             <Button

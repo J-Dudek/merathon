@@ -1,3 +1,4 @@
+import { ArrowLeft, Check, TriangleAlert } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore } from "../store/useUiStore";
@@ -119,7 +120,7 @@ export function ConflictViewer({ path }: { path: string }) {
     return <div className="p-3 text-xs text-red-400 break-words">{error}</div>;
   }
   if (content === null) {
-    return <div className="p-3 text-xs text-[var(--color-muted)] animate-pulse">Chargement du conflit…</div>;
+    return <div className="p-3 text-xs text-[var(--color-muted)]">Chargement du conflit…</div>;
   }
 
   return (
@@ -128,16 +129,17 @@ export function ConflictViewer({ path }: { path: string }) {
         <button
           className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
           onClick={() => setCenter({ kind: "graph" })}
+          title="Revenir au graphe (Échap)"
         >
-          ← Graphe
+          <ArrowLeft size={12} className="inline mr-1 -mt-0.5" />Graphe
         </button>
-        <h2 className="text-[10px] font-bold uppercase tracking-widest text-red-400">⚠ Conflit</h2>
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-red-400"><TriangleAlert size={11} className="inline mr-1 -mt-0.5" />Conflit</h2>
         <span className="text-xs font-mono text-[var(--color-text)] truncate flex-1">{path}</span>
         <span className="text-[11px] text-[var(--color-muted)]">
-          {sections.length} bloc{sections.length > 1 ? "s" : ""} — clique sur la version à garder
+          {sections.length} bloc{sections.length > 1 ? "s" : ""} — choisis la version à garder
         </span>
         <button
-          className="text-xs px-3 py-1 rounded bg-green-700/70 hover:bg-green-700 text-white disabled:opacity-40"
+          className="text-xs px-3 py-1 rounded bg-green-800 hover:opacity-90 text-white disabled:opacity-40"
           onClick={handleResolve}
           disabled={saving}
         >
@@ -155,7 +157,7 @@ export function ConflictViewer({ path }: { path: string }) {
         {sections.map((section, i) => (
           <div key={i} className="border border-overlay/10 rounded overflow-hidden text-[11px] font-mono">
             {section.before.length > 0 && (
-              <div className="px-3 py-1 bg-shade/20 text-[var(--color-muted)] opacity-60">
+              <div className="px-3 py-1 bg-shade/20 text-[var(--color-muted)]">
                 {section.before.map((l, j) => <div key={j} className="whitespace-pre">{l || " "}</div>)}
               </div>
             )}
@@ -201,10 +203,17 @@ function SidePanel({ label, lines, chosen, side, onChoose, bg, activeBg }: {
       className={`${active ? activeBg : bg} cursor-pointer hover:opacity-90 transition-colors`}
       onClick={() => onChoose(side)}
     >
-      <div className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 ${active ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}`}>
-        {active && <span>✓</span>}
+      {/* Le clic sur tout le bloc choisit cette version ; ce bouton fait de même au clavier. */}
+      <button
+        type="button"
+        aria-pressed={active}
+        title={`Garder la version « ${label} »`}
+        className={`w-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60 ${active ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}`}
+      >
+        {active && <Check size={10} strokeWidth={3} />}
+        <span className="sr-only">Garder la version </span>
         {label}
-      </div>
+      </button>
       <div className="px-2 py-1">
         {lines.map((l, i) => <div key={i} className={`whitespace-pre ${active ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}`}>{l || " "}</div>)}
       </div>
@@ -216,6 +225,7 @@ function ChoiceBtn({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       className={`text-[9px] px-2 py-0.5 rounded transition-colors ${active ? "bg-overlay/20 text-[var(--color-text)]" : "text-[var(--color-muted)] hover:bg-overlay/10"}`}
     >
       {children}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { GitCommitHorizontal, MessageSquare } from "lucide-react";
+import { GitCommitHorizontal, GitMerge, GitPullRequestArrow, GitPullRequestClosed, MessageSquare, type LucideIcon } from "lucide-react";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useRepoStore } from "../store/useRepoStore";
 import { prFreshness, seenKey, seenPrefix, useSeenPrsStore, type PrFreshness } from "../store/useSeenPrsStore";
@@ -205,7 +205,7 @@ export function usePullRequests(forge: LinkedForge | null) {
 
 export type PullRequestsState = ReturnType<typeof usePullRequests>;
 
-const filterClass = "flex-1 min-w-0 bg-shade/30 border border-overlay/10 rounded px-1 py-0.5 text-[10px] text-[var(--color-text)] outline-none";
+const filterClass = "flex-1 min-w-0 bg-shade/30 border border-overlay/50 rounded px-1 py-0.5 text-[10px] text-[var(--color-text)] outline-none";
 
 /** Filtres, lignes de PR / MR et panneau de revue. `indent` aligne les lignes sur celles de la barre latérale. */
 export function PullRequestList({ forge, list, indent = 12 }: { forge: LinkedForge; list: PullRequestsState; indent?: number }) {
@@ -246,7 +246,7 @@ export function PullRequestList({ forge, list, indent = 12 }: { forge: LinkedFor
           <option value="assigned">Assignées à moi</option>
         </select>
       </div>
-      {list.loading && <p className="py-1 text-xs text-[var(--color-muted)] animate-pulse" style={{ paddingLeft: indent }}>Chargement…</p>}
+      {list.loading && <p className="py-1 text-xs text-[var(--color-muted)]" style={{ paddingLeft: indent }}>Chargement…</p>}
       {list.error && <p className="pr-3 py-1 text-xs text-red-400 break-words" style={{ paddingLeft: indent }}>{list.error}</p>}
       {!list.loading && !list.error && (
         <>
@@ -294,6 +294,13 @@ export function PullRequestList({ forge, list, indent = 12 }: { forge: LinkedFor
   );
 }
 
+/** État d'une PR : une icône de forme différente par état, en plus de la couleur (RGAA 3.1). */
+const PR_STATE_ICONS: Record<ForgePR["state"], { icon: LucideIcon; label: string }> = {
+  open: { icon: GitPullRequestArrow, label: "ouverte" },
+  merged: { icon: GitMerge, label: "mergée" },
+  closed: { icon: GitPullRequestClosed, label: "fermée" },
+};
+
 const PR_STATE_COLORS: Record<ForgePR["state"], string> = {
   open: "text-green-400",
   merged: "text-purple-400",
@@ -303,7 +310,12 @@ const PR_STATE_COLORS: Record<ForgePR["state"], string> = {
 /** Étiquettes des changements depuis la dernière consultation. */
 export function FreshnessTags({ freshness }: { freshness: PrFreshness }) {
   if (freshness.kind === "unread") {
-    return <span className="w-1.5 h-1.5 mt-1 rounded-full bg-sky-400 shrink-0" title="Non lue" />;
+    return (
+      <>
+        <span className="w-1.5 h-1.5 mt-1 rounded-full bg-sky-400 shrink-0" title="Non lue" aria-hidden />
+        <span className="sr-only">, non lue</span>
+      </>
+    );
   }
   if (freshness.kind !== "updated") return null;
   const tag = "inline-flex items-center gap-0.5 text-[9px] px-1 rounded border border-amber-400/40 text-amber-300 shrink-0";
@@ -311,17 +323,17 @@ export function FreshnessTags({ freshness }: { freshness: PrFreshness }) {
     <>
       {freshness.commits && (
         <span className={tag} title="Nouveaux commits depuis ta dernière consultation">
-          <GitCommitHorizontal size={10} /> commits
+          <GitCommitHorizontal size={10} /> <span className="sr-only">, nouveaux</span> commits
         </span>
       )}
       {freshness.comments && (
         <span className={tag} title="Nouveaux commentaires depuis ta dernière consultation">
-          <MessageSquare size={10} /> commentaires
+          <MessageSquare size={10} /> <span className="sr-only">, nouveaux</span> commentaires
         </span>
       )}
       {!freshness.commits && !freshness.comments && (
         <span className={tag} title="Nouvelle activité (commentaire, relecture, label…) depuis ta dernière consultation">
-          activité
+          <span className="sr-only">, nouvelle </span>activité
         </span>
       )}
     </>
@@ -345,16 +357,26 @@ export function PRRow({ pr, freshness, approved, typeLabel, indent, onClick, onC
   hint?: string;
   meta?: React.ReactNode;
 }) {
+  const state = PR_STATE_ICONS[pr.state];
   return (
+    // Entrée ou Espace : détail ; touche Menu ou Maj+F10 : menu (comme le clic droit).
     <div
-      className="pr-3 py-1.5 hover:bg-overlay/5 cursor-pointer"
+      role="button"
+      tabIndex={0}
+      className="pr-3 py-1.5 hover:bg-overlay/5 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
       style={{ paddingLeft: indent }}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        onClick();
+      }}
       onContextMenu={onContextMenu}
       title={hint ?? "Clic : voir le détail · Clic droit : checkout, navigateur"}
     >
       <div className="flex items-start gap-2">
-        <span className={`${PR_STATE_COLORS[pr.state]} shrink-0 text-xs`}>●</span>
+        <state.icon size={12} strokeWidth={2} className={`${PR_STATE_COLORS[pr.state]} shrink-0 mt-0.5`} aria-hidden />
+        <span className="sr-only">{typeLabel} {state.label} : </span>
         <div className="flex-1 min-w-0">
           <p
             className={`text-xs truncate ${
@@ -372,7 +394,7 @@ export function PRRow({ pr, freshness, approved, typeLabel, indent, onClick, onC
         {approved && (
           <span className={`text-[9px] px-1 rounded border shrink-0 ${MY_PR_STATUSES.approved.className}`}>{MY_PR_STATUSES.approved.label}</span>
         )}
-        {pr.draft && <span className="text-[9px] border border-overlay/20 px-1 rounded text-[var(--color-muted)] shrink-0">draft</span>}
+        {pr.draft && <span className="text-[9px] border border-overlay/20 px-1 rounded text-[var(--color-muted)] shrink-0"><span className="sr-only">, </span>draft</span>}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRepoStore } from "../store/useRepoStore";
 import { confirmAction, useUiStore } from "../store/useUiStore";
@@ -181,7 +182,7 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
             <span className={labelClass}>Branche source</span>
             <input className={`${inputClass} font-mono`} readOnly value={sourceBranch} />
           </label>
-          <span className="pb-1.5 text-[var(--color-muted)]">→</span>
+          <ArrowRight size={14} className="mb-2 shrink-0 text-[var(--color-muted)]" />
           <label className="flex flex-col gap-1 flex-1 min-w-0">
             <span className={labelClass}>Branche cible</span>
             <select className={`${inputClass} font-mono`} value={targetBranch} onChange={(e) => setTargetBranch(e.target.value)}>
@@ -230,7 +231,7 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
             Membres, labels et jalons indisponibles : {loadError}
           </p>
         )}
-        {!options && !loadError && <p className="text-[11px] text-[var(--color-muted)] animate-pulse">Chargement des options du projet…</p>}
+        {!options && !loadError && <p className="text-[11px] text-[var(--color-muted)]">Chargement des options du projet…</p>}
 
         {options && (
           <div className="grid grid-cols-2 gap-3">
@@ -340,9 +341,20 @@ function TagPicker({ label, choices, value, onChange, action }: {
 }) {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
+  /** Suggestion désignée au clavier (flèches), choisie par Entrée. */
+  const [active, setActive] = useState(0);
+  const listId = useId();
   const q = query.trim().toLowerCase();
   const suggestions = choices.filter((c) => !value.includes(c.key) && c.label.toLowerCase().includes(q)).slice(0, 8);
   const colorOf = (key: string) => choices.find((c) => c.key === key)?.color;
+  const open = focused && suggestions.length > 0;
+  const current = Math.min(active, suggestions.length - 1);
+
+  function pick(key: string) {
+    onChange([...value, key]);
+    setQuery("");
+    setActive(0);
+  }
 
   return (
     <div className="flex flex-col gap-1 min-w-0 relative">
@@ -358,51 +370,71 @@ function TagPicker({ label, choices, value, onChange, action }: {
         <div className="flex flex-wrap gap-1">
           {value.map((key) => (
             <span key={key} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-overlay/10 text-[11px] text-[var(--color-text)]">
-              {colorOf(key) && <span className="w-2 h-2 rounded-full" style={{ background: colorOf(key) }} />}
+              {colorOf(key) && <span className="w-2 h-2 rounded-full" style={{ background: colorOf(key) }} aria-hidden />}
               {key}
-              <button className="opacity-60 hover:opacity-100" aria-label={`Retirer ${key}`} onClick={() => onChange(value.filter((v) => v !== key))}>
-                ×
+              <button className="text-[var(--color-muted)] hover:text-[var(--color-text)]" aria-label={`Retirer ${key}`} onClick={() => onChange(value.filter((v) => v !== key))}>
+                <X size={11} />
               </button>
             </span>
           ))}
         </div>
       )}
+      {/* Liste de suggestions au clavier : flèches pour choisir, Entrée pour ajouter, Échap pour fermer. */}
       <input
         className={inputClass}
         placeholder={choices.length ? "Rechercher…" : "Aucun choix disponible"}
         {...fieldLabel(`${label} : ajouter`)}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-activedescendant={open ? `${listId}-${current}` : undefined}
         disabled={!choices.length}
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setActive(0);
+          setFocused(true);
+        }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && suggestions[0]) {
-            onChange([...value, suggestions[0].key]);
-            setQuery("");
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            setFocused(true);
+            const n = suggestions.length;
+            if (n) setActive((current + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
+          } else if (e.key === "Enter" && open) {
+            e.preventDefault();
+            pick(suggestions[current].key);
+          } else if (e.key === "Escape" && open) {
+            e.stopPropagation();
+            setFocused(false);
           }
         }}
       />
-      {focused && suggestions.length > 0 && (
-        <ul className="absolute z-10 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[var(--color-bg-elevated)] border border-overlay/10 rounded shadow-xl">
-          {suggestions.map((c) => (
-            <li key={c.key}>
-              <button
-                className="w-full text-left px-2 py-1 text-xs text-[var(--color-text)] hover:bg-overlay/10 flex items-center gap-2"
-                // mousedown : avant que le champ perde le focus et ferme la liste.
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onChange([...value, c.key]);
-                  setQuery("");
-                }}
-              >
-                {c.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} />}
-                <span className="truncate">{c.label}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul
+        id={listId}
+        role="listbox"
+        aria-label={`Suggestions : ${label}`}
+        className={open ? "absolute z-10 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[var(--color-bg-elevated)] border border-overlay/10 rounded shadow-xl" : "hidden"}
+      >
+        {open && suggestions.map((c, i) => (
+          <li
+            key={c.key}
+            id={`${listId}-${i}`}
+            role="option"
+            aria-selected={i === current}
+            className={`px-2 py-1 text-xs text-[var(--color-text)] cursor-pointer flex items-center gap-2 ${i === current ? "bg-overlay/15" : "hover:bg-overlay/10"}`}
+            // Le champ garde le focus (la liste resterait sinon fermée avant le clic) ; le choix se fait au relâchement.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => pick(c.key)}
+          >
+            {c.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} aria-hidden />}
+            <span className="truncate">{c.label}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

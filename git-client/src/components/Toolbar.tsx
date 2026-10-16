@@ -1,9 +1,7 @@
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore } from "../store/useUiStore";
 import { useTabsStore } from "../store/useTabsStore";
-import {
-  AppWindow, BookOpen, CloudDownload, FolderOpen, FolderPlus, History, Info, Monitor, Moon, RefreshCw, Settings, SquarePlus, Sun, X, type LucideIcon,
-} from "lucide-react";
+import { AppWindow, Archive, ArchiveRestore, ArrowDown, ArrowUp, BookOpen, ChevronDown, CloudDownload, FolderOpen, FolderPlus, GitBranch, History, Info, Monitor, Moon, RefreshCw, Settings, SquarePlus, Sun, X, type LucideIcon } from "lucide-react";
 import {
   createBranch, fetchRemote, openNewWindow, pull, push, stashApply, stashSave,
 } from "../ipc/commands";
@@ -24,7 +22,7 @@ function headLabel(info: RepoInfo): string {
   const rebase = info.interactive_rebase;
   if (rebase) return `Rebase interactif ${rebase.step}/${rebase.total}`;
   if (info.head_detached) return `HEAD détaché @ ${info.head_hash?.slice(0, 7)}`;
-  return `⎇ ${info.head_branch ?? ""}`;
+  return info.head_branch ?? "";
 }
 
 export function Toolbar({ onClone }: { onClone: () => void }) {
@@ -136,7 +134,9 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
   const disabled = !repoPath || !!busy;
 
   return (
-    <header className="flex items-center gap-1.5 px-3 h-11 shrink-0 bg-[var(--color-bg-secondary)] border-b border-overlay/10">
+    <header className="flex flex-wrap items-center gap-1.5 px-3 min-h-11 py-1 shrink-0 bg-[var(--color-bg-secondary)] border-b border-overlay/10">
+      {/* Titre de niveau 1 pour les technologies d'assistance : les panneaux ont des titres de niveau 2. */}
+      <h1 className="sr-only">Merathon{repoName ? ` — ${repoName}` : ""}</h1>
       <Tooltip
         title="Ouvrir le menu du dépôt"
         lines={[
@@ -159,11 +159,13 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
             className="w-6 h-6 rounded-md ring-1 ring-overlay/10 shrink-0 select-none"
           />
           <span className="text-sm font-semibold text-[var(--color-text)] truncate">{repoName ?? "Merathon"}</span>
-          <span className="text-[10px] text-[var(--color-muted)]">▾</span>
+          <ChevronDown size={12} className="text-[var(--color-muted)] shrink-0" />
         </button>
       </Tooltip>
       {info && (
         <span className="text-xs font-mono text-[var(--color-accent-text)] truncate max-w-48" title="Branche courante">
+          {!info.interactive_rebase && !info.head_detached && <GitBranch size={12} className="inline mr-1 -mt-0.5" />}
+          <span className="sr-only">Branche courante : </span>
           {headLabel(info)}
         </span>
       )}
@@ -187,8 +189,9 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
 
       <ToolBtn
         label="Pull"
-        icon="⇣"
+        icon={ArrowDown}
         badge={head?.behind}
+        badgeLabel={(n) => `${n} commit${n > 1 ? "s" : ""} à récupérer`}
         disabled={disabled || !head}
         onClick={() => doPull(false)}
         onMenu={(e) => openMenu(e, [
@@ -198,8 +201,9 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
       />
       <ToolBtn
         label="Push"
-        icon="⇡"
+        icon={ArrowUp}
         badge={head?.ahead}
+        badgeLabel={(n) => `${n} commit${n > 1 ? "s" : ""} à envoyer`}
         disabled={disabled || !head}
         onClick={() => doPush(false)}
         onMenu={(e) => openMenu(e, [
@@ -207,22 +211,24 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
           { label: "Push forcé…", action: () => doPush(true), danger: true },
         ])}
       />
-      <ToolBtn label="Fetch" icon="⟳" disabled={disabled} onClick={doFetch} />
-      <ToolBtn label="Branche" icon="⎇" disabled={disabled || !info?.head_hash} onClick={doBranch} />
-      <ToolBtn label="Stash" icon="⊟" disabled={disabled} onClick={doStash} />
-      <ToolBtn label="Pop" icon="⊞" badge={stashes.length || undefined} disabled={disabled || stashes.length === 0} onClick={doPop} />
+      <ToolBtn label="Fetch" icon={RefreshCw} disabled={disabled} onClick={doFetch} />
+      <ToolBtn label="Branche" icon={GitBranch} disabled={disabled || !info?.head_hash} onClick={doBranch} />
+      <ToolBtn label="Stash" icon={Archive} disabled={disabled} onClick={doStash} />
+      <ToolBtn label="Pop" icon={ArchiveRestore} badge={stashes.length || undefined} badgeLabel={(n) => `${n} stash${n > 1 ? "es" : ""}`} disabled={disabled || stashes.length === 0} onClick={doPop} />
 
-      {busy && <span className="text-xs text-[var(--color-muted)] animate-pulse ml-2">{busy}</span>}
+      {/* Opération en cours (Fetch…, Push…) : annoncée par une zone de statut toujours présente. */}
+      <span role="status" className="text-xs text-[var(--color-muted)] ml-2">{busy ?? ""}</span>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex flex-wrap items-center gap-2">
         <ThemeButton onOpen={openMenu} />
         <SearchBar />
         <button
           className="text-xs px-2 py-1 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
           onClick={() => openNewWindow()}
           title="Ouvrir une nouvelle fenêtre"
+          aria-label="Ouvrir une nouvelle fenêtre"
         >
-          ⧉
+          <AppWindow size={14} strokeWidth={1.75} />
         </button>
       </div>
 
@@ -266,16 +272,18 @@ function ThemeButton({ onOpen }: { onOpen: (e: React.MouseEvent, items: MenuEntr
       >
         <Icon size={14} strokeWidth={1.75} />
         {label}
-        <span className="text-[9px]">▾</span>
+        <ChevronDown size={11} />
       </button>
     </Tooltip>
   );
 }
 
-function ToolBtn({ label, icon, badge, disabled, onClick, onMenu }: {
+function ToolBtn({ label, icon: Icon, badge, badgeLabel, disabled, onClick, onMenu }: {
   label: string;
-  icon: string;
+  icon: LucideIcon;
   badge?: number;
+  /** Signification de la pastille, restituée aux technologies d'assistance. */
+  badgeLabel?: (n: number) => string;
   disabled?: boolean;
   onClick: () => void;
   onMenu?: (e: React.MouseEvent) => void;
@@ -287,12 +295,15 @@ function ToolBtn({ label, icon, badge, disabled, onClick, onMenu }: {
         style={onMenu ? undefined : { borderRadius: 4 }}
         onClick={onClick}
         disabled={disabled}
-        title={label}
+        title={badge && badgeLabel ? `${label} (${badgeLabel(badge)})` : label}
       >
-        <span className="opacity-80">{icon}</span>
+        <Icon size={13} strokeWidth={1.75} className="opacity-80 shrink-0" />
         {label}
         {!!badge && (
-          <span className="text-[9px] px-1 rounded-full bg-[var(--color-accent-solid)] text-white leading-4">{badge}</span>
+          <span className="text-[9px] px-1 rounded-full bg-[var(--color-accent-solid)] text-white leading-4">
+            <span aria-hidden>{badge}</span>
+            <span className="sr-only">{badgeLabel ? ` (${badgeLabel(badge)})` : ` (${badge})`}</span>
+          </span>
         )}
       </button>
       {onMenu && (
@@ -301,8 +312,9 @@ function ToolBtn({ label, icon, badge, disabled, onClick, onMenu }: {
           disabled={disabled}
           onClick={onMenu}
           aria-label={`Options ${label}`}
+          aria-haspopup="menu"
         >
-          ▾
+          <ChevronDown size={12} />
         </button>
       )}
     </div>

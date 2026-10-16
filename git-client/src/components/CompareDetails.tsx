@@ -1,8 +1,9 @@
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRepoStore, type Comparison } from "../store/useRepoStore";
 import { diffCommits } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
-import { CommitFileRow } from "./CommitDetails";
+import { CommitFileRow, LineCounts } from "./CommitDetails";
 import type { CommitFile, CommitInfo } from "../types/git";
 
 /** Différences entre deux commits du graphe (`git diff base head`), à la place du détail d'un commit. */
@@ -41,8 +42,8 @@ export function CompareDetails({ comparison }: { comparison: Comparison }) {
     <div className="flex flex-col h-full bg-[var(--color-bg-secondary)] text-sm">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-overlay/10 shrink-0">
         <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Comparaison</h2>
-        <button className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs" title="Fermer la comparaison" onClick={close}>
-          ✕
+        <button className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs" title="Fermer la comparaison" aria-label="Fermer la comparaison" onClick={close}>
+          <X size={13} />
         </button>
       </div>
 
@@ -52,7 +53,7 @@ export function CompareDetails({ comparison }: { comparison: Comparison }) {
       </div>
 
       {error && <p className="p-3 text-xs text-red-400 break-words">{error}</p>}
-      {!files && !error && <p className="p-3 text-xs text-[var(--color-muted)] animate-pulse">Chargement…</p>}
+      {!files && !error && <p className="p-3 text-xs text-[var(--color-muted)]">Chargement…</p>}
 
       {files && (
         <div className="flex-1 overflow-y-auto">
@@ -60,7 +61,8 @@ export function CompareDetails({ comparison }: { comparison: Comparison }) {
             {files.length} fichier{files.length > 1 ? "s" : ""}
             {totals && (
               <span className="ml-auto font-mono normal-case tracking-normal font-normal">
-                <span className="text-green-400">+{totals.add}</span> <span className="text-red-400">−{totals.del}</span>
+                <span className="sr-only"> : </span>
+                <LineCounts add={totals.add} del={totals.del} all />
               </span>
             )}
           </h3>
@@ -86,6 +88,7 @@ function CommitLine({ label, commit }: { label: string; commit: CommitInfo }) {
       <button
         className="font-mono text-[var(--color-accent-text)] hover:underline shrink-0"
         title="Copier le hash complet"
+        aria-label={`${commit.short_hash}, copier le hash complet`}
         onClick={() => navigator.clipboard.writeText(commit.hash)}
       >
         {commit.short_hash}

@@ -81,7 +81,7 @@ export const GIT_MEMO: MemoGroup[] = [
         summary: "Place des modifications dans l'index : seul ce qui est indexé fera partie du prochain commit.",
         example: "Tu as corrigé un bug et retouché la doc : tu indexes d'abord le correctif pour en faire un commit à part.",
         steps: [
-          "Survole un fichier de « Non indexé » et clique sur « + », ou clic droit → « Indexer ».",
+          "Survole un fichier de « Non indexé » et clique sur le bouton plus (« Indexer »), ou clic droit → « Indexer ».",
           "« Tout indexer » dans l'en-tête de la section prend tous les fichiers.",
           "Ctrl + clic ou Maj + clic sélectionne plusieurs fichiers ; en arborescence, le « + » d'un dossier indexe tout son contenu.",
         ],
@@ -103,7 +103,7 @@ export const GIT_MEMO: MemoGroup[] = [
         summary: "Retire des modifications de l'index sans les perdre : elles redeviennent « non indexées ».",
         example: "Tu as indexé un fichier de configuration locale par erreur.",
         steps: [
-          "Survole le fichier dans « Indexé » et clique sur « − », ou clic droit → « Désindexer ».",
+          "Survole le fichier dans « Indexé » et clique sur le bouton moins (« Désindexer »), ou clic droit → « Désindexer ».",
           "« Tout désindexer » vide l'index ; depuis le diff, « Désindexer le bloc » ou « Désindexer les lignes ».",
         ],
       },
@@ -113,7 +113,7 @@ export const GIT_MEMO: MemoGroup[] = [
         summary: "Remet un fichier dans l'état de l'index : les modifications non indexées sont abandonnées.",
         example: "Tu as fait des essais dans un fichier et tu veux repartir de la dernière version propre.",
         steps: [
-          "Survole le fichier dans « Non indexé » et clique sur « ↺ », ou clic droit → « Annuler les modifications… ».",
+          "Survole le fichier dans « Non indexé » et clique sur la flèche de retour (« Annuler les modifications »), ou clic droit → « Annuler les modifications… ».",
           "Depuis le diff, « Annuler le bloc » n'abandonne qu'une partie du fichier.",
         ],
         warning: "Irréversible : les modifications sont perdues et un fichier non suivi est supprimé du disque.",
@@ -254,7 +254,7 @@ export const GIT_MEMO: MemoGroup[] = [
         example: "Un collègue a poussé sur la même branche que toi : tu te mets à jour avant de continuer.",
         steps: [
           "Bouton « Pull » : avance rapide si possible, sinon merge.",
-          "La flèche « ▾ » à côté propose « Pull (rebase) », qui rejoue tes commits par-dessus ceux du remote et garde un historique linéaire.",
+          "La petite flèche à côté (« Options Pull ») propose « Pull (rebase) », qui rejoue tes commits par-dessus ceux du remote et garde un historique linéaire.",
           "Clic droit sur une autre branche locale → « Pull » la met à jour sans y basculer.",
         ],
       },
@@ -270,7 +270,7 @@ export const GIT_MEMO: MemoGroup[] = [
         command: "git push --force",
         summary: "Remplace la branche distante par ta version locale, même si leurs historiques ont divergé.",
         example: "Tu as réécrit les commits de ta branche de travail (amend, rebase, squash) déjà publiée.",
-        steps: ["Flèche « ▾ » à côté de « Push » → « Push forcé… », puis confirme."],
+        steps: ["Petite flèche à côté de « Push » (« Options Push ») → « Push forcé… », puis confirme."],
         warning: "Les commits distants absents de ta version locale sont perdus : à réserver à tes propres branches.",
       },
     ],

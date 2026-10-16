@@ -50,6 +50,8 @@ export function Modal({ title, onClose, children, width = "w-[420px]", height = 
   const titleId = useId();
   const [size, setSize] = useState(() => loadSize(resizeKey));
   const boxRef = useRef<HTMLDivElement>(null);
+  /** Clic commencé sur le fond : la fenêtre ne se ferme qu'au relâchement, et seulement s'il a lieu sur le fond aussi. */
+  const backdropDown = useRef(false);
   const custom = size.width !== undefined;
   const sized = size.maximized || custom;
 
@@ -113,7 +115,13 @@ export function Modal({ title, onClose, children, width = "w-[420px]", height = 
   return createPortal(
     <div
       className={`fixed inset-0 z-[10000] flex justify-center bg-black/50 ${sized ? "items-center" : "items-start pt-[12vh]"}`}
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      onMouseDown={(e) => {
+        backdropDown.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (backdropDown.current && e.target === e.currentTarget) onClose();
+        backdropDown.current = false;
+      }}
     >
       <div
         ref={boxRef}
@@ -179,7 +187,7 @@ function HeaderIcon({ onClick, label, title, children }: {
 }
 
 export const inputClass =
-  "bg-shade/30 border border-overlay/10 rounded px-2 py-1.5 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/60 placeholder:text-[var(--color-muted)] w-full";
+  "bg-shade/30 border border-overlay/50 rounded px-2 py-1.5 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/60 placeholder:text-[var(--color-muted)] w-full";
 
 export function Button({ onClick, disabled, variant = "default", children, title, type = "button" }: {
   onClick?: () => void;
@@ -191,7 +199,7 @@ export function Button({ onClick, disabled, variant = "default", children, title
 }) {
   const styles = {
     default: "bg-overlay/10 hover:bg-overlay/15 text-[var(--color-text)]",
-    primary: "bg-[var(--color-accent)] hover:opacity-90 text-white font-semibold",
+    primary: "bg-[var(--color-accent-solid)] hover:opacity-90 text-white font-semibold",
     danger: "bg-red-700/80 hover:bg-red-700 text-white font-semibold",
   }[variant];
   return (

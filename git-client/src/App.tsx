@@ -21,7 +21,7 @@ import { openContextMenuFromKeyboard } from "./lib/keyboardContextMenu";
 import { InteractiveRebaseDialog } from "./components/InteractiveRebaseDialog";
 import { useRepoStore } from "./store/useRepoStore";
 import { useAccountsStore } from "./store/useAccountsStore";
-import { defaultSideWidths, useUiStore, type Side } from "./store/useUiStore";
+import { defaultSideWidths, SIDE_LIMITS, useUiStore, type Side } from "./store/useUiStore";
 import { persistTabSession, useTabsStore } from "./store/useTabsStore";
 import { stepZoom, useDisplayStore } from "./store/useDisplayStore";
 import { PreferencesDialog } from "./components/PreferencesDialog";
@@ -34,6 +34,7 @@ import { checkForUpdatesOnStartup } from "./lib/updater";
 import { startAutoSync } from "./lib/autoSync";
 import { useIconBadge } from "./lib/iconBadge";
 import { openDevtools } from "./ipc/commands";
+import { resizeKeyDelta } from "./lib/resizeKeys";
 
 type LeftTab = "repo" | "accounts";
 
@@ -94,6 +95,12 @@ export default function App() {
     getCurrentWebview().setZoom(zoom).catch((e) => notify("error", `Zoom : ${errorMessage(e)}`));
   }, [zoom, notify]);
 
+  // Titre de la page (RGAA 8.6) : le dépôt de l'onglet actif, restitué par les technologies d'assistance.
+  useEffect(() => {
+    const name = repoPath?.split(/[\\/]/).pop();
+    document.title = name ? `${name} — Merathon` : "Merathon — Git Repository Manager";
+  }, [repoPath]);
+
   // Fenêtre ouverte sur un dépôt précis (ex. un sous-module) : voir window.rs.
   // La fenêtre principale rouvre les onglets de la session précédente et les mémorise.
   useEffect(() => {
@@ -135,6 +142,11 @@ export default function App() {
     return repoPath ? <Sidebar /> : <p className="p-3 text-xs text-[var(--color-muted)] italic">Aucun dépôt ouvert</p>;
   }
 
+  function rightPaneLabel() {
+    if (comparison) return "Comparaison";
+    return selectedCommit ? "Détail du commit" : "Modifications en cours";
+  }
+
   function rightPane() {
     if (comparison) return <CompareDetails comparison={comparison} />;
     return selectedCommit ? <CommitDetails commit={selectedCommit} /> : <StagingPanel />;
@@ -157,36 +169,53 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden">
-      {/* Titre de niveau 1 pour les technologies d'assistance : les panneaux ont des titres de niveau 2. */}
-      <h1 className="sr-only">Merathon</h1>
+    <div className="flex flex-col h-screen w-screen overflow-hidden max-[760px]:overflow-y-auto max-[760px]:overflow-x-hidden">
+      {/* Lien d'évitement (RGAA 12.7) : premier arrêt de tabulation, visible quand il a le focus. */}
+      <a
+        href="#contenu"
+        onClick={(e) => {
+          e.preventDefault();
+          // Le graphe (ou la vue centrale) prend le focus : la tabulation reprend depuis le contenu principal.
+          const main = document.getElementById("contenu");
+          (main?.querySelector<HTMLElement>("[role=listbox], [tabindex='0'], button, input") ?? main)?.focus();
+        }}
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[10002] focus:px-3 focus:py-2 focus:rounded focus:bg-[var(--color-bg-elevated)] focus:text-[var(--color-text)] focus:text-xs focus:outline-2 focus:outline-[var(--color-accent)]"
+      >
+        Aller au contenu principal
+      </a>
       <Toolbar onClone={() => setShowClone(true)} />
       <TabBar />
 
       {/* Remonté à chaque changement d'onglet : pas de sélection d'un dépôt appliquée à un autre. */}
-      <div key={activeTab} className="flex flex-1 overflow-hidden">
-        <div
-          className="relative shrink-0 flex flex-col overflow-hidden border-r border-overlay/10 bg-[var(--color-bg-secondary)]"
+      {/* Fenêtre étroite ou zoom fort (RGAA 10.4, 10.11) : les panneaux s'empilent et la page défile verticalement. */}
+      <div key={activeTab} className="flex flex-1 overflow-hidden max-[760px]:flex-col max-[760px]:flex-none max-[760px]:overflow-visible">
+        <aside
+          aria-label={leftTab === "accounts" ? "Comptes" : "Dépôt : branches, tags et stashes"}
+          className="relative shrink-0 flex flex-col overflow-hidden border-r border-overlay/10 bg-[var(--color-bg-secondary)] max-[760px]:w-full! max-[760px]:h-80 max-[760px]:border-r-0 max-[760px]:border-b"
           style={{ width: sideWidths.left }}
         >
           <SideResizer side="left" />
-          <div className="flex shrink-0 border-b border-overlay/10">
+          <div role="group" aria-label="Contenu du panneau de gauche" className="flex shrink-0 border-b border-overlay/10">
             <LeftTabBtn active={leftTab === "repo"} onClick={() => setLeftTab("repo")}>Dépôt</LeftTabBtn>
             <LeftTabBtn active={leftTab === "accounts"} onClick={() => setLeftTab("accounts")}>Comptes</LeftTabBtn>
           </div>
           <div className="flex-1 overflow-hidden">{leftPane()}</div>
-        </div>
+        </aside>
 
-        <main className="flex-1 min-w-0 overflow-hidden flex flex-col bg-[var(--color-bg-primary)]">
+        <main id="contenu" tabIndex={-1} className="flex-1 min-w-0 overflow-hidden flex flex-col bg-[var(--color-bg-primary)] outline-none max-[760px]:flex-none max-[760px]:h-96">
           <div className="flex-1 min-h-0 overflow-hidden">{mainPane()}</div>
           <BottomPanel />
         </main>
 
         {repoPath && (
-          <div className="relative shrink-0 overflow-hidden border-l border-overlay/10" style={{ width: sideWidths.right }}>
+          <aside
+            aria-label={rightPaneLabel()}
+            className="relative shrink-0 overflow-hidden border-l border-overlay/10 max-[760px]:w-full! max-[760px]:h-96 max-[760px]:border-l-0 max-[760px]:border-t"
+            style={{ width: sideWidths.right }}
+          >
             <SideResizer side="right" />
             {rightPane()}
-          </div>
+          </aside>
         )}
       </div>
 
@@ -216,6 +245,7 @@ const MIN_CENTER_WIDTH = 320;
 /** Poignée sur le bord intérieur d'un panneau latéral : tirer pour l'élargir, double-clic pour la largeur par défaut. */
 function SideResizer({ side }: { side: Side }) {
   const setSideWidth = useUiStore((s) => s.setSideWidth);
+  const sideWidth = useUiStore((s) => s.sideWidths[side]);
 
   function startResize(e: React.PointerEvent) {
     e.preventDefault();
@@ -237,12 +267,29 @@ function SideResizer({ side }: { side: Side }) {
     window.addEventListener("pointerup", up);
   }
 
+  // Au clavier : flèches gauche / droite (Maj : pas plus grand), Entrée : largeur par défaut.
+  function onKeyDown(e: React.KeyboardEvent) {
+    const delta = resizeKeyDelta(e, "x");
+    if (e.key === "Enter") setSideWidth(side, defaultSideWidths[side]);
+    else if (delta === null) return;
+    else setSideWidth(side, useUiStore.getState().sideWidths[side] + (side === "left" ? delta : -delta));
+    e.preventDefault();
+  }
+
   return (
     <div
-      className={`absolute inset-y-0 ${side === "left" ? "right-0" : "left-0"} w-1 cursor-col-resize z-10 hover:bg-sky-400/40 active:bg-sky-400/60`}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={side === "left" ? "Largeur du panneau de gauche" : "Largeur du panneau de droite"}
+      aria-valuenow={sideWidth}
+      aria-valuemin={SIDE_LIMITS[side].min}
+      aria-valuemax={SIDE_LIMITS[side].max}
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      className={`absolute inset-y-0 ${side === "left" ? "right-0" : "left-0"} w-1 cursor-col-resize z-10 hover:bg-sky-400/40 active:bg-sky-400/60 focus-visible:bg-[var(--color-accent)] outline-none max-[760px]:hidden`}
       onPointerDown={startResize}
       onDoubleClick={() => setSideWidth(side, defaultSideWidths[side])}
-      title="Redimensionner (double-clic : largeur par défaut)"
+      title="Redimensionner (double-clic ou Entrée : largeur par défaut ; flèches au clavier)"
     />
   );
 }
@@ -291,6 +338,7 @@ function LeftTabBtn({ active, onClick, children }: { active: boolean; onClick: (
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       className={`flex-1 text-[10px] font-bold uppercase tracking-widest py-2 transition-colors ${
         active
           ? "text-[var(--color-text)] border-b-2 border-[var(--color-accent)]"

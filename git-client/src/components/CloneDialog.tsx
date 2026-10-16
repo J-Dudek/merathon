@@ -97,12 +97,13 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
               <input className={inputClass} placeholder="Filtrer…" {...fieldLabel("Filtrer les dépôts du compte")} value={filter} onChange={(e) => setFilter(e.target.value)} />
             </div>
             <div className="h-44 overflow-y-auto border border-overlay/10 rounded">
-              {reposLoading && <p className="p-2 text-xs text-[var(--color-muted)] animate-pulse">Chargement…</p>}
+              {reposLoading && <p className="p-2 text-xs text-[var(--color-muted)]">Chargement…</p>}
               {reposError && <p className="p-2 text-xs text-red-400 break-words">{reposError}</p>}
               {!reposLoading && !reposError && visibleRepos.map((r) => (
                 <button
                   key={r.fullName}
                   onClick={() => setUrl(r.cloneUrl)}
+                  aria-pressed={url === r.cloneUrl}
                   className={`w-full text-left px-2 py-1 text-xs flex items-center gap-2 hover:bg-overlay/5 ${
                     url === r.cloneUrl ? "bg-overlay/10" : ""
                   }`}
@@ -125,6 +126,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
             autoFocus
             className={inputClass}
             placeholder="https://github.com/owner/repo.git ou git@gitlab.com:group/repo.git"
+            required
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
@@ -133,7 +135,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
         <div className="flex gap-2 items-end">
           <label className="flex flex-col gap-1 flex-1 min-w-0">
             <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Dossier parent</span>
-            <input className={inputClass} readOnly placeholder="Choisir…" value={parentDir} onClick={chooseDir} />
+            <input className={inputClass} readOnly required placeholder="Choisir…" value={parentDir} onClick={chooseDir} />
           </label>
           <Button onClick={chooseDir}>Parcourir</Button>
         </div>
@@ -142,6 +144,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
           <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Nom du dossier</span>
           <input
             className={inputClass}
+            required
             value={name}
             onChange={(e) => {
               setName(e.target.value);

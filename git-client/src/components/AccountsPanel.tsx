@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { CircleCheck, CircleDot, Ellipsis, ExternalLink, RotateCw } from "lucide-react";
 import { useAccountsStore, defaultBaseUrl } from "../store/useAccountsStore";
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore, confirmAction } from "../store/useUiStore";
@@ -352,9 +353,9 @@ function DeviceCodePanel({ device, onCancel }: { device: DeviceCode; onCancel: (
         className="text-[10px] text-sky-400 hover:underline"
         onClick={() => openUrl(device.verification_uri_complete ?? device.verification_uri)}
       >
-        {device.verification_uri} ↗
+        {device.verification_uri} <ExternalLink size={10} className="inline ml-0.5 -mt-0.5" />
       </button>
-      <p className="text-[11px] text-[var(--color-muted)] animate-pulse">En attente de la validation…</p>
+      <p className="text-[11px] text-[var(--color-muted)]">En attente de la validation…</p>
       <SmallButton onClick={onCancel}>Annuler</SmallButton>
     </div>
   );
@@ -384,7 +385,7 @@ function TokenFields({ kind, url, token, onToken }: {
         title={url ? tokenHelpUrl(kind, url) : MISSING_URL}
         onClick={() => url && openUrl(tokenHelpUrl(kind, url))}
       >
-        {tokenHelpLabel(kind)} ↗
+        {tokenHelpLabel(kind)} <ExternalLink size={10} className="inline ml-0.5 -mt-0.5" />
       </button>
     </>
   );
@@ -418,7 +419,7 @@ function ClientIdFields({ kind, url, clientId, onClientId, onUseDefault }: {
           title={url ? oauthAppHelpUrl(kind, url) : MISSING_URL}
           onClick={() => url && openUrl(oauthAppHelpUrl(kind, url))}
         >
-          Enregistrer une application ↗
+          Enregistrer une application <ExternalLink size={10} className="inline ml-0.5 -mt-0.5" />
         </button>
         {onUseDefault && (
           <>
@@ -490,8 +491,10 @@ function AccountRow({ account }: { account: ForgeAccount }) {
         </p>
       </div>
       <button
-        className="text-[var(--color-muted)] hover:text-[var(--color-text)] opacity-0 group-hover:opacity-100 text-xs px-1"
+        className="text-[var(--color-muted)] hover:text-[var(--color-text)] opacity-0 group-hover:opacity-100 focus:opacity-100 text-xs px-1"
         title="Options"
+        aria-label={`Options du compte ${account.label}`}
+        aria-haspopup="menu"
         onClick={(e) => open(e, [
           ...(account.auth === "pat" ? [{ label: "Changer le token…", action: changeToken }] : []),
           { label: "Renommer…", action: rename },
@@ -499,7 +502,7 @@ function AccountRow({ account }: { account: ForgeAccount }) {
           { label: "Supprimer", danger: true, action: handleRemove },
         ])}
       >
-        ⋯
+        <Ellipsis size={14} />
       </button>
       {menu && <ContextMenu menu={menu} onClose={close} />}
     </div>
@@ -554,12 +557,12 @@ function RepoIssuesSection() {
     <Section
       title={`Issues · ${forge.projectPath} (${accountData?.issues.length ?? 0})`}
       action={
-        <button className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Rafraîchir" onClick={loadIssues}>
-          ↻
+        <button className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Rafraîchir" aria-label="Rafraîchir les issues" onClick={loadIssues}>
+          <RotateCw size={12} />
         </button>
       }
     >
-      {accountData?.loading && <p className="px-3 py-1 text-xs text-[var(--color-muted)] animate-pulse">Chargement…</p>}
+      {accountData?.loading && <p className="px-3 py-1 text-xs text-[var(--color-muted)]">Chargement…</p>}
       {accountData?.error && <p className="px-3 py-1 text-xs text-red-400 break-words">{accountData.error}</p>}
       {!accountData?.loading && !accountData?.error && (
         <>
@@ -573,15 +576,26 @@ function RepoIssuesSection() {
 
 function IssueRow({ issue }: { issue: ForgeIssue }) {
   return (
-    <div className="px-3 py-1.5 hover:bg-overlay/5 cursor-pointer" onClick={() => openUrl(issue.url)}>
+    // Lien vers la forge, ouvert dans le navigateur.
+    <a
+      href={issue.url}
+      className="block px-3 py-1.5 hover:bg-overlay/5 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
+      onClick={(e) => {
+        e.preventDefault();
+        void openUrl(issue.url);
+      }}
+    >
       <div className="flex items-start gap-2">
-        <span className={`shrink-0 text-xs ${issue.state === "open" ? "text-green-400" : "text-red-400"}`}>●</span>
+        {issue.state === "open"
+          ? <CircleDot size={12} strokeWidth={2} className="shrink-0 mt-0.5 text-green-400" aria-hidden />
+          : <CircleCheck size={12} strokeWidth={2} className="shrink-0 mt-0.5 text-red-400" aria-hidden />}
+        <span className="sr-only">Issue {issue.state === "open" ? "ouverte" : "fermée"} : </span>
         <div className="min-w-0">
           <p className="text-xs text-[var(--color-text)] truncate">{issue.title}</p>
           <p className="text-[10px] text-[var(--color-muted)]">#{issue.number} · {issue.author}</p>
         </div>
       </div>
-    </div>
+    </a>
   );
 }
 
@@ -610,7 +624,7 @@ function SmallButton({ onClick, disabled, primary, type = "button", children }: 
       onClick={onClick}
       disabled={disabled}
       className={`text-[11px] px-2.5 py-1 rounded disabled:opacity-40 ${
-        primary ? "bg-[var(--color-accent)] text-white font-semibold hover:opacity-90" : "bg-overlay/10 text-[var(--color-text)] hover:bg-overlay/15"
+        primary ? "bg-[var(--color-accent-solid)] text-white font-semibold hover:opacity-90" : "bg-overlay/10 text-[var(--color-text)] hover:bg-overlay/15"
       }`}
     >
       {children}

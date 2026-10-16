@@ -81,7 +81,7 @@ Fermer tous les onglets (Ctrl+W) pour afficher l'accueil.
 
 | Étape | Attendu | Résultat | Annonce entendue |
 |---|---|---|---|
-| Tab jusqu'à la section « Local » | Titre de section annoncé comme titre (connu non conforme : 9.1) | | |
+| Tab jusqu'à la section « Local » | Titre de section annoncé comme titre, avec son état (déplié / replié) | | |
 | Tab jusqu'à `fix/footer` | « fix/footer, bouton », indication « local » ou avance / retard | | |
 | Espace | La branche est sélectionnée ; le graphe affiche son commit | | |
 | Maj+F10 (ou touche Menu) | Menu annoncé, premier choix « Checkout fix/footer » lu | | |
@@ -104,10 +104,10 @@ Fermer tous les onglets (Ctrl+W) pour afficher l'accueil.
 
 | Étape | Attendu | Résultat | Annonce entendue |
 |---|---|---|---|
-| Tab jusqu'à « Non indexé » | Titre de section (connu non conforme : 9.1) | | |
+| Tab jusqu'à « Non indexé » | Titre de section annoncé comme titre de niveau 2 | | |
 | Tab sur `fichier.txt` | Nom du fichier et son état (modifié) | | |
 | Tout indexer | Les fichiers passent dans « Indexé » ; changement annoncé (7.5) | | |
-| Tab jusqu'au champ de résumé | Étiquette du champ annoncée (connu non conforme : 11.1, seul un texte d'exemple existe) | | |
+| Tab jusqu'au champ de résumé | Étiquette « Résumé du commit » annoncée | | |
 | Saisir « Commit de test » puis Tab jusqu'au bouton Commiter, Entrée | Commit créé, message de réussite annoncé | | |
 
 ### S7. Diff — critères 5.4, 5.6, 5.7, 3.1
@@ -115,7 +115,7 @@ Fermer tous les onglets (Ctrl+W) pour afficher l'accueil.
 | Étape | Attendu | Résultat | Annonce entendue |
 |---|---|---|---|
 | Ouvrir le diff d'un fichier modifié | Le focus ou la lecture arrive sur le diff | | |
-| Mode navigation (Orca+A), touche T (tableau) puis flèches | En-têtes de colonnes annoncés (connu non conforme : 5.6) | | |
+| Mode navigation (Orca+A), touche T (tableau) puis flèches | En-têtes de colonnes annoncés (Sélection, Ancienne ligne, Nouvelle ligne, Contenu) | | |
 | Lignes ajoutées et supprimées | Le préfixe + / − est lu : l'information ne passe pas que par la couleur (3.1) | | |
 | Échap | Retour au graphe | | |
 
@@ -161,21 +161,41 @@ Atteindre un palier : créer une branche (la première déclenche une célébrat
 |---|---|---|---|
 | Ctrl+J puis onglet Terminal | Le terminal reçoit le focus | | |
 | Saisir `echo bonjour` puis Entrée | La sortie « bonjour » est lue | | |
-| Tenter de sortir du terminal au clavier (Tab, Maj+Tab, Ctrl+J) | Le focus quitte le terminal (connu non conforme : 12.9, piège au clavier) | | |
+| Ctrl+Maj+J | Le focus revient sur l'onglet « Terminal » ; la touche est annoncée dans le nom du terminal | | |
 
 ### S13. Infobulles — critères 10.13, 12.11
 
 | Étape | Attendu | Résultat | Annonce entendue |
 |---|---|---|---|
-| Tab sur un bouton de la barre d'outils à infobulle (thème) | Infobulle affichée au focus et lue | | |
-| Échap | L'infobulle se masque sans déplacer le focus (connu non conforme : 10.13) | | |
+| Tab sur un bouton de la barre d'outils à infobulle (thème) | Infobulle affichée au focus ; Orca lit le nom du bouton, qui contient le thème actuel (l'infobulle, redondante, n'est pas lue) | | |
+| Échap | L'infobulle se masque sans déplacer le focus | | |
 
 ### S14. Repères et structure — critères 9.2, 12.6, 12.7
 
 | Étape | Attendu | Résultat | Annonce entendue |
 |---|---|---|---|
-| Mode navigation, touche M (repère suivant) | Barre d'outils, onglets, barre latérale, zone principale atteignables | | |
-| Touche H (titre suivant) | Titres présents et hiérarchisés (connu non conforme : 9.1) | | |
+| Mode navigation, touche M (repère suivant) | Bannière, navigation « Dépôts ouverts », complémentaire « Dépôt : branches, tags et stashes », principal, complémentaire « Modifications en cours » | | |
+| Touche H (titre suivant) | Titres présents et hiérarchisés (h1 « Merathon — dépôt », h2 des panneaux) | | |
+
+### S15. Messages de statut — critère 7.5
+
+| Étape | Attendu | Résultat | Annonce entendue |
+|---|---|---|---|
+| Saisir « Commit » dans la recherche de la barre d'outils | « 5 commits trouvés » annoncé sans quitter le champ | | |
+| Bouton Fetch (dépôt sans remote : erreur attendue) | Message d'erreur lu (zone d'alerte) ; il reste affiché jusqu'à sa fermeture | | |
+| Mémo Git, saisir « cherry » | Nombre de fiches trouvées annoncé | | |
+| Rebase interactif depuis « Commit 2 », bouton « Descendre » d'un commit | « <hash> en position 2 sur 3 » annoncé, le focus reste sur le bouton | | |
+
+### S16. Nouveaux composants — critère 7.1
+
+| Étape | Attendu | Résultat | Annonce entendue |
+|---|---|---|---|
+| Tab depuis le début de la fenêtre | Premier arrêt : « Aller au contenu principal », lien ; Entrée place le focus dans le graphe | | |
+| Panneau de droite, fichier « fichier.txt » de « Non indexé » | Bouton « fichier.txt, modifié » ; Entrée affiche le diff | | |
+| Dans le diff, Tab jusqu'à la première ligne ajoutée, Espace | Case à cocher « Sélectionner la ligne ajoutée … », cochée | | |
+| Menu du thème (barre d'outils), flèches | Choix exclusifs annoncés « coché » / « non coché », groupe « Thème de couleurs » | | |
+| Préférences, rubriques | Rubrique courante annoncée (page courante) ; Apparence › Thème : bouton enfoncé | | |
+| Tab jusqu'à la poignée entre la barre latérale et le graphe, flèche droite | Séparateur « Largeur du panneau de gauche », valeur annoncée et modifiée | | |
 
 ## 3. Après les tests
 

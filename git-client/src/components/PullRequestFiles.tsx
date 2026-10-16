@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MessageSquare } from "lucide-react";
+import { Check, MessageSquare, RotateCw } from "lucide-react";
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore } from "../store/useUiStore";
 import { compareRefs, fetchRemote, getCompareFileDiff } from "../ipc/commands";
@@ -14,14 +14,15 @@ import type {
 import { DiffViewer, type DiffAnnotations } from "./DiffViewer";
 import { Button, inputClass } from "./Modal";
 import { fieldLabel } from "../lib/fieldLabel";
+import { LineCounts } from "./CommitDetails";
 
-const STATUS_LETTERS: Record<CommitFile["status"], { letter: string; color: string }> = {
-  added: { letter: "A", color: "text-green-400" },
-  modified: { letter: "M", color: "text-yellow-400" },
-  deleted: { letter: "D", color: "text-red-400" },
-  renamed: { letter: "R", color: "text-sky-300" },
-  copied: { letter: "C", color: "text-sky-300" },
-  typechange: { letter: "T", color: "text-[var(--color-muted)]" },
+const STATUS_LETTERS: Record<CommitFile["status"], { letter: string; label: string; color: string }> = {
+  added: { letter: "A", label: "ajouté", color: "text-green-400" },
+  modified: { letter: "M", label: "modifié", color: "text-yellow-400" },
+  deleted: { letter: "D", label: "supprimé", color: "text-red-400" },
+  renamed: { letter: "R", label: "renommé", color: "text-sky-300" },
+  copied: { letter: "C", label: "copié", color: "text-sky-300" },
+  typechange: { letter: "T", label: "type changé", color: "text-[var(--color-muted)]" },
 };
 
 const dateFormat = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
@@ -262,11 +263,11 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
   return (
     <div className="flex flex-col h-full min-h-[240px]">
       <div className="flex items-center gap-2 px-4 py-2 border-b border-overlay/10 text-[11px] text-[var(--color-muted)]">
-        {loading && <span className="animate-pulse">Calcul du diff…</span>}
+        {loading && <span>Calcul du diff…</span>}
         {!loading && comparison && (
           <span className="truncate">
             {plural(comparison.commits, "commit")} · {plural(files.length, "fichier")} ·{" "}
-            <span className="text-green-400">+{totals.add}</span> <span className="text-red-400">−{totals.del}</span> · vus{" "}
+            <LineCounts add={totals.add} del={totals.del} all /> · vus{" "}
             {viewedCount}/{files.length} · base <span className="font-mono">{comparison.merge_base.slice(0, 7)}</span> ({base})
           </span>
         )}
@@ -291,7 +292,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
             }}
             title={`Fetch ${remoteName} puis recalculer`}
           >
-            ↻ Fetch
+            <RotateCw size={11} className="inline mr-1 -mt-0.5" />Fetch
           </button>
         </div>
       </div>
@@ -389,29 +390,35 @@ function FileRow({ file, selected, viewed, comments, onSelect, onToggleViewed }:
   return (
     <li>
       <div
-        className={`flex items-center gap-2 px-2 py-[3px] text-xs cursor-pointer ${
-          selected ? "bg-[var(--color-accent)]/20" : "hover:bg-overlay/5"
-        } ${viewed ? "opacity-50" : ""}`}
+        className={`flex items-center gap-2 px-2 py-[3px] text-xs ${selected ? "bg-[var(--color-accent)]/20" : "hover:bg-overlay/5"}`}
         title={file.old_path ? `${file.old_path} → ${file.path}` : file.path}
-        onClick={onSelect}
       >
         <input
           type="checkbox"
           checked={viewed}
           onChange={onToggleViewed}
-          onClick={(e) => e.stopPropagation()}
           aria-label={`Marquer ${file.path} comme vu`}
         />
-        <span className={`w-3 shrink-0 font-mono font-bold ${status.color}`}>{status.letter}</span>
-        <span className="truncate flex-1 text-[var(--color-text)]">{file.path.split("/").pop()}</span>
-        {comments > 0 && (
-          <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-[var(--color-muted)]">
-            <MessageSquare size={10} /> {comments}
+        {/* Fichier vu : nom en gris (sans transparence, qui ferait chuter le contraste) et case cochée. */}
+        <button
+          type="button"
+          aria-current={selected ? "true" : undefined}
+          onClick={onSelect}
+          className="flex-1 min-w-0 flex items-center gap-2 text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60 rounded"
+        >
+          <span className={`w-3 shrink-0 font-mono font-bold ${status.color}`} aria-hidden>{status.letter}</span>
+          <span className={`truncate flex-1 ${viewed ? "text-[var(--color-muted)]" : "text-[var(--color-text)]"}`}>{file.path.split("/").pop()}</span>
+          <span className="sr-only">, {status.label}{viewed ? ", vu" : ""}, </span>
+          {comments > 0 && (
+            <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-[var(--color-muted)]">
+              <MessageSquare size={10} /> <span aria-hidden>{comments}</span>
+              <span className="sr-only">{plural(comments, "commentaire")}, </span>
+            </span>
+          )}
+          <span className="shrink-0 font-mono text-[10px]">
+            <LineCounts add={file.additions} del={file.deletions} all />
           </span>
-        )}
-        <span className="shrink-0 font-mono text-[10px]">
-          <span className="text-green-400">+{file.additions}</span> <span className="text-red-400">−{file.deletions}</span>
-        </span>
+        </button>
       </div>
     </li>
   );
@@ -445,7 +452,7 @@ function Thread({ thread, busy, onReply, onResolve }: {
         className="self-start text-[11px] text-[var(--color-muted)] hover:text-[var(--color-text)]"
         onClick={() => setOpen(true)}
       >
-        ✓ Fil résolu · {plural(thread.comments.length, "commentaire")} — afficher
+        <Check size={11} className="inline mr-1 -mt-0.5" />Fil résolu · {plural(thread.comments.length, "commentaire")} — afficher
       </button>
     );
   }

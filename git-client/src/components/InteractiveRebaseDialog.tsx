@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRepoStore } from "../store/useRepoStore";
 import { interactiveRebase, rebaseTodo, type RebaseAction, type RebaseMode } from "../ipc/commands";
@@ -56,6 +57,13 @@ export function InteractiveRebaseDialog({ base, onClose }: { base: string; onClo
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
+  /** Dernier déplacement au clavier, annoncé aux technologies d'assistance. */
+  const [moved, setMoved] = useState("");
+
+  function move(i: number, step: -1 | 1) {
+    setRows((p) => moveItem(p, i, i + step));
+    setMoved(`${rows[i].commit.short_hash} en position ${i + step + 1} sur ${rows.length}`);
+  }
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -160,48 +168,50 @@ export function InteractiveRebaseDialog({ base, onClose }: { base: string; onClo
 
         <p className="text-[11px] text-[var(--color-muted)]">
           Du plus ancien (en haut) au plus récent.{" "}
-          {canReorder ? "Réordonne en glissant la poignée ⠿ ou avec les flèches. " : ""}
+          {canReorder ? "Réordonne en glissant la poignée ou avec les flèches. " : ""}
           Le rebase s'arrête sur un conflit (à résoudre) ou sur un commit « Modifier » ; tu peux l'annuler à tout moment.
         </p>
 
-        {!todo && !error && <p className="text-xs text-[var(--color-muted)] animate-pulse">Chargement…</p>}
+        {!todo && !error && <p className="text-xs text-[var(--color-muted)]">Chargement…</p>}
         {todo && rows.length === 0 && <p className="text-xs text-[var(--color-muted)] italic">Aucun commit à réécrire.</p>}
 
+        <p role="status" className="sr-only">{moved}</p>
         {rows.length > 0 && (
-          <div ref={listRef} className="flex flex-col border border-overlay/10 rounded divide-y divide-overlay/5 max-h-[50vh] overflow-y-auto">
+          <div ref={listRef} role="list" aria-label="Commits à réécrire, du plus ancien au plus récent" className="flex flex-col border border-overlay/10 rounded divide-y divide-overlay/5 max-h-[50vh] overflow-y-auto">
             {rows.map((row, i) => {
               const editable = row.action === "reword" || row.action === "squash";
               const isMerge = row.commit.is_merge;
               return (
                 <div
                   key={row.commit.hash}
+                  role="listitem"
                   data-row
-                  className={`flex flex-col gap-1 px-2 py-1.5 ${row.action === "drop" ? "opacity-50" : ""} ${
+                  className={`flex flex-col gap-1 px-2 py-1.5 ${row.action === "drop" ? "bg-shade/20" : ""} ${
                     dragging === i ? "bg-[var(--color-accent)]/15" : ""
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     {canReorder && (
                       <>
+                        {/* Poignée réservée à la souris : Monter / Descendre font de même au clavier. */}
                         <span
-                          role="button"
-                          aria-label="Déplacer"
+                          aria-hidden
                           title="Glisser pour déplacer"
                           className="cursor-grab active:cursor-grabbing select-none text-[var(--color-muted)] hover:text-[var(--color-text)] px-0.5 touch-none"
                           onPointerDown={(e) => onHandleDown(e, i)}
                           onPointerMove={onHandleMove}
                           onPointerUp={onHandleUp}
                         >
-                          ⠿
+                          <GripVertical size={14} />
                         </span>
                         <div className="flex">
-                          <button className="h-6 w-6 text-[9px] leading-3 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" disabled={i === 0} onClick={() => setRows((p) => moveItem(p, i, i - 1))} aria-label="Monter">▲</button>
-                          <button className="h-6 w-6 text-[9px] leading-3 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" disabled={i === rows.length - 1} onClick={() => setRows((p) => moveItem(p, i, i + 1))} aria-label="Descendre">▼</button>
+                          <button className="h-6 w-6 text-[9px] leading-3 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Monter ${row.commit.short_hash}`}><ChevronUp size={14} className="mx-auto" /></button>
+                          <button className="h-6 w-6 text-[9px] leading-3 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" disabled={i === rows.length - 1} onClick={() => move(i, 1)} aria-label={`Descendre ${row.commit.short_hash}`}><ChevronDown size={14} className="mx-auto" /></button>
                         </div>
                       </>
                     )}
                     <select
-                      className="w-28 shrink-0 bg-shade/30 border border-overlay/10 rounded px-1.5 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/60"
+                      className="w-28 shrink-0 bg-shade/30 border border-overlay/50 rounded px-1.5 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/60"
                       value={row.action}
                       aria-label={`Action pour le commit ${row.commit.short_hash}`}
                       title={ACTIONS.find((a) => a.value === row.action)?.hint}
@@ -217,7 +227,9 @@ export function InteractiveRebaseDialog({ base, onClose }: { base: string; onClo
                     </select>
                     <span className="font-mono text-[11px] text-[var(--color-accent-text)]">{row.commit.short_hash}</span>
                     {isMerge && (
-                      <span className="text-[9px] px-1 rounded border border-sky-400/40 text-sky-300 shrink-0">merge</span>
+                      <span className="text-[9px] px-1 rounded border border-sky-400/40 text-sky-300 shrink-0">
+                        merge<span className="sr-only"> (commit de fusion)</span>
+                      </span>
                     )}
                     <span className={`text-xs truncate flex-1 ${row.action === "drop" ? "line-through" : "text-[var(--color-text)]"}`}>
                       {row.commit.summary}
@@ -257,6 +269,7 @@ function ModeBtn({ active, onClick, title, children }: { active: boolean; onClic
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={`text-left p-2 rounded border transition-colors ${
         active ? "border-[var(--color-accent)]/60 bg-overlay/5" : "border-overlay/10 hover:bg-overlay/5"

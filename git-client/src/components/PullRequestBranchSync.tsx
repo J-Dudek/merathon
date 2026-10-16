@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRepoStore } from "../store/useRepoStore";
 import { confirmAction, useUiStore } from "../store/useUiStore";
@@ -136,13 +137,13 @@ export function PullRequestBranchSync({ details, remoteName, onCheckout, onPushe
 
   return (
     <section className="flex flex-col gap-2 rounded border border-overlay/10 p-3 text-xs">
-      {state.kind === "checking" && <p className="text-[var(--color-muted)] animate-pulse">Vérification du retard sur {targetBranch}…</p>}
+      {state.kind === "checking" && <p className="text-[var(--color-muted)]">Vérification du retard sur {targetBranch}…</p>}
 
       {state.kind === "unavailable" && (
         <p className="text-[var(--color-muted)]">Retard sur {targetBranch} non vérifiable : {state.reason}</p>
       )}
 
-      {state.kind === "up_to_date" && <p className="text-green-300">✓ À jour avec {targetBranch}</p>}
+      {state.kind === "up_to_date" && <p className="text-green-300"><Check size={12} className="inline mr-1 -mt-0.5" />À jour avec {targetBranch}</p>}
 
       {state.kind === "behind" && (
         <div className="flex items-center gap-3">

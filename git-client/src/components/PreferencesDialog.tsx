@@ -23,10 +23,11 @@ import { checkForUpdates } from "../lib/updater";
 import { errorMessage } from "../lib/actions";
 import { aboutReport, osLabel, REPO_URL, releaseUrl, versionLabel } from "../lib/about";
 import {
-  AUDIT, EVALUATED_VIEWS, ISSUES_URL, ORCA_PROTOCOL_URL, RGAA_GRID_URL, criteria, declaration, declarationMarkdown, formatPercent, scoreAfter,
+  AUDIT, EVALUATED_VIEWS, ISSUES_URL, ORCA_PROTOCOL_URL, RGAA_GRID_URL, conformity, criteria, declaration, declarationMarkdown, formatPercent, scoreAfter,
   viewsAtFullScore, type Finding,
 } from "../lib/accessibility";
 import { appInfo, type AppInfo } from "../ipc/commands";
+import { plural } from "../lib/strings";
 import logo from "../assets/logo.webp";
 
 const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
@@ -53,11 +54,12 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="Préférences" onClose={onClose} width="w-[720px]">
-      <div className="flex h-[460px] max-h-[64vh] text-xs text-[var(--color-text)]">
-        <nav className="w-48 shrink-0 p-2 border-r border-overlay/10 bg-shade/10 flex flex-col gap-0.5">
+      <div className="flex h-[460px] max-h-[64vh] text-xs text-[var(--color-text)] max-[760px]:flex-col max-[760px]:h-auto max-[760px]:max-h-none">
+        <nav aria-label="Rubriques des préférences" className="w-48 shrink-0 p-2 border-r border-overlay/10 bg-shade/10 flex flex-col gap-0.5 max-[760px]:w-full max-[760px]:flex-row max-[760px]:flex-wrap max-[760px]:border-r-0 max-[760px]:border-b">
           {sections.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
+              aria-current={section === id ? "page" : undefined}
               onClick={() => setSection(id)}
               className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left transition-colors ${
                 section === id
@@ -81,7 +83,13 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
         </nav>
 
         <div className="flex-1 min-w-0 flex flex-col">
-          <div className="flex-1 overflow-y-auto px-6 py-5">
+          {/* Zone défilante atteignable au clavier, même dans les rubriques sans champ (raccourcis, à propos). */}
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label={sections.find((s) => s.id === section)?.label}
+            className="flex-1 overflow-y-auto px-6 py-5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
+          >
             {section === "appearance" && <AppearanceSection />}
             {section === "terminal" && <TerminalSection />}
             {section === "sync" && <SyncSection />}
@@ -137,6 +145,7 @@ function AppearanceSection() {
           {THEMES.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
+              aria-pressed={theme === value}
               onClick={() => update({ theme: value })}
               className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                 theme === value
@@ -178,6 +187,7 @@ function AppearanceSection() {
           {DENSITIES.map((d) => (
             <button
               key={d.value}
+              aria-pressed={density === d.value}
               onClick={() => update({ density: d.value })}
               className={`rounded-lg border p-2.5 text-left transition-colors ${
                 density === d.value
@@ -203,7 +213,7 @@ function DensityPreview({ rowHeight }: { rowHeight: number }) {
   const gap = rowHeight * 0.55;
   const ys = [10, 10 + gap, 10 + gap * 2];
   return (
-    <svg viewBox="0 0 120 64" className="w-full h-14 rounded bg-shade/25">
+    <svg viewBox="0 0 120 64" className="w-full h-14 rounded bg-shade/25" aria-hidden>
       <line x1="16" y1={ys[0]} x2="16" y2={ys[2]} stroke="var(--color-accent)" strokeWidth="2" />
       {ys.map((y, i) => (
         <g key={i}>
@@ -339,7 +349,7 @@ function NotificationsGroup() {
           <input type="checkbox" className="h-4 w-4" checked={settings.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
           Activer les notifications
         </label>
-        <div className={`flex flex-col gap-2.5 pl-6 ${settings.enabled ? "" : "opacity-50"}`}>
+        <div role="group" aria-label="Notifier pour" className={`flex flex-col gap-2.5 pl-6 ${settings.enabled ? "" : "opacity-50"}`}>
           {NOTIFICATION_KINDS.map(({ key, label }) => (
             <label key={key} className="flex items-center gap-2">
               <input
@@ -680,17 +690,23 @@ function AccessibilitySection() {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  const { status, rate } = conformity();
+  const grid = AUDIT.rgaaGrid;
   const tiles: [string, string, string][] = [
-    ["Score Lighthouse", formatPercent(scoreAfter()), `${formatPercent(AUDIT.scoreBefore)} avant corrections`],
-    ["Vues à 100 %", `${viewsAtFullScore()} / ${EVALUATED_VIEWS.length * 2}`, "thèmes sombre et clair"],
-    ["Conformité RGAA", "Non conforme", "audit complet à réaliser"],
+    [
+      "Conformité RGAA",
+      rate === null ? "Non conforme" : formatPercent(rate),
+      rate === null ? `${plural(grid.NT, "critère")} à vérifier avec Orca` : status,
+    ],
+    ["Critères conformes", `${grid.C} / ${grid.C + grid.NC + grid.NT}`, `${grid.NA} non applicables`],
+    ["Score Lighthouse", formatPercent(scoreAfter()), `${viewsAtFullScore()} vues sur ${EVALUATED_VIEWS.length * 2} à 100 %`],
   ];
 
   return (
     <>
       <SectionTitle title="Accessibilité" subtitle="Compte rendu de l'évaluation et déclaration d'accessibilité de Merathon." />
 
-      <div className="mb-6 grid grid-cols-3 gap-2.5">
+      <div className="mb-6 grid grid-cols-3 gap-2.5 max-[760px]:grid-cols-1">
         {tiles.map(([label, value, hint]) => (
           <div key={label} className="rounded-lg border border-overlay/10 bg-overlay/[0.03] px-3 py-2.5">
             <p className="text-[var(--color-muted)]">{label}</p>
@@ -707,10 +723,10 @@ function AccessibilitySection() {
 
       <Group
         title="Grille d'audit RGAA"
-        description="106 critères pré-remplis pour préparer l'audit complet, et protocole de test avec le lecteur d'écran Orca."
-        value={`${AUDIT.rgaaGrid.NT} à tester`}
+        description="Statut et constat de chacun des 106 critères, et protocole de test avec le lecteur d'écran Orca."
+        value={grid.NT ? `${grid.NT} à tester` : "complète"}
       >
-        <div className="mb-3 grid grid-cols-4 gap-2 text-center">
+        <div className="mb-3 grid grid-cols-4 gap-2 text-center max-[760px]:grid-cols-2">
           {([["C", "Conformes"], ["NC", "Non conformes"], ["NA", "Non applicables"], ["NT", "Non testés"]] as const).map(([key, label]) => (
             <div key={key} className="rounded-md border border-overlay/10 px-2 py-1.5">
               <p className="text-base font-semibold tabular-nums">{AUDIT.rgaaGrid[key]}</p>
@@ -761,11 +777,9 @@ function AccessibilitySection() {
           {EVALUATED_VIEWS.map((view) => (
             <li key={view.name} className="flex items-center justify-between gap-2 text-[11px]">
               <span className="truncate" title={view.name}>{view.name}</span>
-              <span
-                className="shrink-0 font-mono text-[10px] text-[var(--color-muted)]"
-                aria-label={`${view.dark} % en thème sombre, ${view.light} % en thème clair`}
-              >
-                {view.dark} · {view.light}
+              <span className="shrink-0 font-mono text-[10px] text-[var(--color-muted)]">
+                <span aria-hidden>{view.dark} · {view.light}</span>
+                <span className="sr-only">{view.dark} % en thème sombre, {view.light} % en thème clair</span>
               </span>
             </li>
           ))}
@@ -781,6 +795,7 @@ function AccessibilitySection() {
             {copied ? <Check size={13} strokeWidth={1.75} /> : <Copy size={13} strokeWidth={1.75} />}
             {copied ? "Copiée" : "Copier en Markdown"}
           </button>
+          <span role="status" className="sr-only">{copied ? "Déclaration copiée dans le presse-papiers" : ""}</span>
           <button
             onClick={() => void openUrl(ISSUES_URL)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/15 hover:bg-overlay/5"

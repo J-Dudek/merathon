@@ -13,7 +13,7 @@ mod window;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
-    use_x11_under_wsl();
+    configure_wsl_environment();
 
     tauri::Builder::default()
         .manage(terminal::Terminals::default())
@@ -128,16 +128,29 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// Sous WSLg, une fenêtre Wayland n'a pas d'icône dans la barre des tâches Windows (pingouin par défaut) :
-/// en X11 (XWayland), l'icône de la fenêtre est transmise. Un `GDK_BACKEND` déjà défini est respecté.
+/// Variables d'environnement posées sous WSL (WSLg), avant le démarrage de Tauri.
+/// - `GDK_BACKEND=x11` : une fenêtre Wayland n'a pas d'icône dans la barre des tâches Windows (pingouin par défaut) ;
+///   en X11 (XWayland), l'icône de la fenêtre est transmise.
+/// - `WEBKIT_DISABLE_DMABUF_RENDERER=1` et `LIBGL_ALWAYS_SOFTWARE=1` : selon le GPU et son pilote Windows, le rendu
+///   accéléré de WebKitGTK laisse des zones non redessinées (rectangles blancs sur le graphe) ; rendu logiciel à la place.
 #[cfg(target_os = "linux")]
-fn use_x11_under_wsl() {
-    if std::env::var_os("GDK_BACKEND").is_some() {
+const WSL_ENV: [(&str, &str); 3] = [
+    ("GDK_BACKEND", "x11"),
+    ("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
+    ("LIBGL_ALWAYS_SOFTWARE", "1"),
+];
+
+/// Pose les variables de [`WSL_ENV`] sous WSL ; une variable déjà définie par l'utilisateur est respectée.
+#[cfg(target_os = "linux")]
+fn configure_wsl_environment() {
+    if !is_wsl() {
         return;
     }
-    if is_wsl() {
-        // Appelé avant le démarrage de Tauri, quand aucun autre thread ne lit l'environnement.
-        std::env::set_var("GDK_BACKEND", "x11");
+    for (name, value) in WSL_ENV {
+        if std::env::var_os(name).is_none() {
+            // Appelé avant le démarrage de Tauri, quand aucun autre thread ne lit l'environnement.
+            std::env::set_var(name, value);
+        }
     }
 }
 

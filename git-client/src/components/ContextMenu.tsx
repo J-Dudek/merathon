@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, type LucideIcon } from "lucide-react";
 import { Kbd } from "./Kbd";
@@ -39,6 +39,7 @@ interface Props {
 export function ContextMenu({ menu, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: menu.y, left: menu.x });
+  const menuId = useId();
 
   // Garde le menu dans la fenêtre lorsqu'il est ouvert près d'un bord.
   useLayoutEffect(() => {
@@ -117,21 +118,16 @@ export function ContextMenu({ menu, onClose }: Props) {
       onKeyDown={onMenuKey}
       className="min-w-48 max-w-[min(40rem,calc(100vw-8px))] max-h-[80vh] overflow-y-auto p-1 rounded-lg border border-overlay/10 bg-[var(--color-bg-elevated)]/95 backdrop-blur-md shadow-2xl shadow-black/50 ring-1 ring-shade/40 select-none"
     >
-      {menu.items.map((entry, i) => {
+      {menuSections(menu.items).map((section, s) => {
+        const entries = section.entries.map((entry, i) => {
         if (entry === "separator") return <div key={i} role="separator" className="my-1 mx-1 h-px bg-overlay/10" />;
-        if ("header" in entry) {
-          return (
-            <div key={i} className="px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">
-              {entry.header}
-            </div>
-          );
-        }
         const Icon = entry.icon;
         return (
           <button
             key={i}
-            role="menuitem"
-            tabIndex={-1}
+            role={entry.checked === undefined ? "menuitem" : "menuitemradio"}
+            aria-checked={entry.checked}
+            tabIndex={0}
             className={`group w-full flex items-center gap-2.5 text-left px-2 py-1.5 rounded-md text-xs transition-colors outline-none disabled:opacity-40 disabled:cursor-default ${
               entry.danger
                 ? "text-red-400 hover:bg-red-500/15 focus-visible:bg-red-500/15"
@@ -152,13 +148,35 @@ export function ContextMenu({ menu, onClose }: Props) {
               )}
             </span>
             {entry.shortcut && <Kbd keys={entry.shortcut} className="ml-4" />}
-            {entry.checked && <Check size={14} strokeWidth={2} className="shrink-0 ml-4 text-[var(--color-accent-text)]" aria-label="actif" />}
+            {entry.checked && <Check size={14} strokeWidth={2} className="shrink-0 ml-4 text-[var(--color-accent-text)]" aria-hidden />}
           </button>
+        );
+        });
+        if (!section.header) return entries;
+        // Titre de section : groupe de choix nommé par ce titre.
+        const id = `${menuId}-${s}`;
+        return (
+          <div key={`g${s}`} role="group" aria-labelledby={id}>
+            <div id={id} className="px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">
+              {section.header}
+            </div>
+            {entries}
+          </div>
         );
       })}
     </div>,
     document.body
   );
+}
+
+/** Choix du menu regroupés sous leurs titres de section (le premier groupe peut ne pas en avoir). */
+function menuSections(items: MenuEntry[]): { header: string | null; entries: (MenuItem | "separator")[] }[] {
+  const sections: { header: string | null; entries: (MenuItem | "separator")[] }[] = [{ header: null, entries: [] }];
+  for (const entry of items) {
+    if (entry !== "separator" && "header" in entry) sections.push({ header: entry.header, entries: [] });
+    else sections[sections.length - 1].entries.push(entry);
+  }
+  return sections.filter((s) => s.header || s.entries.length);
 }
 
 export function useContextMenu() {

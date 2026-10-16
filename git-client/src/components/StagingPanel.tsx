@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { List, ListTree } from "lucide-react";
+import { ChevronDown, ChevronRight, List, ListTree, Minus, Plus, Undo2, X } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useRepoStore, type CenterView, type CommitDraft } from "../store/useRepoStore";
 import { useUiStore, confirmAction } from "../store/useUiStore";
@@ -349,7 +349,7 @@ export function StagingPanel() {
       {state !== "clean" && !info?.interactive_rebase && (
         <div className="px-3 py-2 border-b border-amber-400/30 bg-amber-500/10 flex flex-col gap-1.5 shrink-0">
           <p className="text-xs font-semibold text-amber-300">{STATE_LABELS[state]}</p>
-          <p className="text-[11px] text-amber-200/80">
+          <p className="text-[11px] text-amber-200">
             {operationHint(state, conflicted.length)}
           </p>
           <div className="flex gap-2">
@@ -420,12 +420,12 @@ export function StagingPanel() {
                 onClear={clearSelection}
                 fallback={
                   <>
-                    <HeaderBtn title="Annuler toutes les modifications" onClick={() => discard(unstaged)}>↺</HeaderBtn>
+                    <HeaderBtn title="Annuler toutes les modifications" onClick={() => discard(unstaged)}><Undo2 size={12} /></HeaderBtn>
                     <HeaderBtn title="Tout indexer" onClick={() => runGit(() => stageAll(path))}>Tout indexer</HeaderBtn>
                   </>
                 }
               >
-                <HeaderBtn title="Annuler les modifications de la sélection" onClick={() => discard(pickedIn("u"))}>↺</HeaderBtn>
+                <HeaderBtn title="Annuler les modifications de la sélection" onClick={() => discard(pickedIn("u"))}><Undo2 size={12} /></HeaderBtn>
                 <HeaderBtn title="Indexer la sélection" onClick={() => runGit(() => stageFiles(path, pathsOf(pickedIn("u"))))}>Indexer</HeaderBtn>
               </SelectionActions>
               {conflicted.length === 0 && viewToggle}
@@ -443,15 +443,15 @@ export function StagingPanel() {
               onContextMenu={(e) => openMenu(e, fileMenu(f))}
               actions={
                 <>
-                  <RowBtn title="Annuler les modifications" onClick={() => discard(targets(f))}>↺</RowBtn>
-                  <RowBtn title="Indexer" onClick={() => runGit(() => stageFiles(path, pathsOf(targets(f))))}>+</RowBtn>
+                  <RowBtn title={`Annuler les modifications de ${f.path}`} onClick={() => discard(targets(f))}><Undo2 size={12} /></RowBtn>
+                  <RowBtn title={`Indexer ${f.path}`} onClick={() => runGit(() => stageFiles(path, pathsOf(targets(f))))}><Plus size={13} /></RowBtn>
                 </>
               }
             />
           ), (files) => (
             <>
-              <RowBtn title="Annuler les modifications du dossier" onClick={() => discard(files)}>↺</RowBtn>
-              <RowBtn title="Indexer le dossier" onClick={() => runGit(() => stageFiles(path, files.map((f) => f.path)))}>+</RowBtn>
+              <RowBtn title="Annuler les modifications du dossier" onClick={() => discard(files)}><Undo2 size={12} /></RowBtn>
+              <RowBtn title="Indexer le dossier" onClick={() => runGit(() => stageFiles(path, files.map((f) => f.path)))}><Plus size={13} /></RowBtn>
             </>
           ))}
         </FileSection>
@@ -481,10 +481,10 @@ export function StagingPanel() {
               picked={isPicked(f)}
               onClick={(e) => handleClick(e, f)}
               onContextMenu={(e) => openMenu(e, fileMenu(f))}
-              actions={<RowBtn title="Désindexer" onClick={() => runGit(() => unstageFiles(path, pathsOf(targets(f))))}>−</RowBtn>}
+              actions={<RowBtn title={`Désindexer ${f.path}`} onClick={() => runGit(() => unstageFiles(path, pathsOf(targets(f))))}><Minus size={13} /></RowBtn>}
             />
           ), (files) => (
-            <RowBtn title="Désindexer le dossier" onClick={() => runGit(() => unstageFiles(path, files.map((f) => f.path)))}>−</RowBtn>
+            <RowBtn title="Désindexer le dossier" onClick={() => runGit(() => unstageFiles(path, files.map((f) => f.path)))}><Minus size={13} /></RowBtn>
           ))}
         </FileSection>
 
@@ -522,7 +522,7 @@ export function StagingPanel() {
           Modifier le dernier commit (amend)
         </label>
         <button
-          className="bg-[var(--color-accent)] hover:opacity-90 disabled:opacity-40 text-white text-xs font-semibold py-1.5 rounded transition-opacity"
+          className="bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white text-xs font-semibold py-1.5 rounded transition-opacity"
           onClick={handleCommit}
           disabled={!canCommit}
           title="Ctrl+Entrée"
@@ -547,21 +547,21 @@ function InteractiveBanner({ stop, conflicts, onContinue, onAbort }: {
       <p className="text-xs font-semibold text-sky-300">
         Rebase interactif — étape {stop.step}/{stop.total}
       </p>
-      <p className="text-[11px] text-sky-100/80">
+      <p className="text-[11px] text-sky-100">
         <span className="font-mono">{stop.short_hash}</span> « {stop.summary} »
       </p>
-      <p className="text-[11px] text-sky-100/70">
+      <p className="text-[11px] text-sky-100">
         {interactiveHint(stop, conflicts)}
       </p>
       <div className="flex gap-2">
         <button
           onClick={onContinue}
           disabled={stop.reason === "conflict" && conflicts > 0}
-          className="text-[11px] px-2 py-0.5 rounded bg-green-700/60 hover:bg-green-700/80 text-white disabled:opacity-40"
+          className="text-[11px] px-2 py-0.5 rounded bg-green-800 hover:opacity-90 text-white disabled:opacity-40"
         >
           Continuer
         </button>
-        <button onClick={onAbort} className="text-[11px] px-2 py-0.5 rounded bg-red-800/60 hover:bg-red-800/80 text-white">
+        <button onClick={onAbort} className="text-[11px] px-2 py-0.5 rounded bg-red-800 hover:opacity-90 text-white">
           Annuler le rebase
         </button>
       </div>
@@ -570,7 +570,7 @@ function InteractiveBanner({ stop, conflicts, onContinue, onAbort }: {
 }
 
 const commitInput =
-  "w-full bg-shade/30 border border-overlay/10 rounded px-2 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/50 placeholder:text-[var(--color-muted)]";
+  "w-full bg-shade/30 border border-overlay/50 rounded px-2 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/50 placeholder:text-[var(--color-muted)]";
 
 function FileSection({ title, count, actions, children }: {
   title: string;
@@ -591,14 +591,23 @@ function FileSection({ title, count, actions, children }: {
   );
 }
 
-const STATUS_BADGE: Record<FileStatus["status"], { letter: string; color: string }> = {
-  modified: { letter: "M", color: "text-yellow-400" },
-  added: { letter: "A", color: "text-green-400" },
-  deleted: { letter: "D", color: "text-red-400" },
-  renamed: { letter: "R", color: "text-sky-400" },
-  untracked: { letter: "?", color: "text-green-300" },
-  conflicted: { letter: "!", color: "text-red-400" },
+const STATUS_BADGE: Record<FileStatus["status"], { letter: string; label: string; color: string }> = {
+  modified: { letter: "M", label: "modifié", color: "text-yellow-400" },
+  added: { letter: "A", label: "ajouté", color: "text-green-400" },
+  deleted: { letter: "D", label: "supprimé", color: "text-red-400" },
+  renamed: { letter: "R", label: "renommé", color: "text-sky-400" },
+  untracked: { letter: "?", label: "non suivi", color: "text-green-300" },
+  conflicted: { letter: "!", label: "en conflit", color: "text-red-400" },
 };
+
+/** Clic au clavier : Entrée ou Espace, avec les touches de modification (Ctrl / Maj pour la sélection multiple). */
+function clickOnKey(onClick: (e: React.MouseEvent) => void) {
+  return (e: React.KeyboardEvent) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    onClick(e as unknown as React.MouseEvent);
+  };
+}
 
 function rowTone(shown: boolean, picked: boolean): string {
   if (picked) return "bg-[var(--color-accent)]/20";
@@ -617,7 +626,7 @@ function SelectionActions({ files, onClear, fallback, children }: {
     <>
       <span className="text-[10px] text-[var(--color-accent-text)] self-center">{plural(files.length, "sélectionné")}</span>
       {children}
-      <HeaderBtn title="Annuler la sélection" onClick={onClear}>✕</HeaderBtn>
+      <HeaderBtn title="Annuler la sélection" onClick={onClear}><X size={12} /></HeaderBtn>
     </>
   );
 }
@@ -648,12 +657,17 @@ function FileTree({ nodes, depth, isOpen, onToggle, onFolderMenu, row, folderAct
           onContextMenu={(e) => onFolderMenu(e, node.path, node.files)}
           title={node.path}
         >
-          <span className="w-3 shrink-0 text-[9px] text-[var(--color-muted)]">{open ? "▾" : "▸"}</span>
-          <span className="flex-1 truncate text-[11px] font-mono text-[var(--color-muted)]">
-            {node.name}
-            <span className="ml-1.5 opacity-60">{node.files.length}</span>
-          </span>
-          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">{folderActions?.(node.files)}</div>
+          {/* Le clic remonte à la ligne ; ce bouton rend le dossier pliable au clavier. */}
+          <button type="button" aria-expanded={open} className="flex-1 min-w-0 flex items-center gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60 rounded">
+            {open ? <ChevronDown size={11} className="w-3 shrink-0 text-[var(--color-muted)]" /> : <ChevronRight size={11} className="w-3 shrink-0 text-[var(--color-muted)]" />}
+            <span className="flex-1 truncate text-[11px] font-mono text-[var(--color-muted)]">
+              <span className="sr-only">Dossier </span>
+              {node.name}
+              <span className="ml-1.5 opacity-60" aria-hidden>{node.files.length}</span>
+              <span className="sr-only">, {plural(node.files.length, "fichier")}</span>
+            </span>
+          </button>
+          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">{folderActions?.(node.files)}</div>
         </div>
         {open && (
           <FileTree
@@ -683,7 +697,7 @@ function FileRow({ file, depth, shown, picked, onClick, onContextMenu, actions }
   onContextMenu: (e: React.MouseEvent) => void;
   actions?: React.ReactNode;
 }) {
-  const { letter, color } = STATUS_BADGE[file.status];
+  const { letter, label, color } = STATUS_BADGE[file.status];
   const name = file.path.split("/").pop();
   const dir = depth === undefined ? file.path.slice(0, file.path.length - (name?.length ?? 0)) : "";
   return (
@@ -694,20 +708,35 @@ function FileRow({ file, depth, shown, picked, onClick, onContextMenu, actions }
       onContextMenu={onContextMenu}
       title={file.path}
     >
-      <span className={`text-[10px] font-bold font-mono w-3 shrink-0 ${color}`}>{letter}</span>
-      <span className="flex-1 truncate text-[11px] font-mono">
-        <span className="text-[var(--color-text)]">{name}</span>
-        {dir && <span className="text-[var(--color-muted)] ml-1.5">{dir}</span>}
-      </span>
-      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">{actions}</div>
+      {/* Le clic remonte à la ligne ; ce bouton ouvre le fichier au clavier (Ctrl / Maj : sélection multiple). */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-current={shown ? "true" : undefined}
+        onKeyDown={clickOnKey(onClick)}
+        className="flex-1 min-w-0 flex items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60 rounded"
+      >
+        <span className={`text-[10px] font-bold font-mono w-3 shrink-0 ${color}`} aria-hidden>{letter}</span>
+        <span className="flex-1 truncate text-[11px] font-mono">
+          <span className="text-[var(--color-text)]">{name}</span>
+          {dir && <span className="text-[var(--color-muted)] ml-1.5">{dir}</span>}
+          <span className="sr-only">, {label}{picked ? ", sélectionné" : ""}</span>
+        </span>
+      </div>
+      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">{actions}</div>
     </div>
   );
 }
+
+/** Libellé à donner aux technologies d'assistance quand le bouton n'affiche qu'une icône. */
+const symbolLabel = (title: string, children: React.ReactNode) =>
+  typeof children === "string" && /\p{L}/u.test(children) ? undefined : title;
 
 function RowBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       title={title}
+      aria-label={symbolLabel(title, children)}
       className="text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10 rounded w-5 h-5 flex items-center justify-center text-sm font-bold"
       onClick={(e) => {
         e.stopPropagation();
@@ -723,6 +752,7 @@ function HeaderBtn({ title, onClick, children }: { title: string; onClick: () =>
   return (
     <button
       title={title}
+      aria-label={symbolLabel(title, children)}
       className="text-[10px] px-1.5 py-0.5 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
       onClick={onClick}
     >
@@ -742,7 +772,7 @@ function SmallBtn({ onClick, disabled, danger, children }: {
       onClick={onClick}
       disabled={disabled}
       className={`text-[11px] px-2 py-0.5 rounded disabled:opacity-40 ${
-        danger ? "bg-red-800/60 hover:bg-red-800/80 text-white" : "bg-green-700/60 hover:bg-green-700/80 text-white"
+        danger ? "bg-red-800 hover:opacity-90 text-white" : "bg-green-800 hover:opacity-90 text-white"
       }`}
     >
       {children}

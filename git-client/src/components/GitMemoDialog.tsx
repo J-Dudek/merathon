@@ -3,6 +3,7 @@ import { TriangleAlert } from "lucide-react";
 import { Modal, inputClass } from "./Modal";
 import { filterMemo, GIT_MEMO, type MemoEntry } from "../lib/gitMemo";
 import { fieldLabel } from "../lib/fieldLabel";
+import { plural } from "../lib/strings";
 
 /** Mémo des opérations git : à quoi elles servent, un cas d'usage, et comment les faire dans l'application. */
 export function GitMemoDialog({ onClose }: { onClose: () => void }) {
@@ -11,11 +12,12 @@ export function GitMemoDialog({ onClose }: { onClose: () => void }) {
   const searching = query.trim() !== "";
   // Une recherche porte sur tout le mémo, sinon seule la rubrique choisie est affichée.
   const groups = searching ? filterMemo(GIT_MEMO, query) : GIT_MEMO.filter((g) => g.id === groupId);
+  const found = groups.reduce((n, g) => n + g.entries.length, 0);
 
   return (
     <Modal title="Mémo Git" onClose={onClose} width="w-[860px]" height="h-[76vh]" resizeKey="git-memo">
-      <div className="flex h-full text-xs text-[var(--color-text)]">
-        <nav className="w-48 shrink-0 p-2 border-r border-overlay/10 bg-shade/10 flex flex-col gap-0.5 overflow-y-auto">
+      <div className="flex h-full text-xs text-[var(--color-text)] max-[760px]:flex-col max-[760px]:h-auto">
+        <nav aria-label="Rubriques du mémo" className="w-48 shrink-0 max-[760px]:w-full max-[760px]:flex-row max-[760px]:flex-wrap max-[760px]:overflow-visible p-2 border-r border-overlay/10 bg-shade/10 flex flex-col gap-0.5 overflow-y-auto">
           <input
             className={`${inputClass} mb-1.5`}
             placeholder="Rechercher…"
@@ -29,6 +31,7 @@ export function GitMemoDialog({ onClose }: { onClose: () => void }) {
             return (
               <button
                 key={id}
+                aria-current={active ? "page" : undefined}
                 onClick={() => {
                   setGroupId(id);
                   setQuery("");
@@ -40,13 +43,23 @@ export function GitMemoDialog({ onClose }: { onClose: () => void }) {
                 }`}
               >
                 {label}
-                <span className="text-[10px] opacity-60">{entries.length}</span>
+                <span className="text-[10px] opacity-60" aria-hidden>{entries.length}</span>
+                <span className="sr-only">, {entries.length} fiche{entries.length > 1 ? "s" : ""}</span>
               </button>
             );
           })}
         </nav>
 
-        <div className="flex-1 min-w-0 overflow-y-auto px-6 py-5">
+        {/* Zone défilante atteignable au clavier ; le nombre de résultats d'une recherche est annoncé. */}
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="Fiches du mémo"
+          className="flex-1 min-w-0 overflow-y-auto px-6 py-5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
+        >
+          <p role="status" className="sr-only">
+            {searching && `${plural(found, "fiche")} trouvée${found > 1 ? "s" : ""}`}
+          </p>
           {groups.length === 0 && <p className="text-[var(--color-muted)] italic">Aucune opération ne correspond à « {query.trim()} ».</p>}
           {groups.map((group) => (
             <section key={group.id} className="mb-6 last:mb-0">
@@ -82,7 +95,7 @@ function MemoCard({ entry }: { entry: MemoEntry }) {
       {entry.warning && (
         <p className="mt-2.5 flex items-start gap-1.5 rounded border border-amber-400/30 bg-amber-500/10 px-2 py-1.5 leading-relaxed text-amber-300">
           <TriangleAlert size={13} strokeWidth={1.75} className="mt-0.5 shrink-0" />
-          {entry.warning}
+          <span><span className="sr-only">Attention : </span>{entry.warning}</span>
         </p>
       )}
     </article>
@@ -90,5 +103,5 @@ function MemoCard({ entry }: { entry: MemoEntry }) {
 }
 
 function MemoLabel({ children }: { children: React.ReactNode }) {
-  return <p className="mt-2.5 mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">{children}</p>;
+  return <h5 className="mt-2.5 mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">{children}</h5>;
 }

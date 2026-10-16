@@ -46,7 +46,7 @@ describe("PullRequestBranchSync", () => {
   it("says the branch is up to date", async () => {
     ipc.branchDivergence.mockResolvedValue({ head: HEAD, ahead: 2, behind: 0 });
     renderSync();
-    expect(await screen.findByText("✓ À jour avec main")).toBeTruthy();
+    expect(await screen.findByText("À jour avec main")).toBeTruthy();
     expect(screen.queryByText(/Rebaser/)).toBeNull();
   });
 
@@ -78,7 +78,7 @@ describe("PullRequestBranchSync", () => {
     expect(ipc.rebasePullRequest).toHaveBeenCalledWith("/repo", "origin/main", HEAD, "feat/x");
     fireEvent.click(await screen.findByText("Force push"));
 
-    expect(await screen.findByText("✓ À jour avec main")).toBeTruthy();
+    expect(await screen.findByText("À jour avec main")).toBeTruthy();
     // Le lease porte sur la tête qui a été rebasée.
     expect(ipc.forcePushPullRequest).toHaveBeenCalledWith("/repo", "origin", "feat/x", HEAD);
     expect(onPushed).toHaveBeenCalled();

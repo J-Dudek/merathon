@@ -78,7 +78,7 @@
   --color-green-950: oklch(92.5% 0.084 155.995); /* green-200 */
   --color-sky-100: oklch(44.3% 0.11 240.79); /* sky-800 */
   --color-sky-200: oklch(44.3% 0.11 240.79); /* sky-800 */
-  --color-sky-300: oklch(50% 0.134 242.749); /* sky-700 */
+  --color-sky-300: oklch(44.3% 0.11 240.79); /* sky-800 : lisible aussi sur les étiquettes teintées */
   --color-sky-400: oklch(50% 0.134 242.749); /* sky-700 */
   --color-sky-900: oklch(82.8% 0.111 230.318); /* sky-300 */
   --color-sky-950: oklch(90.1% 0.058 230.902); /* sky-200 */
@@ -106,6 +106,24 @@ body {
   color: var(--color-text);
   font-family: 'Inter', system-ui, sans-serif;
   overflow: hidden;
+}
+
+/*
+ * Focus clavier des champs (RGAA 10.7) : un contour d'accent net, même quand le champ retire le contour
+ * par défaut au profit d'une bordure teintée trop discrète. Les curseurs des préférences ont leur propre style.
+ */
+input:not(.pref-slider):focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: 0;
+}
+
+/* Indicateurs d'activité (icônes qui tournent) : immobiles si le système demande de réduire les animations. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin {
+    animation: none !important;
+  }
 }
 
 /* Curseur des préférences : piste remplie jusqu'à la valeur, poignée ronde. */

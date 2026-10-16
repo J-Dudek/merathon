@@ -127,6 +127,8 @@ interface UiStore {
 
   notify: (kind: Toast["kind"], message: string) => void;
   dismiss: (id: number) => void;
+  /** Survol ou focus des notifications : leur disparition automatique est suspendue (RGAA 13.1). */
+  holdToasts: (held: boolean) => void;
   ask: (options: DialogOptions) => Promise<DialogResult | null>;
   closeDialog: (result: DialogResult | null) => void;
   setBusy: (label: string | null) => void;
@@ -139,6 +141,11 @@ interface UiStore {
 }
 
 let nextToastId = 1;
+
+/** Durée d'affichage d'une notification d'information ou de succès ; une erreur reste jusqu'à sa fermeture. */
+const TOAST_DELAY = 5000;
+const toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
+let toastsHeld = false;
 
 export const useUiStore = create<UiStore>((set, get) => ({
   toasts: [],
@@ -155,10 +162,24 @@ export const useUiStore = create<UiStore>((set, get) => ({
   notify: (kind, message) => {
     const id = nextToastId++;
     set((s) => ({ toasts: [...s.toasts, { id, kind, message }] }));
-    setTimeout(() => get().dismiss(id), kind === "error" ? 10000 : 4000);
+    if (kind !== "error" && !toastsHeld) toastTimers.set(id, setTimeout(() => get().dismiss(id), TOAST_DELAY));
   },
 
-  dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  dismiss: (id) => {
+    clearTimeout(toastTimers.get(id));
+    toastTimers.delete(id);
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+  },
+
+  holdToasts: (held) => {
+    toastsHeld = held;
+    toastTimers.forEach(clearTimeout);
+    toastTimers.clear();
+    if (held) return;
+    for (const t of get().toasts) {
+      if (t.kind !== "error") toastTimers.set(t.id, setTimeout(() => get().dismiss(t.id), TOAST_DELAY));
+    }
+  },
 
   ask: (options) =>
     new Promise((resolve) => {

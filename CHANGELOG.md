@@ -2,6 +2,14 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.7.1](https://github.com/J-Dudek/merathon/compare/v2.7.0...v2.7.1) (2026-10-16)
+
+### Corrections
+
+- Switch to icons to avoid problems when the font isn't installed (c378772)
+- UI issue on WSL (6907654)
+- RGAA issue (afea39d)
+
 ## [2.7.0](https://github.com/J-Dudek/merathon/compare/v2.6.0...v2.7.0) (2026-10-15)
 
 ### Nouveautés

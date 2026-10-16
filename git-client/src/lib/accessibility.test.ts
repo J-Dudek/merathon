@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  AUDIT, EVALUATED_VIEWS, ORCA_PROTOCOL_URL, RGAA_GRID_URL, declaration, declarationMarkdown, formatPercent, scoreAfter, viewsAtFullScore,
-  type RgaaStatus,
+  AUDIT, EVALUATED_VIEWS, ORCA_PROTOCOL_URL, RGAA_GRID_URL, conformity, declaration, declarationMarkdown, formatPercent, scoreAfter,
+  viewsAtFullScore, type RgaaStatus,
 } from "./accessibility";
 import gridCsv from "../../../docs/accessibilite/grille-rgaa.csv?raw";
 
@@ -13,9 +13,17 @@ describe("declaration", () => {
     ]);
   });
 
-  it("ne revendique pas de conformité sans audit complet", () => {
-    const status = declaration().find((b) => b.heading === "État de conformité")!;
-    expect(status.paragraphs![0]).toContain("non conforme");
+  const state = (grid: Record<RgaaStatus, number>) => declaration([], grid).find((b) => b.heading === "État de conformité")!.paragraphs![0];
+
+  it("ne revendique pas de conformité tant qu'un critère reste à tester", () => {
+    expect(state({ C: 104, NC: 0, NA: 1, NT: 1 })).toContain("non conforme");
+    expect(state({ C: 104, NC: 0, NA: 1, NT: 1 })).toContain("1 critère reste à vérifier");
+  });
+
+  it("déclare la conformité totale quand tous les critères applicables sont conformes", () => {
+    expect(state({ C: 68, NC: 0, NA: 38, NT: 0 })).toBe("Merathon est totalement conforme avec le RGAA 4.1.2.");
+    const results = declaration([], { C: 68, NC: 0, NA: 38, NT: 0 }).find((b) => b.heading === "Résultats des tests")!;
+    expect(results.paragraphs![0]).toContain("révèle que 100 % des critères du RGAA version 4.1.2 sont respectés");
   });
 
   it("liste chaque non-conformité connue et chaque vue évaluée", () => {
@@ -33,9 +41,11 @@ describe("non-conformités", () => {
     expect(block([finding]).list).toEqual(["Champ sans étiquette : recherche sans nom. (RGAA 11.1, WCAG 1.3.1)"]);
   });
 
-  it("indique qu'aucune n'est connue quand la liste est vide, sans revendiquer de conformité", () => {
-    expect(block([]).paragraphs![0]).toContain("Aucune non-conformité n'est connue");
-    expect(declaration([]).find((b) => b.heading === "État de conformité")!.paragraphs![0]).toContain("non conforme");
+  it("indique qu'aucune n'est connue quand la liste est vide, sans revendiquer de conformité si l'audit n'est pas fini", () => {
+    expect(declaration([], { C: 66, NC: 0, NA: 38, NT: 2 }).find((b) => b.heading === "Contenus non accessibles")!.paragraphs![0])
+      .toContain("Aucune non-conformité n'est connue");
+    expect(declaration([], { C: 68, NC: 0, NA: 38, NT: 0 }).find((b) => b.heading === "Contenus non accessibles")!.paragraphs![0])
+      .toBe("Aucune non-conformité n'a été relevée lors de l'audit.");
   });
 });
 
@@ -80,6 +90,18 @@ describe("grille RGAA", () => {
     const md = declarationMarkdown();
     expect(md).toContain(RGAA_GRID_URL);
     expect(md).toContain(ORCA_PROTOCOL_URL);
+  });
+});
+
+describe("conformity", () => {
+  it("calcule le taux sur les critères applicables, une fois tous les critères testés", () => {
+    expect(conformity({ C: 68, NC: 0, NA: 38, NT: 0 })).toEqual({ status: "totalement conforme", rate: 100 });
+    expect(conformity({ C: 51, NC: 17, NA: 38, NT: 0 })).toEqual({ status: "partiellement conforme", rate: 75 });
+    expect(conformity({ C: 20, NC: 48, NA: 38, NT: 0 }).status).toBe("non conforme");
+  });
+
+  it("n'a pas de taux tant qu'un critère reste à tester", () => {
+    expect(conformity({ C: 66, NC: 0, NA: 38, NT: 2 })).toEqual({ status: "non conforme", rate: null });
   });
 });
 

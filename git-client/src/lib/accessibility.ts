@@ -51,16 +51,18 @@ export interface Finding {
 export type RgaaStatus = "C" | "NC" | "NA" | "NT";
 
 export const AUDIT = {
-  date: "2026-10-15",
-  standard: "WCAG 2.1 niveau AA",
+  date: "2026-10-16",
+  standard: "RGAA 4.1.2 (WCAG 2.1 niveau AA)",
   tools: [
+    "Revue des 106 critères du RGAA dans le code et dans l'interface (grille publiée)",
+    "axe-core 4.10.2 (règles WCAG 2.0, 2.1 A / AA et bonnes pratiques) sur 35 états de l'interface, dans deux moteurs et deux thèmes",
     "Lighthouse 12.2.1, catégorie Accessibilité (moteur axe-core)",
-    "axe-core 4.10.2 (règles WCAG 2.0, 2.1 A / AA et bonnes pratiques)",
-    "Calcul des contrastes selon la formule WCAG, y compris sur les fonds semi-transparents",
-    "Parcours clavier automatisé (Playwright)",
+    "html-validate sur le DOM généré (critère 8.2)",
+    "Parcours clavier automatisé (Playwright) : ordre de tabulation et visibilité du focus de chaque vue",
+    "Fenêtres de 640 × 400 et 320 × 256 px (zoom 200 % et 400 %), espacement du texte WCAG, feuilles de style désactivées",
   ],
   environment:
-    "Chrome sans interface (headless) sous Linux, fenêtre de 1280 × 800 px. L'interface est rendue avec un backend simulé (dépôt fictif), en thème sombre et en thème clair.",
+    "Chromium (moteur de WebView2) et WebKit 27 (moteur de WebKitGTK et de WKWebView), pilotés par Playwright sous Linux, fenêtre de 1280 × 800 px. L'interface est rendue avec un backend simulé (dépôt fictif, compte GitHub fictif avec pull requests et issues, fusion en conflit), en thème sombre et en thème clair.",
   /** Score Lighthouse moyen avant corrections, en %. */
   scoreBefore: 87.4,
   fixes: [
@@ -82,8 +84,25 @@ export const AUDIT = {
     { title: "Tableau du diff", detail: "En-têtes de colonnes déclarés (masqués visuellement) : sélection, commentaire, ancienne ligne, nouvelle ligne, contenu.", criterion: "1.3.1", rgaa: "5.6, 5.7" },
     { title: "Boîtes de dialogue", detail: "Fenêtres déclarées comme boîtes de dialogue modales, nommées par leur titre.", criterion: "4.1.2", rgaa: "7.1" },
     { title: "Mon activité", detail: "Badges atteignables au clavier, avec un nom complet (« 10ᵉ commit, obtenu le … ») et l'infobulle au focus ; barres de progression annoncées.", criterion: "2.1.1, 1.1.1, 4.1.2" },
+    { title: "Symboles", detail: "Les symboles décoratifs (⎇ ☁ ⇣ ⟳ ▾ …) sont masqués aux lecteurs d'écran ; la nature des étiquettes (branche courante, branche distante, tag), les compteurs (en avance, en retard, stashes, erreurs) et les commits de fusion sont dits en toutes lettres.", criterion: "1.1.1, 1.3.1", rgaa: "1.2, 13.5" },
+    { title: "Boutons à symbole", detail: "Les boutons qui n'affichent qu'un symbole (+, −, ↺, ✕, ⋯, ↻) sont nommés par leur action et leur objet (« Indexer src/index.html », « Fermer l'onglet site-vitrine »).", criterion: "4.1.2, 2.4.6", rgaa: "11.9" },
+    { title: "Fichiers et dossiers au clavier", detail: "Fichiers de l'indexation, du détail d'un commit, d'une comparaison et d'une PR, dossiers de l'arborescence, PR / MR, issues, versions d'un conflit et lignes du diff (sélection pour l'indexation partielle) deviennent atteignables et activables au clavier, avec leur état (modifié, ajouté, vu, sélectionné…).", criterion: "2.1.1, 4.1.2", rgaa: "7.3" },
+    { title: "États des boutons", detail: "Onglets Dépôt / Comptes, Terminal / Journal, rubriques des préférences et du mémo, thème, densité, mode du rebase, versions d'un conflit et dossiers dépliables annoncent leur état (enfoncé, page courante, déplié) ; le menu du thème est une liste de choix exclusifs.", criterion: "4.1.2", rgaa: "7.1" },
+    { title: "Information par la couleur", detail: "État d'une PR, d'une issue et d'un check donné par la forme de l'icône (et en toutes lettres pour les lecteurs d'écran) ; branches masquées signalées par un œil barré au lieu d'une transparence.", criterion: "1.4.1", rgaa: "3.1" },
+    { title: "Contrastes", detail: "Fond plein sous le texte blanc des boutons principaux, du bouton Résoudre et du bandeau de rebase ; nombres de lignes supprimées et étiquettes distantes plus foncés ; bordures des champs à 3:1 ; texte des fichiers vus et des branches masquées sans transparence ; textes de chargement sans clignotement.", criterion: "1.4.3, 1.4.11, 2.2.2", rgaa: "3.2, 3.3, 13.8" },
+    { title: "Structure", detail: "Lien d'évitement « Aller au contenu principal », panneaux latéraux en régions nommées, titre de la page avec le dépôt ouvert, intertitres de la PR et du mémo en vrais titres, liste des commits du rebase et des checks en listes.", criterion: "2.4.1, 1.3.1, 2.4.2", rgaa: "12.6, 12.7, 8.6, 9.1, 9.3" },
+    { title: "Messages de statut", detail: "Opération en cours (Fetch…, Push…), nombre de commits trouvés par la recherche, de fiches du mémo, déplacement d'un commit du rebase et copie de la déclaration annoncés par des zones de statut.", criterion: "4.1.3", rgaa: "7.5" },
+    { title: "Notifications", detail: "Les erreurs restent affichées jusqu'à leur fermeture ; les autres notifications ne disparaissent pas tant que la souris ou le focus est dessus.", criterion: "2.2.1", rgaa: "13.1" },
+    { title: "Zones défilantes et redimensionnement", detail: "Diff, contenu des préférences et du mémo atteignables au clavier pour défiler ; poignées de redimensionnement des panneaux et de l'arbre des branches utilisables aux flèches.", criterion: "2.1.1", rgaa: "7.3" },
+    { title: "Focus visible", detail: "Contour d'accent sur les champs au focus clavier (leur bordure teintée était trop discrète), focus visible sur les lignes de fichiers, de PR et du diff.", criterion: "2.4.7", rgaa: "10.7" },
+    { title: "Contenus au survol", detail: "Les boutons qui n'apparaissent qu'au survol (fermer un onglet, ajouter un remote, options d'un compte, retirer un dépôt récent, actions des fichiers) apparaissent aussi au focus clavier ; les infobulles, redondantes avec le nom des boutons, sont masquées aux lecteurs d'écran.", criterion: "1.4.13, 2.1.1", rgaa: "10.14, 10.8" },
+    { title: "Zoom et réagencement", detail: "Sous 760 px de large (zoom 200 % sur une petite fenêtre), la barre d'outils passe à la ligne et les panneaux s'empilent avec un défilement vertical ; plus de contenu tronqué ni de défilement horizontal.", criterion: "1.4.4, 1.4.10", rgaa: "10.4, 10.11" },
+    { title: "Formulaires", detail: "Champs obligatoires déclarés (création, clonage), suggestions des relecteurs / assignés / labels en liste de choix au clavier, choix et fermeture des fenêtres au relâchement du clic plutôt qu'à l'appui.", criterion: "3.3.2, 4.1.2, 2.5.2", rgaa: "11.10, 7.1, 13.11" },
   ] satisfies Finding[],
   manualChecks: [
+    "Arbre d'accessibilité de chaque vue (noms, rôles, états) dans Chromium et WebKit.",
+    "Tabulation de chaque vue et de chaque fenêtre : ordre logique, focus toujours visible, aucun piège.",
+    "Rendu à 640 × 400 et 320 × 256 px, avec l'espacement du texte WCAG, et sans feuilles de style.",
     "Ordre de tabulation des préférences et de « Mon activité ».",
     "Infobulles affichées au focus clavier, sans rester affichées après un clic souris.",
     "Texte annoncé par la zone de statut des célébrations.",
@@ -95,16 +114,22 @@ export const AUDIT = {
     "Infobulles : affichage au focus, masquage par Échap, survol de l'infobulle.",
     "Étiquettes de tous les champs, en-têtes du diff, titres et boîtes de dialogue dans le DOM.",
   ],
+  /** Écrans vérifiés en plus des vues notées par Lighthouse (compte GitHub et conflit simulés). */
+  extraViews: [
+    "Pull requests : liste, détail, fichiers modifiés et commentaires, création",
+    "Mes PR et issues (onglet Comptes)",
+    "Résolution d'un conflit de fusion",
+    "Menus contextuels d'un commit, du dépôt, du thème et de Pull",
+    "Diff d'un fichier de commit sélectionné, recherche, mise de côté (stash), suppression confirmée",
+  ],
   /** Non-conformités connues, non corrigées : la déclaration les reprend (mêmes critères que les « NC » de la grille). */
   nonCompliant: [] as Finding[],
   /** Synthèse de la grille RGAA pré-remplie, par statut (106 critères). */
-  rgaaGrid: { C: 13, NC: 0, NA: 32, NT: 61 } satisfies Record<RgaaStatus, number>,
+  rgaaGrid: { C: 66, NC: 0, NA: 38, NT: 2 } satisfies Record<RgaaStatus, number>,
   notEvaluated: [
-    "Restitution par un lecteur d'écran réel (Orca, NVDA, VoiceOver).",
-    "Rendu dans les moteurs de l'application (WebKitGTK, WebView2, WKWebView) : seul Chrome a été utilisé.",
-    "Zoom de l'interface à 200 % et réagencement du contenu.",
-    "Écrans des pull requests / merge requests remplis (aucun compte GitHub ou GitLab simulé).",
-    "Résolution de conflits et commit en cours de fusion.",
+    "Restitution par un lecteur d'écran réel (Orca) dans l'application : critères 7.1 et 7.5, à vérifier avec le protocole Orca.",
+    "Moteurs embarqués eux-mêmes (WebKitGTK, WebView2, WKWebView) : les tests ont été faits dans Chromium et WebKit, leurs moteurs.",
+    "Écrans propres à GitLab (merge requests) : mêmes composants que pour GitHub, testés avec un compte GitHub simulé.",
   ],
 };
 
@@ -124,13 +149,36 @@ export interface DeclarationBlock {
 
 const formatDate = (iso: string) => new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(new Date(`${iso}T12:00:00`));
 
+/** « 1 critère reste », « 2 critères restent ». */
+const remaining = (n: number) => (n > 1 ? `${n} critères restent` : `${n} critère reste`);
+
+export interface Conformity {
+  /** « totalement conforme », « partiellement conforme » ou « non conforme ». */
+  status: string;
+  /** Taux de conformité (critères conformes ÷ critères applicables), en % ; null tant que des critères restent à tester. */
+  rate: number | null;
+}
+
+/**
+ * État de conformité au sens du RGAA d'après la grille : le taux n'existe que si chaque critère a un statut.
+ * 100 % : totalement conforme ; 50 % au moins : partiellement conforme ; sinon, ou audit incomplet : non conforme.
+ */
+export function conformity(grid: Record<RgaaStatus, number> = AUDIT.rgaaGrid): Conformity {
+  const applicable = grid.C + grid.NC;
+  if (grid.NT > 0 || applicable === 0) return { status: "non conforme", rate: null };
+  const rate = (grid.C / applicable) * 100;
+  if (rate === 100) return { status: "totalement conforme", rate };
+  return { status: rate >= 50 ? "partiellement conforme" : "non conforme", rate };
+}
+
 /**
  * Déclaration d'accessibilité, sur le modèle du RGAA 4.1.2.
- * Sans audit complet des critères du RGAA, l'état de conformité est « non conforme » : un score d'outil automatique n'en tient pas lieu.
+ * L'état de conformité découle de la grille d'audit : tant qu'un critère reste à tester, il est « non conforme ».
  */
-export function declaration(nonCompliant: Finding[] = AUDIT.nonCompliant): DeclarationBlock[] {
+export function declaration(nonCompliant: Finding[] = AUDIT.nonCompliant, grid: Record<RgaaStatus, number> = AUDIT.rgaaGrid): DeclarationBlock[] {
   const date = formatDate(AUDIT.date);
-  const grid = AUDIT.rgaaGrid;
+  const { status, rate } = conformity(grid);
+  const counts = `${grid.C} critères conformes, ${grid.NC} non conformes et ${grid.NA} non applicables sur les 106 du référentiel`;
   return [
     {
       heading: "Engagement",
@@ -143,15 +191,19 @@ export function declaration(nonCompliant: Finding[] = AUDIT.nonCompliant): Decla
     {
       heading: "État de conformité",
       paragraphs: [
-        "Merathon est non conforme avec le RGAA 4.1.2 et la norme EN 301 549 : aucun audit complet de leurs critères n'a encore été réalisé.",
+        rate === null
+          ? `Merathon est non conforme avec le RGAA 4.1.2 : l'audit n'est pas terminé, ${remaining(grid.NT)} à vérifier.`
+          : `Merathon est ${status} avec le RGAA 4.1.2.`,
       ],
     },
     {
       heading: "Résultats des tests",
       paragraphs: [
-        `Une évaluation partielle, fondée sur les ${AUDIT.standard}, a été menée le ${date} sur ${EVALUATED_VIEWS.length} vues, chacune en thème sombre et en thème clair. Le score d'accessibilité Lighthouse moyen est passé de ${formatPercent(AUDIT.scoreBefore)} à ${formatPercent(scoreAfter())} après corrections (${viewsAtFullScore()} vues sur ${EVALUATED_VIEWS.length * 2} à 100 %).`,
-        "Ce score ne contrôle qu'une partie des critères (environ un tiers) et ne constitue pas un taux de conformité au RGAA.",
-        `Une grille d'audit RGAA pré-remplie prépare l'audit complet : sur les 106 critères, ${grid.C} sont conformes, ${grid.NC} non conformes, ${grid.NA} non applicables et ${grid.NT} restent à tester. Grille : ${RGAA_GRID_URL}`,
+        rate === null
+          ? `L'audit interne mené le ${date} compte ${counts} ; ${grid.NT} restent à vérifier avec un lecteur d'écran. Le taux de conformité sera calculé quand tous les critères auront été testés.`
+          : `L'audit interne mené le ${date} révèle que ${formatPercent(rate)} des critères du RGAA version 4.1.2 sont respectés : ${counts}.`,
+        `Le score d'accessibilité Lighthouse moyen est de ${formatPercent(scoreAfter())} (${viewsAtFullScore()} vues sur ${EVALUATED_VIEWS.length * 2} à 100 %) ; il ne contrôle qu'une partie des critères et ne constitue pas un taux de conformité.`,
+        `Grille d'audit détaillée, critère par critère : ${RGAA_GRID_URL}`,
       ],
     },
     nonCompliant.length
@@ -163,7 +215,9 @@ export function declaration(nonCompliant: Finding[] = AUDIT.nonCompliant): Decla
       : {
           heading: "Contenus non accessibles",
           paragraphs: [
-            "Aucune non-conformité n'est connue à ce jour. Les points non évalués (voir le compte rendu, rubrique « Non évalué ») peuvent en révéler : un audit complet reste à mener.",
+            rate === null
+              ? "Aucune non-conformité n'est connue à ce jour. Les critères qui restent à vérifier (voir le compte rendu, rubrique « Non évalué ») peuvent en révéler."
+              : "Aucune non-conformité n'a été relevée lors de l'audit.",
           ],
         },
     {
@@ -177,8 +231,8 @@ export function declaration(nonCompliant: Finding[] = AUDIT.nonCompliant): Decla
         "Technologies utilisées : HTML, CSS, JavaScript (React), WAI-ARIA, dans une application Tauri (WebKitGTK sous Linux, WebView2 sous Windows, WKWebView sous macOS).",
         `Environnement de test : ${AUDIT.environment}`,
         `Outils d'évaluation : ${AUDIT.tools.join(" ; ")}.`,
-        `Vues vérifiées : ${EVALUATED_VIEWS.map((v) => v.name).join(", ")}.`,
-        `Grille d'audit RGAA pré-remplie : ${RGAA_GRID_URL} (format tableur : ${RGAA_GRID_CSV_URL}).`,
+        `Vues vérifiées : ${[...EVALUATED_VIEWS.map((v) => v.name), ...AUDIT.extraViews].join(", ")}.`,
+        `Grille d'audit RGAA : ${RGAA_GRID_URL} (format tableur : ${RGAA_GRID_CSV_URL}).`,
         `Protocole de test avec le lecteur d'écran Orca : ${ORCA_PROTOCOL_URL}.`,
       ],
     },

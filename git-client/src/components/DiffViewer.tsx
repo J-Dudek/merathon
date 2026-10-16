@@ -1,3 +1,4 @@
+import { Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FileDiff, DiffLine } from "../types/git";
 import type { LineAction } from "../ipc/commands";
@@ -37,7 +38,7 @@ export function DiffViewer({ diff, loading, staging, annotations }: Props) {
   useEffect(() => setSelection(null), [diff]);
 
   if (loading) {
-    return <div className="p-3 text-xs text-[var(--color-muted)] animate-pulse">Chargement…</div>;
+    return <div className="p-3 text-xs text-[var(--color-muted)]">Chargement…</div>;
   }
   if (!diff) {
     return <div className="p-3 text-xs text-[var(--color-muted)] italic">Sélectionne un fichier</div>;
@@ -83,7 +84,13 @@ export function DiffViewer({ diff, loading, staging, annotations }: Props) {
 
   return (
     <div className="relative h-full flex flex-col">
-      <div className="flex-1 overflow-auto font-mono text-[11px] leading-5 select-text">
+      {/* Zone défilante atteignable au clavier : les flèches font défiler le diff. */}
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label={`Différences de ${diff.path}`}
+        className="flex-1 overflow-auto font-mono text-[11px] leading-5 select-text outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
+      >
         {diff.hunks.map((hunk, i) => (
           <div key={i}>
             <div className="flex items-center gap-2 px-2 py-0.5 bg-[var(--color-bg-info)] text-[var(--color-info)] border-y border-overlay/5 sticky top-0 z-10">
@@ -133,7 +140,14 @@ export function DiffViewer({ diff, loading, staging, annotations }: Props) {
           ) : (
             <HunkBtn disabled={applying} onClick={() => apply(selection.hunk, [...selection.lines], "unstage")}>Désindexer les lignes</HunkBtn>
           )}
-          <button className="text-[var(--color-muted)] hover:text-[var(--color-text)]" onClick={() => setSelection(null)}>✕</button>
+          <button
+            className="text-[var(--color-muted)] hover:text-[var(--color-text)]"
+            onClick={() => setSelection(null)}
+            title="Annuler la sélection"
+            aria-label="Annuler la sélection"
+          >
+            <X size={12} />
+          </button>
         </div>
       )}
     </div>
@@ -193,20 +207,35 @@ function DiffLineRow({ line, selectable, selected, onToggle, annotations }: {
         onClick={(e) => selectable && onToggle(e.shiftKey)}
         title={selectable ? "Clic : sélectionner la ligne · Maj+clic : plage" : undefined}
       >
-        <td className={`w-1 ${selected ? "bg-sky-400" : ""}`} />
+        <td className={`w-1.5 p-0 ${selected ? "bg-sky-400" : ""}`}>
+          {/* Sélection au clavier : Espace (Maj+Espace pour une plage) ; le clic sur la ligne fait de même. */}
+          {selectable && (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={selected}
+              aria-label={`Sélectionner la ligne ${lineLabel(line)}`}
+              className="block w-full h-5 cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-[var(--color-accent)]"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle(e.shiftKey);
+              }}
+            />
+          )}
+        </td>
         {annotations && (
           <td className="w-5 select-none">
             {onComment && (
               <button
-                className="w-4 h-4 leading-none rounded bg-[var(--color-accent)] text-white font-sans font-bold opacity-0 group-hover:opacity-100 focus:opacity-100"
+                className="w-4 h-4 leading-none rounded bg-[var(--color-accent-solid)] text-white font-sans font-bold opacity-0 group-hover:opacity-100 focus:opacity-100"
                 title="Commenter cette ligne"
-                aria-label="Commenter cette ligne"
+                aria-label={`Commenter la ligne ${lineLabel(line)}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onComment(line);
                 }}
               >
-                +
+                <Plus size={12} strokeWidth={2.5} className="mx-auto" />
               </button>
             )}
           </td>
@@ -218,7 +247,8 @@ function DiffLineRow({ line, selectable, selected, onToggle, annotations }: {
           {line.new_lineno ?? ""}
         </td>
         <td className={`pl-2 pr-4 whitespace-pre ${text}`}>
-          <span className="select-none mr-1 opacity-70">{prefix}</span>
+          <span className="select-none mr-1 opacity-70" aria-hidden>{prefix}</span>
+          {line.kind !== "context" && <span className="sr-only">{line.kind === "added" ? "Ajoutée : " : "Supprimée : "}</span>}
           {line.content}
         </td>
       </tr>
@@ -231,6 +261,12 @@ function DiffLineRow({ line, selectable, selected, onToggle, annotations }: {
       )}
     </>
   );
+}
+
+/** Ligne désignée par son numéro dans la version où elle existe. */
+function lineLabel(line: DiffLine): string {
+  if (line.kind === "removed") return `supprimée ${line.old_lineno}`;
+  return line.kind === "added" ? `ajoutée ${line.new_lineno}` : `${line.new_lineno}`;
 }
 
 function lineStyle(kind: DiffLine["kind"]) {

@@ -1,3 +1,4 @@
+import { Plus, X } from "lucide-react";
 import { useRepoStore } from "../store/useRepoStore";
 import { useTabsStore, type RepoTab } from "../store/useTabsStore";
 
@@ -18,6 +19,7 @@ export function TabBar() {
         {tabs.map((tab) => {
           const path = pathOf(tab);
           const active = tab.id === activeId;
+          const name = path?.split(/[\\/]/).pop() || "Nouvel onglet";
           return (
             <div
               key={tab.id}
@@ -32,18 +34,18 @@ export function TabBar() {
             >
               {/* Vrai bouton : l'onglet s'active aussi au clavier (le clic remonte au conteneur). */}
               <button type="button" aria-current={active ? "page" : undefined} className="truncate text-left">
-                {path?.split(/[\\/]/).pop() || "Nouvel onglet"}
+                {name}
               </button>
               <button
-                className={`shrink-0 w-4 h-4 leading-4 rounded text-[11px] hover:bg-overlay/15 ${active ? "" : "opacity-0 group-hover:opacity-100"}`}
+                className={`shrink-0 w-4 h-4 leading-4 rounded text-[11px] hover:bg-overlay/15 ${active ? "" : "opacity-0 group-hover:opacity-100 focus:opacity-100"}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   closeTab(tab.id);
                 }}
-                aria-label="Fermer l'onglet"
+                aria-label={`Fermer l'onglet ${name}`}
                 title="Fermer l'onglet (Ctrl+W)"
               >
-                ×
+                <X size={12} className="mx-auto" />
               </button>
             </div>
           );
@@ -55,7 +57,7 @@ export function TabBar() {
         title="Nouvel onglet (Ctrl+T)"
         aria-label="Nouvel onglet"
       >
-        +
+        <Plus size={14} />
       </button>
     </div>
   );
