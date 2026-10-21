@@ -22,6 +22,8 @@ const ACTIONS: { value: RebaseAction; label: string; hint: string; merge: boolea
   { value: "drop", label: "Supprimer", hint: "Retirer le commit de l'historique", merge: true },
 ];
 
+export const actionLabel = (action: RebaseAction) => ACTIONS.find((a) => a.value === action)?.label ?? action;
+
 /** Vérifie le plan avant de l'envoyer ; renvoie un message d'erreur ou null. */
 export function validatePlan(rows: Pick<Row, "action" | "message">[]): string | null {
   const kept = rows.filter((r) => r.action !== "drop");

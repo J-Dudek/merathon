@@ -15,6 +15,7 @@ import { ignoreDirPattern, ignoreExtensionPattern, ignoreFilePattern, ignoreFold
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
 import type { FileStatus, InteractiveStop, RepoState } from "../types/git";
 import { fieldLabel } from "../lib/fieldLabel";
+import { RebaseTimeline } from "./RebaseTimeline";
 
 const STATE_LABELS: Record<Exclude<RepoState, "clean">, string> = {
   merge: "Merge en cours",
@@ -547,9 +548,7 @@ function InteractiveBanner({ stop, conflicts, onContinue, onAbort }: {
       <p className="text-xs font-semibold text-sky-300">
         Rebase interactif — étape {stop.step}/{stop.total}
       </p>
-      <p className="text-[11px] text-sky-100">
-        <span className="font-mono">{stop.short_hash}</span> « {stop.summary} »
-      </p>
+      <RebaseTimeline stop={stop} />
       <p className="text-[11px] text-sky-100">
         {interactiveHint(stop, conflicts)}
       </p>

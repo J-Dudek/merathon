@@ -65,6 +65,22 @@ export interface InteractiveStop {
   step: number;
   total: number;
   conflicted_files: string[];
+  /** Base sur laquelle les commits sont rejoués (hash abrégé). */
+  onto: string;
+  /** Toutes les étapes du plan, de la plus ancienne à la plus récente. */
+  timeline: TimelineStep[];
+}
+
+export interface TimelineStep {
+  hash: string;
+  short_hash: string;
+  summary: string;
+  action: "pick" | "reword" | "edit" | "squash" | "fixup" | "drop";
+  status: "done" | "current" | "todo";
+  /** Commit produit (étape faite, ou arrêtée sur « Modifier ») ; null si supprimée, sautée ou à venir. */
+  new_hash: string | null;
+  /** Sautée : ses changements étaient déjà présents. */
+  skipped: boolean;
 }
 
 export interface InteractiveOutcome {

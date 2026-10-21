@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.8.0](https://github.com/J-Dudek/merathon/compare/v2.7.2...v2.8.0) (2026-10-21)
+
+### Nouveautés
+
+- ajout details sur rebase interactif (8f01714)
+
 ## [2.7.2](https://github.com/J-Dudek/merathon/compare/v2.7.1...v2.7.2) (2026-10-16)
 
 ### Corrections

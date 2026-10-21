@@ -1,6 +1,6 @@
 [package]
 name = "merathon"
-version = "2.7.2"
+version = "2.8.0"
 description = "Merathon — Git Repository Manager : client Git graphique de bureau"
 authors = ["Julien Dudek"]
 license = "MIT"
@@ -25,7 +25,9 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 # Mises à jour automatiques (téléchargement signé depuis les releases GitHub) et redémarrage.
-tauri-plugin-updater = "2"
+# Sans la fonctionnalité `zip` : les releases publient les paquets bruts (AppImage, deb, exe, msi),
+# jamais d'archive .zip / .tar.gz ; elle n'apportait que la crate zip 4.x (RUSTSEC-2026-0367/0368/0369).
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-process = "2"
 # Notifications système (activité des PR / MR quand la fenêtre est en arrière-plan).
 tauri-plugin-notification = "~2.5.0"

@@ -82,6 +82,33 @@ pub struct InteractiveStop {
     pub step: usize,
     pub total: usize,
     pub conflicted_files: Vec<String>,
+    /// Base sur laquelle les commits sont rejoués (hash abrégé).
+    pub onto: String,
+    /// Toutes les étapes du plan, de la plus ancienne à la plus récente, avec leur avancement.
+    pub timeline: Vec<TimelineStep>,
+}
+
+#[derive(Debug, Serialize, Clone, Copy, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum StepStatus {
+    Done,
+    /// Étape sur laquelle le rebase est arrêté.
+    Current,
+    Todo,
+}
+
+/// Une étape du plan telle qu'affichée dans la frise d'avancement.
+#[derive(Debug, Serialize, Clone, PartialEq)]
+pub struct TimelineStep {
+    pub hash: String,
+    pub short_hash: String,
+    pub summary: String,
+    pub action: RebaseAction,
+    pub status: StepStatus,
+    /// Commit produit par l'étape (faite, ou arrêtée sur `edit`) ; None si supprimée, sautée ou à venir.
+    pub new_hash: Option<String>,
+    /// Étape sautée : ses changements étaient déjà présents (ou merge devenu sans objet).
+    pub skipped: bool,
 }
 
 /// Résultat d'un lancement ou d'une reprise : `stopped` est rempli si le rebase s'est arrêté.
@@ -107,6 +134,9 @@ struct SavedRebase {
     /// Ancien commit → commit qui le remplace (réécrit, fusionné, ou parent s'il est supprimé).
     #[serde(default)]
     mapping: HashMap<String, String>,
+    /// Commits sautés (devenus vides une fois rejoués, ou merges devenus sans objet).
+    #[serde(default)]
+    skipped: HashSet<String>,
     stopped: Option<(usize, StopReason)>,
 }
 
@@ -341,6 +371,7 @@ pub fn interactive_rebase(
         next: 0,
         tip: base_id,
         mapping: HashMap::new(),
+        skipped: HashSet::new(),
         stopped: None,
     };
     run(repo, state)
@@ -533,6 +564,7 @@ fn becomes_empty(original: &Commit, planned: &Planned, tree: &git2::Tree) -> Res
 fn skip(state: &mut SavedRebase, original: &Commit, planned: &Planned) {
     let onto = planned.onto.id().to_string();
     state.mapping.insert(original.id().to_string(), onto.clone());
+    state.skipped.insert(original.id().to_string());
     state.tip = onto;
 }
 
@@ -556,7 +588,61 @@ fn stop_info(repo: &Repository, state: &SavedRebase) -> Result<Option<Interactiv
         step: kept.iter().position(|s| s.hash == step.hash).map(|p| p + 1).unwrap_or(0),
         total: kept.len(),
         conflicted_files: if reason == StopReason::Conflict { conflicted_paths(repo)? } else { Vec::new() },
+        onto: short(&state.base).to_string(),
+        timeline: timeline(repo, state, index)?,
     }))
+}
+
+/// Avancement de chaque étape du plan, le rebase étant arrêté sur l'étape `current`.
+fn timeline(repo: &Repository, state: &SavedRebase, current: usize) -> Result<Vec<TimelineStep>, GitError> {
+    let mut out: Vec<TimelineStep> = Vec::with_capacity(state.steps.len());
+    // Étape dont le commit absorbe les squash / fixup suivants : la dernière ayant produit un commit
+    // (mode linéaire), ou celle du premier parent du commit fusionné (mode préservé).
+    let mut anchor: Option<usize> = None;
+    let mut anchor_of: HashMap<&str, usize> = HashMap::new();
+    for (i, step) in state.steps.iter().enumerate() {
+        let commit = repo.find_commit(Oid::from_str(&step.hash)?)?;
+        let status = match i.cmp(&current) {
+            std::cmp::Ordering::Less => StepStatus::Done,
+            std::cmp::Ordering::Equal => StepStatus::Current,
+            std::cmp::Ordering::Greater => StepStatus::Todo,
+        };
+        let skipped = state.skipped.contains(&step.hash);
+        // Une étape arrêtée sur `edit` a déjà produit son commit (avant que l'utilisateur ne le modifie).
+        let produced = status == StepStatus::Done || (status == StepStatus::Current && i < state.next);
+        let new_hash = (produced && !skipped && step.action != RebaseAction::Drop)
+            .then(|| state.mapping.get(&step.hash).cloned())
+            .flatten();
+
+        if new_hash.is_some() {
+            if matches!(step.action, RebaseAction::Squash | RebaseAction::Fixup) {
+                let target = match state.mode {
+                    RebaseMode::Linear => anchor,
+                    RebaseMode::Preserve => {
+                        commit.parent_id(0).ok().and_then(|p| anchor_of.get(p.to_string().as_str()).copied())
+                    }
+                };
+                // Le commit cible est remplacé par le commit fusionné.
+                if let Some(t) = target {
+                    out[t].new_hash = new_hash.clone();
+                    anchor_of.insert(&step.hash, t);
+                }
+            } else {
+                anchor = Some(i);
+                anchor_of.insert(&step.hash, i);
+            }
+        }
+        out.push(TimelineStep {
+            short_hash: short(&step.hash).to_string(),
+            hash: step.hash.clone(),
+            summary: commit.summary().ok().flatten().unwrap_or("").to_string(),
+            action: step.action,
+            status,
+            new_hash,
+            skipped,
+        });
+    }
+    Ok(out)
 }
 
 /// Rebase interactif arrêté en attente de l'utilisateur, s'il y en a un.
@@ -599,8 +685,7 @@ fn run(repo: &Repository, mut state: SavedRebase) -> Result<InteractiveOutcome, 
             } else if original.parent_count() > 1 && planned.parents.len() < 2 {
                 // Merge dont la branche fusionnée a été supprimée : il n'a plus de raison d'être
                 // (le rejouer réintroduirait le contenu des commits supprimés).
-                state.mapping.insert(step.hash.clone(), planned.onto.id().to_string());
-                state.tip = planned.onto.id().to_string();
+                skip(&mut state, &original, &planned);
                 state.next = index + 1;
                 continue;
             } else {
@@ -920,6 +1005,97 @@ mod tests {
         assert_eq!(fs::read_to_string(dir.path().join("f.txt")).unwrap(), "v1 after v2\n");
         assert_eq!(repo.state(), RepositoryState::Clean);
         assert!(interactive_status(&repo).is_none());
+    }
+
+    #[test]
+    fn timeline_shows_done_current_and_todo_steps() {
+        let (dir, repo, base, c1, c2) = conflicting();
+        let c3 = commit_file(&repo, &dir, "g.txt", "g\n", "c3");
+        let c4 = commit_file(&repo, &dir, "h.txt", "h\n", "c4");
+        // c3 déplacé et renommé, c1 supprimé : c2 (v1 → v2) entre en conflit sur v0.
+        let steps = vec![
+            step(&c3, RebaseAction::Reword, Some("c3 bis")),
+            step(&c1, RebaseAction::Drop, None),
+            step(&c2, RebaseAction::Pick, None),
+            step(&c4, RebaseAction::Pick, None),
+        ];
+        let stop = interactive_rebase(&repo, &base, &steps, RebaseMode::Linear).unwrap().stopped.unwrap();
+        assert_eq!((stop.step, stop.total), (2, 3));
+        assert_eq!(stop.onto, short(&base));
+
+        let t = &stop.timeline;
+        let order: Vec<_> = t.iter().map(|s| (s.hash.as_str(), s.action, s.status)).collect();
+        assert_eq!(
+            order,
+            vec![
+                (c3.as_str(), RebaseAction::Reword, StepStatus::Done),
+                (c1.as_str(), RebaseAction::Drop, StepStatus::Done),
+                (c2.as_str(), RebaseAction::Pick, StepStatus::Current),
+                (c4.as_str(), RebaseAction::Pick, StepStatus::Todo),
+            ]
+        );
+        let rewritten = repo.find_commit(Oid::from_str(t[0].new_hash.as_ref().unwrap()).unwrap()).unwrap();
+        assert_eq!(rewritten.message().ok(), Some("c3 bis"));
+        assert_eq!(t[0].summary, "c3", "message d'origine");
+        assert_eq!(t[1].new_hash, None, "commit supprimé");
+        assert_eq!(t[2].new_hash, None, "conflit : pas encore de commit");
+        assert_eq!(t[3].new_hash, None);
+        assert!(t.iter().all(|s| !s.skipped));
+
+        // Après résolution, l'étape suivante (c4, sans conflit) est faite et le rebase se termine.
+        resolve(&repo, &dir, "f.txt", "v2\n");
+        assert!(continue_interactive(&repo).unwrap().done);
+    }
+
+    #[test]
+    fn timeline_reports_the_squashed_commit_on_its_target() {
+        let f = fixture();
+        let steps = vec![
+            step(&f.c[0], RebaseAction::Pick, None),
+            step(&f.c[1], RebaseAction::Fixup, None),
+            step(&f.c[2], RebaseAction::Edit, None),
+        ];
+        let stop = interactive_rebase(&f.repo, &f.base, &steps, RebaseMode::Linear).unwrap().stopped.unwrap();
+        let t = &stop.timeline;
+        let folded = head(&f.repo).parent(0).unwrap().id().to_string();
+        assert_ne!(folded, f.c[0]);
+        assert_eq!(t[0].new_hash.as_deref(), Some(folded.as_str()), "c1 a absorbé c2 : ce n'est plus le même commit");
+        assert_eq!(t[1].new_hash.as_deref(), Some(folded.as_str()));
+    }
+
+    #[test]
+    fn timeline_reports_squash_target_in_preserve_mode() {
+        let f = fixture();
+        let steps = vec![
+            step(&f.c[0], RebaseAction::Pick, None),
+            step(&f.c[1], RebaseAction::Squash, Some("c1 + c2")),
+            step(&f.c[2], RebaseAction::Edit, None),
+        ];
+        let stop = interactive_rebase(&f.repo, &f.base, &steps, RebaseMode::Preserve).unwrap().stopped.unwrap();
+        let t = &stop.timeline;
+        let folded = head(&f.repo).parent(0).unwrap();
+        assert_eq!(folded.message().ok(), Some("c1 + c2"));
+        assert_eq!(t[0].new_hash, Some(folded.id().to_string()));
+    }
+
+    #[test]
+    fn timeline_marks_skipped_steps_and_edit_result() {
+        let (dir, repo) = new_repo();
+        let base = commit_file(&repo, &dir, "f.txt", "v0\n", "base");
+        let _c1 = commit_file(&repo, &dir, "f.txt", "v1\n", "c1");
+        let c2 = commit_file(&repo, &dir, "f.txt", "v0\n", "revert c1");
+        let c3 = commit_file(&repo, &dir, "g.txt", "g\n", "c3");
+        let steps = vec![step(&c2, RebaseAction::Pick, None), step(&c3, RebaseAction::Edit, None)];
+        let stop = interactive_rebase(&repo, &base, &steps, RebaseMode::Linear).unwrap().stopped.unwrap();
+        assert_eq!(stop.reason, StopReason::Edit);
+
+        let t = &stop.timeline;
+        assert!(t[0].skipped, "devenu vide : sauté");
+        assert_eq!(t[0].new_hash, None);
+        assert_eq!(t[1].status, StepStatus::Current);
+        // L'étape `edit` a déjà produit son commit, celui sur lequel on est arrêté.
+        assert_eq!(t[1].new_hash.as_deref(), Some(head(&repo).id().to_string().as_str()));
+        assert_ne!(t[1].new_hash.as_deref(), Some(c3.as_str()), "rejoué sur la base : nouveau hash");
     }
 
     #[test]
