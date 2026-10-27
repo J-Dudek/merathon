@@ -46,6 +46,14 @@ describe("GitLabClient", () => {
     expect(issue).toMatchObject({ number: 5, state: "open", author: "bob", labels: ["bug"] });
   });
 
+  it("searchIssues looks up an iid or words, open and closed issues", async () => {
+    const { gl, get } = client([{ iid: 5, title: "Bug", state: "closed", web_url: "u", created_at: "d" }]);
+    expect(await gl.searchIssues("g/p", "5")).toMatchObject([{ number: 5, state: "closed" }]);
+    expect(get).toHaveBeenCalledWith("/projects/g%2Fp/issues?iids[]=5&state=all&per_page=20");
+    await gl.searchIssues("g/p", "crash & co");
+    expect(get).toHaveBeenCalledWith("/projects/g%2Fp/issues?search=crash%20%26%20co&state=all&per_page=20");
+  });
+
   it("encodes path-based project IDs", async () => {
     const { gl, get } = client([]);
     await gl.getMergeRequests("group/sub/repo");
@@ -223,6 +231,17 @@ describe("GitLab draft titles", () => {
     expect(draftTitle("[Draft] feat: x", false)).toBe("feat: x");
     expect(draftTitle("WIP: feat: x", false)).toBe("feat: x");
     expect(draftTitle("feat: draft mode", false)).toBe("feat: draft mode");
+  });
+
+  it("updateMergeRequest keeps the draft prefix GitLab knows", async () => {
+    const send = vi.fn().mockResolvedValue(null);
+    const get = vi.fn().mockResolvedValue({ ...rawMR, title: "Draft: Add feature", draft: true });
+    await new GitLabClient(get as never, send as never).updateMergeRequest("group/app", 12, { title: "Add feature v2", description: "d" });
+    expect(send).toHaveBeenCalledWith("PUT", "/projects/group%2Fapp/merge_requests/12", { title: "Draft: Add feature v2", description: "d" });
+
+    get.mockResolvedValue({ ...rawMR, title: "Add feature", draft: false });
+    await new GitLabClient(get as never, send as never).updateMergeRequest("group/app", 12, { title: "Draft: oups", description: "" });
+    expect(send).toHaveBeenLastCalledWith("PUT", "/projects/group%2Fapp/merge_requests/12", { title: "oups", description: "" });
   });
 
   it("setDraft rewrites the merge request title", async () => {

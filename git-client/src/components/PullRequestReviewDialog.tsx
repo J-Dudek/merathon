@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ArrowRight, Check, CircleDashed, CircleX, ExternalLink, MinusCircle, RotateCw } from "lucide-react";
+import { ArrowRight, Check, CircleDashed, CircleX, ExternalLink, MinusCircle, Pencil, RotateCw } from "lucide-react";
 import { forgeClient } from "../api/forge";
+import { draftTitle } from "../api/gitlab";
 import { useUiStore, confirmAction } from "../store/useUiStore";
 import { seenKey, useSeenPrsStore } from "../store/useSeenPrsStore";
 import { useCelebrationStore } from "../store/useCelebrationStore";
 import { errorMessage } from "../lib/actions";
 import type {
-  DraftComment, ForgeAccount, ForgeCheck, ForgeComment, ForgePR, MergeMethod, PullRequestDetails, ReviewEvent,
+  DraftComment, ForgeAccount, ForgeCheck, ForgeComment, ForgeIssue, ForgePR, MergeMethod, PullRequestDetails, PullRequestEdit,
+  ReviewEvent,
 } from "../types/forge";
 import { Button, Modal, inputClass } from "./Modal";
 import { PullRequestFiles } from "./PullRequestFiles";
 import { PullRequestBranchSync } from "./PullRequestBranchSync";
+import { IssueRefTextarea } from "./IssueRefTextarea";
 import { fieldLabel } from "../lib/fieldLabel";
 
 const labelClass = "text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]";
@@ -59,6 +62,10 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
   const [tab, setTab] = useState<"conversation" | "files">("conversation");
   /** Commentaires de ligne en attente de publication avec la revue. */
   const [drafts, setDrafts] = useState<DraftComment[]>([]);
+  /** Titre et description en cours de modification (auteur seulement) ; null hors édition. */
+  const [edit, setEdit] = useState<PullRequestEdit | null>(null);
+  /** Issues du projet, chargées à la première édition pour l'auto-complétion « # ». */
+  const [issues, setIssues] = useState<ForgeIssue[] | null>(null);
   /** Les choix de merge ne sont initialisés qu'au premier chargement, pas à chaque actualisation. */
   const initialized = useRef(false);
 
@@ -166,8 +173,41 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
       draft ? `${ref} repassée en brouillon` : `${ref} prête pour la relecture`, true);
   }
 
+  /** Titre et description tels qu'on les modifie : sans le préfixe de brouillon de GitLab, conservé à l'enregistrement. */
+  function editable(d: PullRequestDetails): PullRequestEdit {
+    return { title: isGitHub ? d.pr.title : draftTitle(d.pr.title, false), description: d.description };
+  }
+
+  function startEdit() {
+    if (!details) return;
+    setEdit(editable(details));
+    if (!issues) {
+      setIssues([]);
+      client().getIssues(projectPath).then(setIssues).catch(() => {}); // sans issues, la description reste libre
+    }
+  }
+
+  const searchIssues = useCallback((term: string) => forgeClient(account).searchIssues(projectPath, term), [account, projectPath]);
+
+  const editDirty = !!edit && !!details
+    && (edit.title !== editable(details).title || edit.description !== editable(details).description);
+
+  function saveEdit() {
+    if (!edit || !edit.title.trim()) return;
+    const changes = { title: edit.title.trim(), description: edit.description };
+    run("edit", async () => {
+      await client().updatePullRequest(projectPath, number, changes);
+      setEdit(null);
+    }, `${ref} modifiée`, true);
+  }
+
   async function requestClose() {
     if (pending) return;
+    if (editDirty && !(await confirmAction(
+      "Abandonner les modifications ?",
+      "Le titre et la description modifiés ne seront pas enregistrés.",
+      true,
+    ))) return;
     if (drafts.length && !(await confirmAction(
       "Abandonner la revue en cours ?",
       `${drafts.length} commentaire${drafts.length > 1 ? "s" : ""} en attente ne ser${drafts.length > 1 ? "ont" : "a"} pas publié${drafts.length > 1 ? "s" : ""}.`,
@@ -228,10 +268,33 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
             {details.checks.length > 0 && <Checks checks={details.checks} />}
 
             <section className="flex flex-col gap-1">
-              <h3 className={labelClass}>Description</h3>
-              {details.description.trim()
+              <div className="flex items-center">
+                <h3 className={labelClass}>Description</h3>
+                {details.pr.author === account.username && !edit && (
+                  <button
+                    className="ml-auto inline-flex items-center gap-1 text-[11px] text-[var(--color-accent-text)] hover:underline disabled:opacity-50"
+                    onClick={startEdit}
+                    disabled={!!pending}
+                    title={`Modifier le titre et la description de ${ref}`}
+                  >
+                    <Pencil size={11} /> Modifier
+                  </button>
+                )}
+              </div>
+              {edit && (
+                <EditForm
+                  edit={edit}
+                  onChange={setEdit}
+                  issues={issues ?? []}
+                  search={searchIssues}
+                  pending={pending}
+                  onCancel={() => setEdit(null)}
+                  onSave={saveEdit}
+                />
+              )}
+              {!edit && (details.description.trim()
                 ? <p className="text-xs text-[var(--color-text)] whitespace-pre-wrap break-words font-mono bg-shade/20 rounded p-2">{details.description}</p>
-                : <p className="text-xs text-[var(--color-muted)] italic">Aucune description</p>}
+                : <p className="text-xs text-[var(--color-muted)] italic">Aucune description</p>)}
             </section>
 
             <section className="flex flex-col gap-2">
@@ -295,6 +358,47 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
         </div>
       )}
     </Modal>
+  );
+}
+
+/** Formulaire de modification du titre et de la description ; « # » propose les issues. Ctrl+Entrée enregistre. */
+function EditForm({ edit, onChange, issues, search, pending, onCancel, onSave }: {
+  edit: PullRequestEdit;
+  onChange: (edit: PullRequestEdit) => void;
+  issues: ForgeIssue[];
+  search: (term: string) => Promise<ForgeIssue[]>;
+  pending: string | null;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const saveOnCtrlEnter = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      onSave();
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2" onKeyDown={saveOnCtrlEnter}>
+      <label className="flex flex-col gap-1">
+        <span className={labelClass}>Titre</span>
+        <input autoFocus className={inputClass} value={edit.title} onChange={(e) => onChange({ ...edit, title: e.target.value })} />
+      </label>
+      <IssueRefTextarea
+        label="Description (Markdown)"
+        className={`${inputClass} h-40 resize-y font-mono`}
+        placeholder="Contexte, changements, comment tester… « # » pour citer une issue"
+        value={edit.description}
+        onChange={(description) => onChange({ ...edit, description })}
+        issues={issues}
+        search={search}
+      />
+      <div className="flex justify-end gap-2">
+        <Button onClick={onCancel} disabled={pending === "edit"}>Annuler</Button>
+        <Button variant="primary" onClick={onSave} disabled={!!pending || !edit.title.trim()} title="Ctrl+Entrée">
+          {pending === "edit" ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </div>
+    </div>
   );
 }
 

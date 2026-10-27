@@ -1,6 +1,6 @@
 import type {
   CreatedPullRequest, ForgeCheck, ForgeComment, ForgeIssue, ForgeLabel, ForgeMilestone, ForgePR, ForgeRepo, ForgeUser,
-  LinePosition, MergeMethod, MergeOptions, MyPullRequests, NewPullRequest, PrSummary, PrTemplate, PrTemplates, PullRequestDetails, PullRequestOptions, PullRequestState,
+  LinePosition, MergeMethod, MergeOptions, MyPullRequests, NewPullRequest, PrSummary, PrTemplate, PrTemplates, PullRequestDetails, PullRequestEdit, PullRequestOptions, PullRequestState,
   ReviewContext, ReviewEvent, ReviewSubmission, ReviewThread, SubmittedReview,
 } from "../types/forge";
 import { PR_PAGE_SIZE } from "../types/forge";
@@ -366,6 +366,10 @@ export class GitHubClient {
     await this.send("PATCH", `/repos/${seg(owner)}/${seg(repo)}/pulls/${number}`, { state });
   }
 
+  async updatePullRequest(owner: string, repo: string, number: number, edit: PullRequestEdit): Promise<void> {
+    await this.send("PATCH", `/repos/${seg(owner)}/${seg(repo)}/pulls/${number}`, { title: edit.title, body: edit.description });
+  }
+
   /** Brouillon ↔ prête : uniquement disponible en GraphQL. */
   async setDraft(owner: string, repo: string, number: number, draft: boolean): Promise<void> {
     const raw = await this.get<RawPullRequest>(`/repos/${seg(owner)}/${seg(repo)}/pulls/${number}`);
@@ -439,6 +443,19 @@ export class GitHubClient {
   async getIssues(owner: string, repo: string, state: "open" | "closed" | "all" = "open"): Promise<ForgeIssue[]> {
     const data = await this.get<RawIssue[]>(`/repos/${seg(owner)}/${seg(repo)}/issues?state=${state}&per_page=50`);
     return data.filter((i) => !i.pull_request).map(parseIssue);
+  }
+
+  /** Issues ouvertes ou fermées : celle du numéro donné, sinon celles dont le titre ou le corps contient les mots. */
+  async searchIssues(owner: string, repo: string, term: string): Promise<ForgeIssue[]> {
+    const t = term.trim();
+    if (/^\d+$/.test(t)) {
+      // Une issue absente répond 404 : pas de résultat.
+      const raw = await this.get<RawIssue>(`/repos/${seg(owner)}/${seg(repo)}/issues/${t}`).catch(() => null);
+      return raw && !raw.pull_request ? [parseIssue(raw)] : [];
+    }
+    const q = encodeURIComponent(`repo:${owner}/${repo} is:issue ${t}`);
+    const data = await this.get<{ items: RawIssue[] }>(`/search/issues?q=${q}&per_page=20`);
+    return data.items.map(parseIssue);
   }
 
   /**

@@ -345,6 +345,17 @@ export const GIT_MEMO: MemoGroup[] = [
           "Clic droit sur la branche → « Créer une pull request GitHub… » ou « Créer une merge request GitLab… » (un compte de la forge doit être connecté).",
         ],
       },
+      {
+        title: "Lier une issue à une pull request",
+        command: "#12 · Closes #12 (dans la description)",
+        summary: "#12 dans la description crée un lien vers l'issue ; « Closes #12 » la ferme en plus au merge, sur GitHub comme sur GitLab.",
+        example: "Ta branche corrige le bug signalé dans l'issue #12 et tu veux qu'elle se ferme toute seule une fois la correction mergée.",
+        steps: [
+          "Dans le formulaire de création, tape « # » dans la description : les issues ouvertes du projet s'affichent, filtrées par numéro ou par mot du titre (les autres, même fermées, sont cherchées sur la forge).",
+          "Entrée insère #12 ; Maj + Entrée insère « Closes #12 ».",
+          "Si le nom de la branche contient le numéro (feat/12-…, fix/issue-12), un bandeau propose « Fermer au merge ».",
+        ],
+      },
     ],
   },
   {

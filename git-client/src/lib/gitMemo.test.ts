@@ -26,6 +26,7 @@ describe("filterMemo", () => {
   it("cherche dans les commandes, sans tenir compte de la casse ni des accents", () => {
     expect(titles("cherry-pick")).toEqual(["Reprendre un commit d'une autre branche"]);
     expect(titles("DESINDEXER")).toContain("Désindexer");
+    expect(titles("closes #12")).toEqual(["Lier une issue à une pull request"]);
   });
 
   it("exige tous les mots et retire les rubriques vides", () => {

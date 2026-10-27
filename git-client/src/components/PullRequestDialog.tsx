@@ -1,5 +1,5 @@
 import { ArrowRight, X } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRepoStore } from "../store/useRepoStore";
 import { confirmAction, useUiStore } from "../store/useUiStore";
@@ -8,9 +8,11 @@ import { forgeClient } from "../api/forge";
 import { push } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
 import { pullRequestTitle } from "../lib/branches";
-import type { ForgeAccount, ForgeMilestone, ForgeUser, PrTemplate, PullRequestOptions } from "../types/forge";
+import type { ForgeAccount, ForgeIssue, ForgeMilestone, ForgeUser, PrTemplate, PullRequestOptions } from "../types/forge";
 import { Button, Modal, inputClass } from "./Modal";
 import { fieldLabel } from "../lib/fieldLabel";
+import { CLOSING_KEYWORD, addClosingRef, closesIssue, issueNumberFromBranch } from "../lib/issueRefs";
+import { IssueRefTextarea } from "./IssueRefTextarea";
 
 /** Pull request à préparer : branche source, projet visé et, pour une branche locale, de quoi la pousser avant. */
 export interface PullRequestTarget {
@@ -61,6 +63,11 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
   const [pushFirst, setPushFirst] = useState(!!target.needsPush);
   const [openAfter, setOpenAfter] = useState(true);
   const [creating, setCreating] = useState(false);
+  /** Issues ouvertes du projet, proposées après un « # » dans la description. */
+  const [issues, setIssues] = useState<ForgeIssue[]>([]);
+  /** Issue ouverte évoquée par le nom de la branche (« feat/123-… »), proposée à la fermeture au merge. */
+  const [branchIssue, setBranchIssue] = useState<ForgeIssue | null>(null);
+  const [branchIssueDismissed, setBranchIssueDismissed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +104,29 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
       cancelled = true;
     };
   }, [account, projectPath]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const client = forgeClient(account);
+    const wanted = issueNumberFromBranch(sourceBranch);
+    client
+      .getIssues(projectPath)
+      .catch(() => [] as ForgeIssue[]) // sans issues, la description reste libre
+      .then(async (list) => {
+        if (cancelled) return;
+        setIssues(list);
+        if (wanted === null) return;
+        // Hors des issues chargées (les plus récentes), on la cherche par son numéro.
+        const found = list.find((i) => i.number === wanted)
+          ?? (await client.searchIssues(projectPath, String(wanted)).catch(() => []))[0];
+        if (!cancelled && found?.number === wanted && found.state === "open") setBranchIssue(found);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [account, projectPath, sourceBranch]);
+
+  const searchIssues = useCallback((term: string) => forgeClient(account).searchIssues(projectPath, term), [account, projectPath]);
 
   /** Applique un modèle ; une description déjà modifiée n'est remplacée qu'après confirmation. */
   async function chooseTemplate(name: string) {
@@ -217,12 +247,36 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
               </div>
             )}
           </div>
-          <textarea
-            aria-label="Description"
+          {branchIssue && !branchIssueDismissed && !closesIssue(description, branchIssue.number) && (
+            <div className="flex items-center gap-2 px-2 py-1 rounded bg-overlay/5 text-[11px] text-[var(--color-muted)]">
+              <span className="min-w-0 truncate">
+                La branche évoque l'issue <span className="font-mono">#{branchIssue.number}</span>{" "}
+                <span className="text-[var(--color-text)]">{branchIssue.title}</span>
+              </span>
+              <button
+                className="ml-auto shrink-0 text-[var(--color-accent-text)] hover:underline"
+                title={`Ajoute « ${CLOSING_KEYWORD} #${branchIssue.number} » : l'issue sera fermée au merge`}
+                onClick={() => setDescription((d) => addClosingRef(d, branchIssue.number))}
+              >
+                Fermer au merge
+              </button>
+              <button
+                className="shrink-0 hover:text-[var(--color-text)]"
+                aria-label="Ignorer la suggestion d'issue"
+                onClick={() => setBranchIssueDismissed(true)}
+              >
+                <X size={11} />
+              </button>
+            </div>
+          )}
+          <IssueRefTextarea
+            label="Description"
             className={`${inputClass} ${templateName ? "h-56" : "h-28"} resize-y font-mono`}
-            placeholder="Contexte, changements, comment tester…"
+            placeholder="Contexte, changements, comment tester… « # » pour citer une issue"
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={setDescription}
+            issues={issues}
+            search={searchIssues}
           />
         </div>
 

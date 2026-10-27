@@ -1,6 +1,6 @@
 import type {
   CreatedPullRequest, ForgeCheck, ForgeComment, ForgeIssue, ForgePR, ForgeRepo, LinePosition, MergeMethod, MergeOptions,
-  MyPullRequests, NewPullRequest, PrSummary, PrTemplate, PrTemplates, PullRequestDetails, PullRequestOptions, PullRequestState, ReviewContext, ReviewEvent, ReviewSubmission,
+  MyPullRequests, NewPullRequest, PrSummary, PrTemplate, PrTemplates, PullRequestDetails, PullRequestEdit, PullRequestOptions, PullRequestState, ReviewContext, ReviewEvent, ReviewSubmission,
   ReviewThread, SubmittedReview,
 } from "../types/forge";
 import { PR_PAGE_SIZE } from "../types/forge";
@@ -391,6 +391,14 @@ export class GitLabClient {
     await this.send("PUT", path, { title: draftTitle(raw.title, draft) });
   }
 
+  /** Le brouillon tient au préfixe du titre (« Draft: ») : il est conservé tel que GitLab le connaît. */
+  async updateMergeRequest(project: string, iid: number, edit: PullRequestEdit): Promise<void> {
+    const path = `/projects/${this.encodeProject(project)}/merge_requests/${iid}`;
+    const raw = await this.get<RawMergeRequest>(path);
+    const draft = raw.draft ?? DRAFT_PREFIX.test(raw.title);
+    await this.send("PUT", path, { title: draftTitle(edit.title, draft), description: edit.description });
+  }
+
   /** Lance un rebase de la branche source sur la cible, côté GitLab (asynchrone). */
   async rebase(project: string, iid: number): Promise<void> {
     await this.send("PUT", `/projects/${this.encodeProject(project)}/merge_requests/${iid}/rebase`, null);
@@ -401,6 +409,14 @@ export class GitLabClient {
     const data = await this.get<RawIssue[]>(
       `/projects/${id}/issues?state=${state}&per_page=50`
     );
+    return data.map(parseIssue);
+  }
+
+  /** Issues ouvertes ou fermées : celle du numéro donné, sinon celles dont le titre ou la description contient les mots. */
+  async searchIssues(project: string, term: string): Promise<ForgeIssue[]> {
+    const t = term.trim();
+    const filter = /^\d+$/.test(t) ? `iids[]=${t}` : `search=${encodeURIComponent(t)}`;
+    const data = await this.get<RawIssue[]>(`/projects/${this.encodeProject(project)}/issues?${filter}&state=all&per_page=20`);
     return data.map(parseIssue);
   }
 

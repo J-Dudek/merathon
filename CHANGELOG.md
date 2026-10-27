@@ -2,6 +2,13 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.9.0](https://github.com/J-Dudek/merathon/compare/v2.8.0...v2.9.0) (2026-10-27)
+
+### Nouveautés
+
+- ajout modification des PR via l'app (titre et contenu) (8476dd7)
+- ajout de l'auto-complétion de PR/MR et du close de celles-ci. update doc (afffce1)
+
 ## [2.8.0](https://github.com/J-Dudek/merathon/compare/v2.7.2...v2.8.0) (2026-10-21)
 
 ### Nouveautés

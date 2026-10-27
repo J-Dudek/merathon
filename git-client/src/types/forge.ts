@@ -279,6 +279,12 @@ export interface NewPullRequest {
   squash: boolean;
 }
 
+/** Modification d'une PR / MR existante. GitLab : titre sans le préfixe de brouillon, conservé à part. */
+export interface PullRequestEdit {
+  title: string;
+  description: string;
+}
+
 export interface CreatedPullRequest {
   pr: ForgePR;
   /** Étapes secondaires échouées (relecteurs, labels…) : la PR existe quand même. */
