@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.9.1](https://github.com/J-Dudek/merathon/compare/v2.9.0...v2.9.1) (2026-10-28)
+
+### Corrections
+
+- le push rebranche la branche sur sa branche distante réelle (3e3e497)
+
 ## [2.9.0](https://github.com/J-Dudek/merathon/compare/v2.8.0...v2.9.0) (2026-10-27)
 
 ### Nouveautés

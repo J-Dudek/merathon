@@ -110,15 +110,18 @@ pub fn push_branch(
     let refspec = format!("{prefix}refs/heads/{branch}:refs/heads/{branch}");
     push_refspecs(repo, remote_name, &[refspec], creds)?;
 
+    // libgit2 ne met à jour la branche de suivi que si le refspec de fetch la couvre :
+    // on l'aligne nous-mêmes sur le commit poussé.
     let mut local = repo.find_branch(branch, BranchType::Local)?;
-    if local.upstream().is_err() {
-        // La branche de suivi peut ne pas encore exister localement juste après le premier push.
-        let tracking = format!("refs/remotes/{remote_name}/{branch}");
-        if repo.find_reference(&tracking).is_err() {
-            let tip = local.get().target().ok_or_else(|| GitError::Other("branche sans commit".into()))?;
-            repo.reference(&tracking, tip, true, "push: création de la branche de suivi")?;
-        }
-        local.set_upstream(Some(&format!("{remote_name}/{branch}")))?;
+    let tip = local.get().target().ok_or_else(|| GitError::Other("branche sans commit".into()))?;
+    let tracking = format!("{remote_name}/{branch}");
+    repo.reference(&format!("refs/remotes/{tracking}"), tip, true, "push: mise à jour de la branche de suivi")?;
+
+    // Une branche renommée ou créée depuis une autre branche distante suit encore celle-ci :
+    // le push est allé ailleurs, et l'avance resterait affichée tant qu'on ne la rebranche pas.
+    let upstream = local.upstream().ok().and_then(|u| u.name().ok().flatten().map(str::to_string));
+    if upstream.as_deref() != Some(tracking.as_str()) {
+        local.set_upstream(Some(&tracking))?;
     }
     Ok(())
 }
@@ -250,6 +253,26 @@ mod tests {
         let (_root, work, _url) = setup_remote();
         let branch = work.find_branch("master", BranchType::Local).unwrap();
         assert_eq!(branch.upstream().unwrap().name().unwrap(), Some("origin/master"));
+    }
+
+    #[test]
+    fn push_repoints_upstream_with_other_name() {
+        let (_root, work, _url) = setup_remote();
+        let head = work.head().unwrap().peel_to_commit().unwrap();
+        work.branch("feat", &head, false).unwrap();
+        work.set_head("refs/heads/feat").unwrap();
+        // Branche renommée localement : elle suit encore origin/old-feat.
+        work.reference("refs/remotes/origin/old-feat", head.id(), true, "").unwrap();
+        work.find_branch("feat", BranchType::Local).unwrap().set_upstream(Some("origin/old-feat")).unwrap();
+        commit_file(&work, "b.txt", "b\n", "second");
+
+        push_branch(&work, "origin", "feat", false, &no_creds).unwrap();
+
+        let branch = work.find_branch("feat", BranchType::Local).unwrap();
+        let upstream = branch.upstream().unwrap();
+        assert_eq!(upstream.name().unwrap(), Some("origin/feat"));
+        let (ahead, _) = work.graph_ahead_behind(branch.get().target().unwrap(), upstream.get().target().unwrap()).unwrap();
+        assert_eq!(ahead, 0);
     }
 
     #[test]
