@@ -244,6 +244,26 @@ describe("GitLab draft titles", () => {
     expect(send).toHaveBeenLastCalledWith("PUT", "/projects/group%2Fapp/merge_requests/12", { title: "oups", description: "" });
   });
 
+  it("setPeople sends the ids, taking missing ones from the merge request and 0 to clear", async () => {
+    const get = vi.fn().mockResolvedValue({ ...rawMR, reviewers: [{ id: 5, username: "bob" }], assignees: [{ id: 6, username: "ana" }] });
+    const send = vi.fn().mockResolvedValue(null);
+    await new GitLabClient(get as never, send as never).setPeople("group/app", 12, {
+      reviewers: [{ id: 0, username: "bob", name: "bob" }, { id: 9, username: "cleo", name: "Cléo" }],
+      assignees: [],
+    });
+    expect(send).toHaveBeenCalledWith("PUT", "/projects/group%2Fapp/merge_requests/12", { reviewer_ids: [5, 9], assignee_ids: [0] });
+  });
+
+  it("lists branches and changes the target branch", async () => {
+    const get = vi.fn().mockResolvedValue([{ name: "main" }, { name: "develop" }]);
+    const send = vi.fn().mockResolvedValue(null);
+    const gl = new GitLabClient(get as never, send as never);
+    expect(await gl.getBranches("group/app")).toEqual(["main", "develop"]);
+    expect(get).toHaveBeenCalledWith("/projects/group%2Fapp/repository/branches?per_page=100");
+    await gl.setTargetBranch("group/app", 12, "develop");
+    expect(send).toHaveBeenCalledWith("PUT", "/projects/group%2Fapp/merge_requests/12", { target_branch: "develop" });
+  });
+
   it("setDraft rewrites the merge request title", async () => {
     const get = vi.fn().mockResolvedValue({ ...rawMR, title: "Draft: Add feature" });
     const send = vi.fn().mockResolvedValue(null);
@@ -344,7 +364,8 @@ describe("GitLabClient inline review", () => {
       iid, title: `MR ${iid}`, state: "opened", project_id: 9, references: { full: "grp/proj!" + iid }, ...extra,
     });
     const get = vi.fn((path: string) => {
-      if (path.startsWith("/merge_requests?scope=assigned_to_me")) return Promise.resolve([mr(1)]);
+      if (path.startsWith("/merge_requests?scope=assigned_to_me")) return Promise.resolve([mr(1, { sha: "pushed" })]);
+      if (path.startsWith("/events?action=pushed")) return Promise.resolve([{ push_data: { commit_to: "pushed" } }, {}]);
       if (path.startsWith("/merge_requests?scope=all&reviewer_username=me")) return Promise.resolve([mr(1), mr(2)]);
       if (path.startsWith("/merge_requests?scope=created_by_me")) return Promise.resolve([mr(3)]);
       if (path === "/projects/9/merge_requests/3") return Promise.resolve(mr(3, { head_pipeline: { id: 1, status: "failed", web_url: "" }, has_conflicts: false }));
@@ -354,7 +375,7 @@ describe("GitLabClient inline review", () => {
     });
     const mine = await new GitLabClient(get as never).getMyMergeRequests("me");
 
-    expect(mine.assigned.map((m) => [m.projectPath, m.number, m.review])).toEqual([["grp/proj", 1, "pending"], ["grp/proj", 2, "approved"]]);
+    expect(mine.assigned.map((m) => [m.projectPath, m.number, m.review, m.pushedByMe])).toEqual([["grp/proj", 1, "pending", true], ["grp/proj", 2, "approved", false]]);
     expect(mine.authored[0]).toMatchObject({ number: 3, projectPath: "grp/proj", review: "approved", ci: "failure", conflicts: false });
   });
 });

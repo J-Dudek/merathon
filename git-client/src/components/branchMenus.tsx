@@ -4,10 +4,11 @@ import { useRepoStore } from "../store/useRepoStore";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useUiStore, confirmAction, promptText } from "../store/useUiStore";
 import {
-  checkoutBranch, checkoutRemoteBranch, createBranch, deleteBranch, deleteRemoteBranch, fastForward, fastForwardBranch, mergeBranch, pull, push,
+  checkoutBranch, checkoutRemoteBranch, createBranch, deleteBranch, deleteRemoteBranch, fastForward, fastForwardBranch, mergeBranch, pull,
   rebaseOnto, renameBranch, setUpstream,
 } from "../ipc/commands";
 import { reportMerge, runGit } from "../lib/actions";
+import { pushBranch } from "../lib/threadReplies";
 import { ancestorsOf, canFastForward } from "../lib/ancestry";
 import { branchKey } from "../lib/graphFilter";
 import { useGraphFilterStore } from "../store/useGraphFilterStore";
@@ -149,7 +150,7 @@ export function useBranchMenus() {
     entries.push(
       {
         label: b.upstream ? `Push vers ${b.upstream}` : "Push (publier la branche)",
-        action: () => runGit(() => push(path, { branch: b.name }), { busy: "Push…", success: `Push de ${b.name} terminé` }),
+        action: () => pushBranch(path, b.name, { success: `Push de ${b.name} terminé` }),
       },
       ...pullRequestEntries(b),
       "separator",

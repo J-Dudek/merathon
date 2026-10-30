@@ -5,6 +5,16 @@ import type { InteractiveOutcome, MergeResult } from "../types/git";
 export function errorMessage(e: unknown): string {
   if (typeof e === "string") return e;
   if (e instanceof Error) return e.message;
+  // Objet d'erreur sans prototype Error (rejet d'un plugin, réponse brute) : son message plutôt que « [object Object] ».
+  if (e && typeof e === "object") {
+    const message = (e as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+    try {
+      return JSON.stringify(e);
+    } catch {
+      // structure circulaire : repli ci-dessous
+    }
+  }
   return String(e);
 }
 

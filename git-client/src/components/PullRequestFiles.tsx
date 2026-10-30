@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, MessageSquare, RotateCw } from "lucide-react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown, ChevronRight, List, ListTree, MessageSquare, RotateCw, Search } from "lucide-react";
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore } from "../store/useUiStore";
 import { compareRefs, fetchRemote, getCompareFileDiff } from "../ipc/commands";
@@ -7,6 +7,7 @@ import { forgeClient } from "../api/forge";
 import { errorMessage } from "../lib/actions";
 import { indexComments, lineKeys, linePosition } from "../lib/reviewComments";
 import { loadViewed, saveViewed } from "../lib/viewedFiles";
+import { fileTree, visibleFiles, type FileNode } from "../lib/fileTree";
 import type { CommitFile, DiffLine, FileDiff, RefComparison } from "../types/git";
 import type {
   DraftComment, ForgeAccount, ForgeComment, LinePosition, PullRequestDetails, ReviewThread, ReviewVerdict,
@@ -30,6 +31,26 @@ const formatDate = (iso: string) => (iso ? dateFormat.format(new Date(iso)) : ""
 const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
 let draftSeq = 0;
+
+const TREE_KEY = "merathon.prFilesTree";
+
+function loadTreeMode(): boolean {
+  try {
+    return localStorage.getItem(TREE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function saveTreeMode(tree: boolean) {
+  try {
+    localStorage.setItem(TREE_KEY, tree ? "1" : "0");
+  } catch {
+    // stockage indisponible : mode gardé pour la session
+  }
+}
+
+const treePadding = (depth: number) => 8 + depth * 12;
 
 /**
  * Diff d'une PR / MR calculé avec git en local (ancêtre commun de la cible → commit de tête), avec les fils de
@@ -62,6 +83,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
   const [composing, setComposing] = useState<{ position: LinePosition; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [treeMode, setTreeMode] = useState(loadTreeMode);
 
   const prKey = `${account.id}/${projectPath}/${pr.number}`;
   const [viewed, setViewed] = useState<Set<string>>(() => loadViewed(prKey, headSha));
@@ -99,14 +121,16 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
       setSelected((current) => (current && result.files.some((f) => f.path === current) ? current : result.files[0]?.path ?? null));
     } catch (e) {
       setComparison(null);
-      setError(
-        `${errorMessage(e)} — les commits de la branche ${pr.sourceBranch} sont introuvables après un fetch de ${remoteName}. ` +
-          "Une PR venant d'un fork n'est pas récupérée par ce fetch : ouvre-la dans le navigateur.",
-      );
+      // PR / MR fermée : sa branche a le plus souvent été supprimée, ses commits ne sont plus récupérables par un fetch.
+      const after = pr.state === "merged" ? "le merge" : "la fermeture";
+      const cause = pr.state === "open"
+        ? "Une PR venant d'un fork n'est pas récupérée par ce fetch : ouvre-la dans le navigateur."
+        : `La branche ${pr.sourceBranch} a sans doute été supprimée après ${after} : consulte les fichiers dans le navigateur.`;
+      setError(`Les commits de la branche ${pr.sourceBranch} sont introuvables après un fetch de ${remoteName}. ${cause} (${errorMessage(e)})`);
     } finally {
       setLoading(false);
     }
-  }, [repoPath, remoteName, base, head, pr.sourceBranch]);
+  }, [repoPath, remoteName, base, head, pr.sourceBranch, pr.state]);
 
   const loadThreads = useCallback(async () => {
     try {
@@ -157,7 +181,12 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
     }
   }
 
-  const files = comparison?.files ?? [];
+  const files = useMemo(() => comparison?.files ?? [], [comparison]);
+  /** Ordre d'affichage, tous dossiers dépliés : sert à passer au fichier suivant. */
+  const ordered = useMemo(
+    () => (treeMode ? visibleFiles(fileTree(files, (f) => f.path), () => true) : files),
+    [files, treeMode],
+  );
   const selectedFile = files.find((f) => f.path === selected) ?? null;
   // Les positions viennent du diff local : il doit porter sur le commit que la forge connaît.
   const stale = !!comparison && !!headSha && comparison.head !== headSha;
@@ -181,7 +210,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
     else {
       next.add(path);
       // Passe au fichier suivant pas encore vu.
-      const after = files.slice(files.findIndex((f) => f.path === path) + 1).concat(files);
+      const after = ordered.slice(ordered.findIndex((f) => f.path === path) + 1).concat(ordered);
       const nextFile = after.find((f) => !next.has(f.path));
       if (path === selected && nextFile) setSelected(nextFile.path);
     }
@@ -189,11 +218,24 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
     saveViewed(prKey, headSha, next);
   }
 
-  function startComment(line: DiffLine) {
+  // Rappels stables pour la liste mémoïsée : la dernière version de toggleViewed est lue au moment du clic.
+  const toggleViewedRef = useRef(toggleViewed);
+  useLayoutEffect(() => {
+    toggleViewedRef.current = toggleViewed;
+  });
+  const onToggleViewed = useCallback((path: string) => toggleViewedRef.current(path), []);
+
+  const toggleTreeMode = useCallback(() => {
+    setTreeMode(!treeMode);
+    saveTreeMode(!treeMode);
+  }, [treeMode]);
+
+  // Stable tant que le fichier affiché ne change pas : les lignes du diff mémoïsées ne sont pas re-rendues.
+  const startComment = useCallback((line: DiffLine) => {
     if (!selectedFile) return;
     const position = linePosition(line, selectedFile.path, selectedFile.old_path);
     if (position) setComposing({ position, text: "" });
-  }
+  }, [selectedFile]);
 
   function addDraft() {
     if (!composing?.text.trim()) return;
@@ -328,20 +370,16 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
       {threadsError && <p className="px-4 py-1 text-xs text-amber-300 break-words">Commentaires de ligne indisponibles : {threadsError}</p>}
       {comparison && (
         <div className="flex flex-1 min-h-0">
-          <ul className="w-64 shrink-0 overflow-y-auto border-r border-overlay/10 py-1">
-            {files.length === 0 && <li className="px-3 py-1 text-xs text-[var(--color-muted)] italic">Aucun fichier modifié</li>}
-            {files.map((f) => (
-              <FileRow
-                key={f.path}
-                file={f}
-                selected={selected === f.path}
-                viewed={viewed.has(f.path)}
-                comments={commentCount.get(f.path) ?? 0}
-                onSelect={() => setSelected(f.path)}
-                onToggleViewed={() => toggleViewed(f.path)}
-              />
-            ))}
-          </ul>
+          <FileList
+            files={files}
+            treeMode={treeMode}
+            onToggleTreeMode={toggleTreeMode}
+            selected={selected}
+            viewed={viewed}
+            commentCount={commentCount}
+            onSelect={setSelected}
+            onToggleViewed={onToggleViewed}
+          />
           <div className="flex-1 min-w-0 flex flex-col">
             {selectedFile && (
               <div className="flex items-center gap-2 px-3 py-1 border-b border-overlay/5 text-[11px]">
@@ -369,7 +407,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
               </div>
             )}
             <div className="flex-1 min-h-0">
-              <DiffViewer diff={diff} loading={diffLoading} annotations={annotations} />
+              <DiffViewer diff={diff} loading={diffLoading} annotations={annotations} searchable />
             </div>
           </div>
         </div>
@@ -378,36 +416,172 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
   );
 }
 
-function FileRow({ file, selected, viewed, comments, onSelect, onToggleViewed }: {
+/**
+ * Colonne des fichiers : recherche sur le chemin, liste ou arborescence. La recherche et les dossiers repliés vivent ici :
+ * taper dans le champ ne re-rend pas le diff.
+ */
+const FileList = memo(function FileList({ files, treeMode, onToggleTreeMode, selected, viewed, commentCount, onSelect, onToggleViewed }: {
+  files: CommitFile[];
+  treeMode: boolean;
+  onToggleTreeMode: () => void;
+  selected: string | null;
+  viewed: Set<string>;
+  commentCount: Map<string, number>;
+  onSelect: (path: string) => void;
+  onToggleViewed: (path: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  /** Dossiers repliés de l'arborescence. */
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const q = query.trim().toLowerCase();
+  const shownFiles = q ? files.filter((f) => f.path.toLowerCase().includes(q)) : files;
+  // Pendant une recherche, tous les dossiers sont dépliés pour montrer chaque résultat.
+  const isOpen = (path: string) => !!q || !collapsed.has(path);
+
+  function toggleFolder(path: string) {
+    const next = new Set(collapsed);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    setCollapsed(next);
+  }
+
+  const row = (f: CommitFile, depth?: number) => (
+    <FileRow
+      key={f.path}
+      file={f}
+      depth={depth}
+      selected={selected === f.path}
+      viewed={viewed.has(f.path)}
+      comments={commentCount.get(f.path) ?? 0}
+      onSelect={onSelect}
+      onToggleViewed={onToggleViewed}
+    />
+  );
+
+  return (
+      <div className="w-64 shrink-0 flex flex-col border-r border-overlay/10">
+        <div className="flex items-center gap-1 p-1.5 border-b border-overlay/5">
+          <div className="relative flex-1 min-w-0">
+            <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--color-muted)] pointer-events-none" aria-hidden />
+            <input
+              type="search"
+              className={`${inputClass} pl-6! py-1!`}
+              placeholder="Rechercher un fichier…"
+              {...fieldLabel("Rechercher un fichier")}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                // Échap vide la recherche avant de fermer la fenêtre.
+                if (e.key === "Escape" && query) {
+                  e.stopPropagation();
+                  setQuery("");
+                }
+              }}
+            />
+          </div>
+          <button
+            className="w-6 h-6 shrink-0 inline-flex items-center justify-center rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
+            onClick={onToggleTreeMode}
+            aria-label={treeMode ? "Afficher en liste" : "Afficher en arborescence"}
+            title={treeMode ? "Afficher en liste" : "Afficher en arborescence"}
+          >
+            {treeMode ? <List size={12} /> : <ListTree size={12} />}
+          </button>
+        </div>
+        <ul className="flex-1 overflow-y-auto py-1">
+          {files.length === 0 && <li className="px-3 py-1 text-xs text-[var(--color-muted)] italic">Aucun fichier modifié</li>}
+          {files.length > 0 && shownFiles.length === 0 && (
+            <li className="px-3 py-1 text-xs text-[var(--color-muted)] italic">Aucun fichier ne correspond</li>
+          )}
+          {treeMode
+            ? <FileTree nodes={fileTree(shownFiles, (f) => f.path)} depth={0} isOpen={isOpen} onToggle={toggleFolder} viewed={viewed} row={row} />
+            : shownFiles.map((f) => row(f))}
+        </ul>
+      </div>
+  );
+});
+
+/** Dossiers pliables ; chaque dossier indique combien de ses fichiers ont été vus. */
+function FileTree({ nodes, depth, isOpen, onToggle, viewed, row }: {
+  nodes: FileNode<CommitFile>[];
+  depth: number;
+  isOpen: (path: string) => boolean;
+  onToggle: (path: string) => void;
+  viewed: Set<string>;
+  row: (f: CommitFile, depth: number) => React.ReactNode;
+}) {
+  return nodes.map((node) => {
+    if (node.kind === "file") return row(node.item, depth);
+    const open = isOpen(node.path);
+    const seen = node.files.filter((f) => viewed.has(f.path)).length;
+    const Chevron = open ? ChevronDown : ChevronRight;
+    return (
+      <li key={`folder:${node.path}`}>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => onToggle(node.path)}
+          title={node.path}
+          className="w-full flex items-center gap-1 pr-2 py-[3px] text-left hover:bg-overlay/5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
+          style={{ paddingLeft: treePadding(depth) }}
+        >
+          <Chevron size={11} className="w-3 shrink-0 text-[var(--color-muted)]" />
+          <span className="flex-1 truncate text-[11px] font-mono text-[var(--color-muted)]">
+            <span className="sr-only">Dossier </span>
+            {node.name}
+          </span>
+          <span className="shrink-0 text-[10px] text-[var(--color-muted)]">
+            {seen}/{node.files.length}<span className="sr-only"> vus</span>
+          </span>
+        </button>
+        {open && (
+          <ul>
+            <FileTree nodes={node.children} depth={depth + 1} isOpen={isOpen} onToggle={onToggle} viewed={viewed} row={row} />
+          </ul>
+        )}
+      </li>
+    );
+  });
+}
+
+/** Ligne d'un fichier ; avec `depth` (arborescence), en retrait, sinon avec son dossier. */
+const FileRow = memo(function FileRow({ file, depth, selected, viewed, comments, onSelect, onToggleViewed }: {
   file: CommitFile;
+  depth?: number;
   selected: boolean;
   viewed: boolean;
   comments: number;
-  onSelect: () => void;
-  onToggleViewed: () => void;
+  onSelect: (path: string) => void;
+  onToggleViewed: (path: string) => void;
 }) {
   const status = STATUS_LETTERS[file.status];
+  const slash = file.path.lastIndexOf("/");
+  const dir = depth === undefined && slash > 0 ? file.path.slice(0, slash) : "";
   return (
     <li>
       <div
-        className={`flex items-center gap-2 px-2 py-[3px] text-xs ${selected ? "bg-[var(--color-accent)]/20" : "hover:bg-overlay/5"}`}
+        className={`flex items-center gap-2 pr-2 py-[3px] text-xs ${selected ? "bg-[var(--color-accent)]/20" : "hover:bg-overlay/5"}`}
+        style={{ paddingLeft: depth === undefined ? 8 : treePadding(depth) + 16 }}
         title={file.old_path ? `${file.old_path} → ${file.path}` : file.path}
       >
         <input
           type="checkbox"
           checked={viewed}
-          onChange={onToggleViewed}
+          onChange={() => onToggleViewed(file.path)}
           aria-label={`Marquer ${file.path} comme vu`}
         />
         {/* Fichier vu : nom en gris (sans transparence, qui ferait chuter le contraste) et case cochée. */}
         <button
           type="button"
           aria-current={selected ? "true" : undefined}
-          onClick={onSelect}
+          onClick={() => onSelect(file.path)}
           className="flex-1 min-w-0 flex items-center gap-2 text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60 rounded"
         >
           <span className={`w-3 shrink-0 font-mono font-bold ${status.color}`} aria-hidden>{status.letter}</span>
-          <span className={`truncate flex-1 ${viewed ? "text-[var(--color-muted)]" : "text-[var(--color-text)]"}`}>{file.path.split("/").pop()}</span>
+          <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
+            <span className={`truncate shrink-0 max-w-full ${viewed ? "text-[var(--color-muted)]" : "text-[var(--color-text)]"}`}>{file.path.slice(slash + 1)}</span>
+            {dir && <span className="truncate text-[10px] font-mono text-[var(--color-muted)]">{dir}</span>}
+          </span>
           <span className="sr-only">, {status.label}{viewed ? ", vu" : ""}, </span>
           {comments > 0 && (
             <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-[var(--color-muted)]">
@@ -422,7 +596,7 @@ function FileRow({ file, selected, viewed, comments, onSelect, onToggleViewed }:
       </div>
     </li>
   );
-}
+});
 
 function CommentBody({ comment }: { comment: ForgeComment }) {
   return (

@@ -1,6 +1,6 @@
 import type {
   CreatedPullRequest, ForgeCheck, ForgeComment, ForgeIssue, ForgeLabel, ForgeMilestone, ForgePR, ForgeRepo, ForgeUser,
-  LinePosition, MergeMethod, MergeOptions, MyPullRequests, NewPullRequest, PrSummary, PrTemplate, PrTemplates, PullRequestDetails, PullRequestEdit, PullRequestOptions, PullRequestState,
+  LinePosition, MergeMethod, MergeOptions, MyPullRequests, NewPullRequest, PrSummary, PrTemplate, PrTemplates, PullRequestDetails, PullRequestEdit, PullRequestOptions, PullRequestPeople, PullRequestState,
   ReviewContext, ReviewEvent, ReviewSubmission, ReviewThread, SubmittedReview,
 } from "../types/forge";
 import { PR_PAGE_SIZE } from "../types/forge";
@@ -132,7 +132,7 @@ interface RawSearchPullRequest {
   reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
   latestOpinionatedReviews: { nodes: { state: string }[] };
   mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
-  commits: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] };
+  commits: { nodes: { commit: { statusCheckRollup: { state: string } | null; committer?: { user: { login: string } | null } | null } }[] };
 }
 
 const SEARCH_FIELDS = `
@@ -146,10 +146,11 @@ const SEARCH_FIELDS = `
     reviewDecision
     latestOpinionatedReviews(first: 20) { nodes { state } }
     mergeable
-    commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+    commits(last: 1) { nodes { commit { statusCheckRollup { state } committer { user { login } } } } }
   }`;
 
 const MY_PRS_QUERY = `query($assigned: String!, $reviewing: String!, $authored: String!) {
+  viewer { login }
   assigned: search(query: $assigned, type: ISSUE, first: ${PR_PAGE_SIZE}) { nodes { ${SEARCH_FIELDS} } }
   reviewing: search(query: $reviewing, type: ISSUE, first: ${PR_PAGE_SIZE}) { nodes { ${SEARCH_FIELDS} } }
   authored: search(query: $authored, type: ISSUE, first: ${PR_PAGE_SIZE}) { nodes { ${SEARCH_FIELDS} } }
@@ -230,12 +231,12 @@ export class GitHubClient {
   async getMyPullRequests(): Promise<MyPullRequests> {
     const open = "is:pr is:open archived:false";
     type Result = { nodes: RawSearchPullRequest[] };
-    const data = await this.graphql<{ assigned: Result; reviewing: Result; authored: Result }>(MY_PRS_QUERY, {
+    const data = await this.graphql<{ viewer?: { login: string }; assigned: Result; reviewing: Result; authored: Result }>(MY_PRS_QUERY, {
       assigned: `${open} assignee:@me`,
       reviewing: `${open} review-requested:@me`,
       authored: `${open} author:@me`,
     });
-    const parse = (r: Result) => r.nodes.filter((n) => n.number !== undefined).map(parseSearchPR);
+    const parse = (r: Result) => r.nodes.filter((n) => n.number !== undefined).map((n) => parseSearchPR(n, data.viewer?.login));
     return { assigned: uniquePrs([...parse(data.assigned), ...parse(data.reviewing)]), authored: parse(data.authored) };
   }
 
@@ -370,6 +371,56 @@ export class GitHubClient {
     await this.send("PATCH", `/repos/${seg(owner)}/${seg(repo)}/pulls/${number}`, { title: edit.title, body: edit.description });
   }
 
+  /**
+   * Remplace assignés et relecteurs demandés. Retirer un relecteur passe par GraphQL : l'API REST l'exige en DELETE,
+   * méthode refusée par le backend. Les équipes déjà demandées sont conservées.
+   */
+  async setPeople(owner: string, repo: string, number: number, people: PullRequestPeople): Promise<void> {
+    const base = `/repos/${seg(owner)}/${seg(repo)}`;
+    const raw = await this.get<RawPullRequest>(`${base}/pulls/${number}`);
+    const assignees = people.assignees.map((u) => u.username);
+    if (!sameSet(assignees, (raw.assignees ?? []).map((u) => u.login))) {
+      await this.send("PATCH", `${base}/issues/${number}`, { assignees });
+    }
+    const reviewers = people.reviewers.map((u) => u.username);
+    const requested = (raw.requested_reviewers ?? []).map((u) => u.login);
+    if (sameSet(reviewers, requested)) return;
+    if (requested.every((login) => reviewers.includes(login))) {
+      await this.send("POST", `${base}/pulls/${number}/requested_reviewers`, {
+        reviewers: reviewers.filter((login) => !requested.includes(login)),
+      });
+      return;
+    }
+    const logins = Object.fromEntries(reviewers.map((login, i) => [`u${i}`, login]));
+    const declarations = reviewers.map((_, i) => `, $u${i}: String!`).join("");
+    const users = reviewers.map((_, i) => `u${i}: user(login: $u${i}) { id }`).join(" ");
+    const data = await this.graphql<Record<string, { id: string } | null> & {
+      repository: { pullRequest: { id: string; reviewRequests: { nodes: { requestedReviewer: { id?: string } | null }[] } } | null } | null;
+    }>(
+      `query($owner: String!, $repo: String!, $number: Int!${declarations}) {
+        repository(owner: $owner, name: $repo) {
+          pullRequest(number: $number) { id reviewRequests(first: 100) { nodes { requestedReviewer { ... on Team { id } } } } }
+        }
+        ${users}
+      }`,
+      { owner, repo, number, ...logins },
+    );
+    const pull = data.repository?.pullRequest;
+    if (!pull) throw new Error(`Pull request #${number} introuvable`);
+    const userIds = reviewers.map((login, i) => {
+      const id = data[`u${i}`]?.id;
+      if (!id) throw new Error(`Utilisateur GitHub introuvable : ${login}`);
+      return id;
+    });
+    const teamIds = pull.reviewRequests.nodes.flatMap((n) => (n.requestedReviewer?.id ? [n.requestedReviewer.id] : []));
+    await this.graphql(
+      `mutation($id: ID!, $users: [ID!], $teams: [ID!]) {
+        requestReviews(input: { pullRequestId: $id, userIds: $users, teamIds: $teams, union: false }) { clientMutationId }
+      }`,
+      { id: pull.id, users: userIds, teams: teamIds },
+    );
+  }
+
   /** Brouillon ↔ prête : uniquement disponible en GraphQL. */
   async setDraft(owner: string, repo: string, number: number, draft: boolean): Promise<void> {
     const raw = await this.get<RawPullRequest>(`/repos/${seg(owner)}/${seg(repo)}/pulls/${number}`);
@@ -438,6 +489,15 @@ export class GitHubClient {
   /** Merge la branche cible dans la branche de la PR, côté GitHub. */
   async updateBranch(owner: string, repo: string, number: number, sha: string): Promise<void> {
     await this.send("PUT", `/repos/${seg(owner)}/${seg(repo)}/pulls/${number}/update-branch`, { expected_head_sha: sha });
+  }
+
+  async getBranches(owner: string, repo: string): Promise<string[]> {
+    const branches = await this.get<{ name: string }[]>(`/repos/${seg(owner)}/${seg(repo)}/branches?per_page=100`);
+    return branches.map((b) => b.name);
+  }
+
+  async setTargetBranch(owner: string, repo: string, number: number, branch: string): Promise<void> {
+    await this.send("PATCH", `/repos/${seg(owner)}/${seg(repo)}/pulls/${number}`, { base: branch });
   }
 
   async getIssues(owner: string, repo: string, state: "open" | "closed" | "all" = "open"): Promise<ForgeIssue[]> {
@@ -559,6 +619,8 @@ interface RawContentEntry {
 }
 
 /** Contenu base64 de l'API (découpé en lignes) vers du texte UTF-8. */
+const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+
 export function decodeBase64(content: string): string {
   const binary = atob(content.replace(/\s/g, ""));
   return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
@@ -576,8 +638,11 @@ function reviewState(raw: RawReviewState): PrSummary["review"] {
   return "pending";
 }
 
-function parseSearchPR(raw: RawSearchPullRequest): PrSummary {
-  const rollup = raw.commits.nodes[0]?.commit.statusCheckRollup;
+/** `me` : login connecté ; GitHub ne dit pas qui a poussé, le committer du dernier commit en tient lieu. */
+function parseSearchPR(raw: RawSearchPullRequest, me?: string): PrSummary {
+  const head = raw.commits.nodes[0]?.commit;
+  const rollup = head?.statusCheckRollup;
+  const committer = head?.committer?.user?.login;
   return {
     number: raw.number!,
     title: raw.title,
@@ -597,6 +662,7 @@ function parseSearchPR(raw: RawSearchPullRequest): PrSummary {
     review: reviewState(raw),
     ci: rollup ? CI_STATES[rollup.state] ?? null : null,
     conflicts: raw.mergeable === "CONFLICTING",
+    pushedByMe: !!me && committer === me,
   };
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, List, ListTree, Minus, Plus, Undo2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, List, ListTree, MessageSquare, Minus, Plus, Undo2, X } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useRepoStore, type CenterView, type CommitDraft } from "../store/useRepoStore";
 import { useUiStore, confirmAction } from "../store/useUiStore";
@@ -16,6 +16,10 @@ import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type M
 import type { FileStatus, InteractiveStop, RepoState } from "../types/git";
 import { fieldLabel } from "../lib/fieldLabel";
 import { RebaseTimeline } from "./RebaseTimeline";
+import { branchOnRemote, pullRequestsByBranch } from "../lib/branches";
+import { appendThreadTrailers, draftFromMessage, type ThreadLinks } from "../lib/threadTrailers";
+import { useCachedOpenPullRequests, useLinkedForge } from "./PullRequestList";
+import { ReviewThreadPicker } from "./ReviewThreadPicker";
 
 const STATE_LABELS: Record<Exclude<RepoState, "clean">, string> = {
   merge: "Merge en cours",
@@ -82,9 +86,18 @@ export function StagingPanel() {
   const notify = useUiStore((s) => s.notify);
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
-  const { summary, description, amend } = useRepoStore((s) => s.commitDraft);
+  const { summary, description, amend, threads } = useRepoStore((s) => s.commitDraft);
   const setCommitDraft = useRepoStore((s) => s.setCommitDraft);
   const [committing, setCommitting] = useState(false);
+  const [pickingThreads, setPickingThreads] = useState(false);
+  const branches = useRepoStore((s) => s.branches);
+  const forge = useLinkedForge();
+  const openPrs = useCachedOpenPullRequests(forge);
+  const headBranch = branches.find((b) => b.is_head && !b.is_remote);
+  const remoteBranch = forge && headBranch ? branchOnRemote(headBranch, forge.remoteName) : null;
+  /** PR ouverte de la branche courante : ses fils de revue peuvent être liés au commit. */
+  const pullRequest = remoteBranch ? pullRequestsByBranch(openPrs).get(remoteBranch)?.[0] : undefined;
+  const prSign = forge?.account.provider === "github" ? "#" : "!";
   const [treeMode, setTreeMode] = useState(loadTreeMode);
   /** Dossiers repliés, « section:chemin ». */
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -106,6 +119,7 @@ export function StagingPanel() {
   const setSummary = (summary: string) => updateDraft({ summary });
   const setDescription = (description: string) => updateDraft({ description });
   const setAmend = (amend: boolean) => updateDraft({ amend });
+  const setThreads = (threads: ThreadLinks) => updateDraft({ threads });
 
   // Message préparé par git (merge, cherry-pick, revert) : on pré-remplit le formulaire,
   // sans écraser un message déjà saisi (retour sur l'onglet).
@@ -310,7 +324,7 @@ export function StagingPanel() {
     if (!checked || !info?.head_hash || summary.trim()) return;
     try {
       const details = await getCommitDetails(path, info.head_hash);
-      updateDraft({ summary: details.summary, description: details.message.slice(details.summary.length).trim() });
+      updateDraft(draftFromMessage(details.message));
     } catch (e) {
       notify("error", errorMessage(e));
     }
@@ -322,13 +336,14 @@ export function StagingPanel() {
   async function handleCommit() {
     if (!canCommit) return;
     setCommitting(true);
-    const message = description.trim() ? `${summary.trim()}\n\n${description.trim()}` : summary.trim();
+    const text = description.trim() ? `${summary.trim()}\n\n${description.trim()}` : summary.trim();
+    const message = appendThreadTrailers(text, threads);
     const hash = await runGit(() => createCommit(path, message, amend), {
       success: amend ? "Commit modifié" : undefined,
     });
     setCommitting(false);
     if (hash) {
-      updateDraft({ summary: "", description: "", amend: false });
+      updateDraft({ summary: "", description: "", amend: false, threads: {} });
       if (center.kind !== "graph") setCenter({ kind: "graph" });
     }
   }
@@ -373,7 +388,7 @@ export function StagingPanel() {
               <SmallBtn danger onClick={async () => {
                 if (await confirmAction("Tout annuler ?", "La copie de travail revient à l'état du dernier commit.", true)) {
                   await runGit(() => abortMerge(path), { success: "Opération annulée" });
-                  updateDraft({ summary: "", description: "" });
+                  updateDraft({ summary: "", description: "", threads: {} });
                 }
               }}>
                 Annuler l'opération
@@ -513,6 +528,12 @@ export function StagingPanel() {
           onChange={(e) => setDescription(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && handleCommit()}
         />
+        <ThreadLinksRow
+          threads={threads}
+          prRef={pullRequest ? `${prSign}${pullRequest.number}` : null}
+          onPick={() => setPickingThreads(true)}
+          onClear={() => setThreads({})}
+        />
         <label className="flex items-center gap-2 text-[11px] text-[var(--color-muted)] cursor-pointer">
           <input
             type="checkbox"
@@ -533,6 +554,43 @@ export function StagingPanel() {
       </div>
 
       {menu && <ContextMenu menu={menu} onClose={closeMenu} />}
+      {pickingThreads && forge && pullRequest && (
+        <ReviewThreadPicker forge={forge} pr={pullRequest} value={threads} onChange={setThreads} onClose={() => setPickingThreads(false)} />
+      )}
+    </div>
+  );
+}
+
+/** Fils de revue liés au brouillon ; rien tant que la branche n'a pas de PR ouverte et qu'aucun fil n'est lié. */
+function ThreadLinksRow({ threads, prRef, onPick, onClear }: {
+  threads: ThreadLinks;
+  /** « #12 » / « !12 » : PR ouverte de la branche courante. */
+  prRef: string | null;
+  onPick: () => void;
+  onClear: () => void;
+}) {
+  const actions = Object.values(threads);
+  if (!prRef && !actions.length) return null;
+  const resolve = actions.filter((a) => a === "resolve").length;
+  const parts = [
+    ...(resolve ? [`${resolve} à résoudre`] : []),
+    ...(actions.length - resolve ? [`${actions.length - resolve} à répondre`] : []),
+  ];
+  return (
+    <div className="flex items-center gap-2 text-[11px] text-[var(--color-muted)]">
+      <MessageSquare size={12} aria-hidden className="shrink-0" />
+      {prRef ? (
+        <button className="hover:text-[var(--color-text)] underline-offset-2 hover:underline" onClick={onPick}>
+          {actions.length ? `Fils de revue ${prRef} : ${parts.join(", ")}` : `Lier des fils de revue ${prRef}…`}
+        </button>
+      ) : (
+        <span>Fils de revue : {parts.join(", ")} (aucune PR ouverte pour cette branche)</span>
+      )}
+      {actions.length > 0 && (
+        <button className="ml-auto hover:text-[var(--color-text)]" title="Ne plus lier de fil de revue" aria-label="Ne plus lier de fil de revue" onClick={onClear}>
+          <X size={12} />
+        </button>
+      )}
     </div>
   );
 }

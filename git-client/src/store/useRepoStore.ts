@@ -5,6 +5,7 @@ import type {
 import {
   getBranches, getCommits, getRepoInfo, getStatus, getTags, lfsStatus, listRemotes, listStashes, listSubmodules, openRepository,
 } from "../ipc/commands";
+import type { ThreadLinks } from "../lib/threadTrailers";
 
 /** Deux commits comparés (`base` le plus ancien), affichés à la place du détail d'un commit. */
 export interface Comparison {
@@ -47,6 +48,8 @@ export interface CommitDraft {
   summary: string;
   description: string;
   amend: boolean;
+  /** Fils de revue traités par le commit, écrits en trailers à la fin du message. */
+  threads: ThreadLinks;
 }
 
 interface RepoStore {
@@ -106,7 +109,7 @@ export const emptyRepo: RepoState = {
   comparison: null,
   searchQuery: "",
   center: { kind: "graph" },
-  commitDraft: { summary: "", description: "", amend: false },
+  commitDraft: { summary: "", description: "", amend: false, threads: {} },
 };
 
 export const useRepoStore = create<RepoStore>((set, get) => ({

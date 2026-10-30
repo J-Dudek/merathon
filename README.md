@@ -89,6 +89,7 @@ Avec un compte GitHub ou GitLab correspondant à un remote du dépôt, les PR (G
 - **Retard sur la branche cible** (dépôt ouvert localement) : à l'ouverture d'une PR, le remote est fetché et le panneau indique si la branche est à jour ou en retard de N commits sur sa cible. **Rebaser sur …** rejoue ses commits au-dessus de la cible, en mémoire : ni la copie de travail ni les branches locales ne bougent. L'historique obtenu est linéaire, sans commits de merge, et les commits déjà présents dans la cible sont retirés, comme avec `git rebase`. En cas de conflit, rien n'est modifié et le panneau propose de faire un checkout de la branche pour rebaser à la main. Sinon, **Force push** remplace la branche distante, avec la sécurité de `git push --force-with-lease` : le push est annulé si quelqu'un a poussé entre-temps. La branche locale du même nom suit si elle était à l'ancienne tête. Indisponible pour une PR venant d'un fork.
 - **Fichiers modifiés** : diff de la PR calculé en local avec git, depuis l'ancêtre commun avec la branche cible (un fetch est lancé si des commits manquent). Les commentaires de ligne de la forge s'affichent sous leurs lignes, avec réponse et résolution des fils.
 - **Revue** : survoler une ligne puis **+** pour la commenter, tout de suite ou en attente. **Terminer la revue** publie les commentaires en attente avec un commentaire général et un avis (commentaire, approbation, demande de changements sur GitHub). Sur GitHub, la revue est publiée en une seule fois ; sur GitLab, commentaire par commentaire, ceux qui échouent restant en attente.
+- **Fils traités par un commit** : quand la branche courante a une PR ouverte, **Lier des fils de revue…** sous le message de commit liste ses commentaires de ligne. Pour chaque fil, on choisit **Répondre** ou **Répondre et résoudre**. Le choix est écrit en trailer à la fin du message (`Resolves-Thread: <id>` ou `Addresses-Thread: <id>`). Après un push depuis Merathon, chaque fil cité par les commits poussés reçoit une réponse « Traité dans `<sha>` » (la forge en fait un lien vers le commit), puis est résolu si demandé. Il n'y a qu'une réponse par fil, même après un rebase et un nouveau push. Les trailers sont conservés par un amend et regroupés à la fin du message par un squash.
 - **Fichiers vus** : chaque fichier se coche « vu » au fil de la relecture (passage automatique au suivant), avec un compteur. Ce suivi est mémorisé localement et repart de zéro au push suivant.
 
 Limites : les PR venant d'un fork ne sont pas récupérées par le fetch du remote (leur diff est alors à consulter dans le navigateur), et la liste est limitée aux 50 PR les plus récentes (50 par catégorie dans l'onglet **Comptes**), les fils de commentaires aux 100 premiers. Sur GitHub, un avis de relecture sans commentaire de ligne compte comme `activité`, pas comme commentaire.
@@ -246,9 +247,9 @@ Les installeurs sont générés dans `git-client/src-tauri/target/release/bundle
 
 ## Intégration continue et releases
 
-- **À chaque push** (toutes branches) et sur les pull requests : tests Rust et frontend, lint, audit des dépendances (`.github/workflows/ci.yml`).
+- **Sur les pull requests** : tests Rust et frontend sous Linux, lint, audit des dépendances (`.github/workflows/ci.yml`). Un nouveau push annule les tests du précédent, et une PR qui ne modifie que de la documentation (`*.md`, `docs/`) ne les lance pas. Les tests sous Windows tournent au merge, avec la release.
 - **À chaque merge sur `main`** (`.github/workflows/release.yml`) :
-  1. les mêmes tests et, **en parallèle**, le calcul de la prochaine version et la génération des paquets ;
+  1. les mêmes tests, sous Linux et Windows, et, **en parallèle**, le calcul de la prochaine version et la génération des paquets ;
   2. calcul de la version d'après les messages de commit depuis le dernier tag ([Conventional Commits](https://www.conventionalcommits.org)) :
      - `feat!:` ou `BREAKING CHANGE:` → version majeure,
      - `feat:` → version mineure,
@@ -282,8 +283,8 @@ git-client/
 │   ├── store/           # État global (Zustand) : dépôt affiché, onglets, journal, réglages, PR lues…
 │   ├── ipc/commands.ts  # Appels aux commandes Tauri (et inscription au journal)
 │   ├── lib/             # Actions git, synchronisation périodique, état des PR, terminaux (xterm.js),
-│   │                    # commandes du journal, plan de squash, commentaires de revue, fichiers vus,
-│   │                    # motifs .gitignore, contenu du mémo git…
+│   │                    # commandes du journal, plan de squash, commentaires de revue, fils liés aux commits,
+│   │                    # fichiers vus, motifs .gitignore, contenu du mémo git…
 │   └── api/             # Clients GitHub / GitLab (PR / MR, revues, CI, modèles) et interface commune
 └── src-tauri/           # Backend Rust
     └── src/

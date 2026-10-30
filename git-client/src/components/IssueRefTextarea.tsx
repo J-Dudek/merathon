@@ -12,7 +12,7 @@ const POPUP_WIDTH = 360;
  * Zone de texte Markdown où « # » propose les issues du projet : celles déjà chargées, filtrées sur place, complétées
  * par une recherche sur la forge. Entrée insère `#12`, Maj+Entrée `Closes #12` (issue fermée au merge).
  */
-export function IssueRefTextarea({ value, onChange, issues, search, label, className, placeholder }: {
+export function IssueRefTextarea({ value, onChange, issues, search, label, className, wrapperClassName, placeholder }: {
   value: string;
   onChange: (value: string) => void;
   issues: ForgeIssue[];
@@ -20,6 +20,8 @@ export function IssueRefTextarea({ value, onChange, issues, search, label, class
   search?: (term: string) => Promise<ForgeIssue[]>;
   label: string;
   className?: string;
+  /** Classes du conteneur, par exemple pour que la zone de texte occupe la hauteur disponible. */
+  wrapperClassName?: string;
   placeholder?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -98,7 +100,7 @@ export function IssueRefTextarea({ value, onChange, issues, search, label, class
   }
 
   return (
-    <div className="relative">
+    <div className={`relative ${wrapperClassName ?? ""}`}>
       <textarea
         ref={ref}
         aria-label={label}

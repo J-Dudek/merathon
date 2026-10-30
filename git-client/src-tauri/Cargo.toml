@@ -1,6 +1,6 @@
 [package]
 name = "merathon"
-version = "2.9.1"
+version = "2.10.0"
 description = "Merathon — Git Repository Manager : client Git graphique de bureau"
 authors = ["Julien Dudek"]
 license = "MIT"

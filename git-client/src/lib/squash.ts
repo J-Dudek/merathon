@@ -1,5 +1,6 @@
 import type { RebaseMode, RebaseStep } from "../ipc/commands";
 import type { TodoCommit } from "../types/git";
+import { appendThreadTrailers, extractThreadTrailers, mergeThreadLinks } from "./threadTrailers";
 
 export interface SquashPlan {
   steps: RebaseStep[];
@@ -23,11 +24,12 @@ export function squashPlan(todo: TodoCommit[], selected: string[], message: stri
 
   const [target, ...rest] = commits;
   const last = rest[rest.length - 1];
+  const final = squashMessage(commits, message);
   // Chaque squash remplace le message du commit cumulé : le dernier porte le message final.
   const squash = (c: TodoCommit): RebaseStep => ({
     hash: c.hash,
     action: "squash",
-    message: c === last && message.trim() ? message.trim() : null,
+    message: c === last ? final : null,
   });
   const pick = (c: TodoCommit): RebaseStep => ({ hash: c.hash, action: "pick", message: null });
 
@@ -46,4 +48,19 @@ export function squashPlan(todo: TodoCommit[], selected: string[], message: stri
     else if (!wanted.has(c.hash)) steps.push(pick(c));
   }
   return { mode: "linear", commits, steps };
+}
+
+/**
+ * Message du commit squashé, null pour garder les messages concaténés.
+ * Git ne lit les trailers que dans le dernier paragraphe : les fils de revue de tous les commits y sont regroupés,
+ * sinon la concaténation (ou un nouveau message) les ferait perdre.
+ */
+function squashMessage(commits: TodoCommit[], message: string): string | null {
+  const parts = commits.map((c) => extractThreadTrailers(c.message));
+  const typed = extractThreadTrailers(message);
+  const links = mergeThreadLinks(...parts.map((p) => p.links), typed.links);
+  if (!Object.keys(links).length) return message.trim() || null;
+  // Même concaténation que le backend pour un message vide.
+  const text = typed.text || parts.map((p) => p.text).join("\n\n");
+  return appendThreadTrailers(text, links);
 }

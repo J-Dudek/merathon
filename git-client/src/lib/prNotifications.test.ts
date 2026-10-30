@@ -27,6 +27,11 @@ describe("pullRequestEvents", () => {
     expect(pullRequestEvents(lists([], [pr(1)]), after)[0].kinds).toEqual(["ci_success"]);
   });
 
+  it("ne signale pas un push de ma part sur une PR à traiter", () => {
+    const after = lists([pr(1, { headSha: "h2", pushedByMe: true })]);
+    expect(pullRequestEvents(lists([pr(1)]), after)).toEqual([]);
+  });
+
   it("signale une activité quand le nombre de commentaires est inconnu et que rien d'autre n'explique le changement", () => {
     const after = lists([pr(1, { updatedAt: "2026-01-02T00:00:00Z" })]);
     expect(pullRequestEvents(lists([pr(1)]), after)[0].kinds).toEqual(["activity"]);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PullRequestBranchSync } from "./PullRequestBranchSync";
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore } from "../store/useUiStore";
@@ -11,6 +11,7 @@ const ipc = vi.hoisted(() => ({
   rebasePullRequest: vi.fn(),
   discardPullRequestRebase: vi.fn(),
   forcePushPullRequest: vi.fn(),
+  commitTrailers: vi.fn(),
 }));
 vi.mock("../ipc/commands", () => ipc);
 
@@ -29,6 +30,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   ipc.fetchRemoteQuietly.mockResolvedValue(undefined);
   ipc.discardPullRequestRebase.mockResolvedValue(undefined);
+  ipc.commitTrailers.mockResolvedValue([]);
   ipc.branchDivergence.mockResolvedValue({ head: HEAD, ahead: 2, behind: 3 });
   useRepoStore.setState({ repoPath: "/repo", refresh: vi.fn().mockResolvedValue(undefined) });
   // Toute confirmation est acceptée.
@@ -81,6 +83,8 @@ describe("PullRequestBranchSync", () => {
     expect(await screen.findByText("À jour avec main")).toBeTruthy();
     // Le lease porte sur la tête qui a été rebasée.
     expect(ipc.forcePushPullRequest).toHaveBeenCalledWith("/repo", "origin", "feat/x", HEAD);
-    expect(onPushed).toHaveBeenCalled();
+    // Fils de revue cités par les commits réécrits.
+    await waitFor(() => expect(ipc.commitTrailers).toHaveBeenCalledWith("/repo", HEAD, NEW));
+    await waitFor(() => expect(onPushed).toHaveBeenCalled());
   });
 });

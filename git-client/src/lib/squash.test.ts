@@ -25,6 +25,17 @@ describe("squashPlan", () => {
     expect((plan as SquashPlan).steps[1].message).toBeNull();
   });
 
+  it("moves the review thread trailers of every commit to the end of the message", () => {
+    const todo = [
+      { ...commit("a", ["base"]), message: "fix a\n\nResolves-Thread: t1" },
+      { ...commit("b", ["a"]), message: "fix b\n\nAddresses-Thread: t2\nResolves-Thread: t1" },
+    ];
+    expect((squashPlan(todo, ["a", "b"], "") as SquashPlan).steps[1].message)
+      .toBe("fix a\n\nfix b\n\nResolves-Thread: t1\nAddresses-Thread: t2");
+    expect((squashPlan(todo, ["a", "b"], "fix a et b") as SquashPlan).steps[1].message)
+      .toBe("fix a et b\n\nResolves-Thread: t1\nAddresses-Thread: t2");
+  });
+
   it("puts the final message on the last squash only", () => {
     const plan = squashPlan(linear, ["a", "b", "c"], "all") as SquashPlan;
     expect(plan.steps.map((s) => s.message)).toEqual([null, null, "all", null]);

@@ -248,6 +248,42 @@ pub fn compare_refs(repo: &Repository, base: &str, head: &str) -> Result<RefComp
     Ok(RefComparison { merge_base: merge_base.to_string(), head: head_commit.id().to_string(), commits, files })
 }
 
+/// Trailers (`Clé: valeur` en fin de message) d'un commit.
+#[derive(Debug, Serialize, Clone)]
+pub struct CommitTrailers {
+    pub hash: String,
+    pub short_hash: String,
+    pub trailers: Vec<(String, String)>,
+}
+
+/// Au-delà, `from` absent ferait parcourir tout l'historique.
+const TRAILERS_LIMIT: usize = 500;
+
+/// Trailers des commits de `to` absents de `from` (`git log from..to`), seulement pour les commits qui en ont.
+/// Sans `from`, les commits de `to` dans la limite de `TRAILERS_LIMIT`.
+pub fn commit_trailers(repo: &Repository, from: Option<&str>, to: &str) -> Result<Vec<CommitTrailers>, GitError> {
+    let mut walk = repo.revwalk()?;
+    walk.push(repo.revparse_single(to)?.peel_to_commit()?.id())?;
+    if let Some(from) = from {
+        walk.hide(repo.revparse_single(from)?.peel_to_commit()?.id())?;
+    }
+    walk.set_sorting(Sort::TOPOLOGICAL)?;
+
+    let mut result = Vec::new();
+    for oid in walk.take(TRAILERS_LIMIT).filter_map(|oid| oid.ok()) {
+        let commit = repo.find_commit(oid)?;
+        let Ok(message) = commit.message() else { continue };
+        let Ok(parsed) = git2::message_trailers_strs(message) else { continue };
+        let trailers: Vec<(String, String)> = parsed.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        if trailers.is_empty() {
+            continue;
+        }
+        let hash = oid.to_string();
+        result.push(CommitTrailers { short_hash: hash[..7].to_string(), hash, trailers });
+    }
+    Ok(result)
+}
+
 fn collect_refs(repo: &Repository) -> HashMap<Oid, Vec<RefLabel>> {
     let mut map: HashMap<Oid, Vec<RefLabel>> = HashMap::new();
 
@@ -442,5 +478,46 @@ mod tests {
 
         let diff = crate::git::get_compare_file_diff(&repo, &cmp.merge_base, &cmp.head, "a.txt").unwrap();
         assert_eq!(diff.hunks[0].lines[0].content, "one");
+    }
+
+    #[test]
+    fn commit_trailers_lists_only_commits_after_from() {
+        let (dir, repo) = make_repo_with_commits();
+        let pushed = commit_file(&repo, &dir, "a.txt", "1", "fix a\n\nResolves-Thread: old\n");
+        let plain = commit_file(&repo, &dir, "b.txt", "1", "no trailer");
+        let fix = commit_file(&repo, &dir, "c.txt", "1", "fix c\n\nbody\n\nResolves-Thread: t1\nAddresses-Thread: t2\n");
+
+        let result = commit_trailers(&repo, Some(&pushed.to_string()), "HEAD").unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].hash, fix.to_string());
+        assert_eq!(result[0].trailers, vec![
+            ("Resolves-Thread".to_string(), "t1".to_string()),
+            ("Addresses-Thread".to_string(), "t2".to_string()),
+        ]);
+        assert!(result.iter().all(|c| c.hash != plain.to_string()));
+    }
+
+    #[test]
+    fn commit_trailers_without_from_walks_the_whole_branch() {
+        let (dir, repo) = make_repo_with_commits();
+        commit_file(&repo, &dir, "a.txt", "1", "fix a\n\nResolves-Thread: t1\n");
+        let result = commit_trailers(&repo, None, "HEAD").unwrap();
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn commit_trailers_keeps_rewritten_commits_after_a_rebase() {
+        let (dir, repo) = make_repo_with_commits();
+        let root = repo.head().unwrap().peel_to_commit().unwrap();
+        let before = commit_file(&repo, &dir, "a.txt", "1", "fix a\n\nResolves-Thread: t1\n");
+        // Même commit réécrit sur une autre base : l'ancien tip distant n'en est pas l'ancêtre.
+        repo.branch("rebased", &root, false).unwrap();
+        repo.set_head("refs/heads/rebased").unwrap();
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::new().force().remove_untracked(true))).unwrap();
+        commit_file(&repo, &dir, "base.txt", "1", "base work");
+        let after = commit_file(&repo, &dir, "a.txt", "1", "fix a\n\nResolves-Thread: t1\n");
+
+        let result = commit_trailers(&repo, Some(&before.to_string()), "rebased").unwrap();
+        assert_eq!(result.iter().map(|c| c.hash.clone()).collect::<Vec<_>>(), vec![after.to_string()]);
     }
 }

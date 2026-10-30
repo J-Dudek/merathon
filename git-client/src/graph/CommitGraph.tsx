@@ -18,6 +18,7 @@ import { useGraphFilterStore } from "../store/useGraphFilterStore";
 import { useBranchMenus } from "../components/branchMenus";
 import { localOnlyBranches } from "../lib/branches";
 import { squashPlan } from "../lib/squash";
+import { draftFromMessage } from "../lib/threadTrailers";
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
 import { dispatchContextMenu, isContextMenuKey, listKeyIndex } from "../lib/keyboardContextMenu";
 import type { BranchInfo, CommitInfo, MergeResult, RefLabel } from "../types/git";
@@ -242,9 +243,8 @@ export function CommitGraph() {
         action: async () => {
           const message = await runGit(fullMessage, { refresh: false });
           if (message === undefined) return;
-          const [summary, ...rest] = message.split("\n");
           const draft = useRepoStore.getState().commitDraft;
-          setCommitDraft(draft.summary.trim() ? { amend: true } : { amend: true, summary, description: rest.join("\n").trim() });
+          setCommitDraft(draft.summary.trim() ? { amend: true } : { amend: true, ...draftFromMessage(message) });
           setSelectedCommit(null);
         },
       },
@@ -261,8 +261,7 @@ export function CommitGraph() {
           const message = await fullMessage().catch(() => commit.message);
           const done = await runGit(() => resetTo(path, commit.parents[0], "soft"), { success: "Commit annulé, modifications indexées" });
           if (done === undefined) return;
-          const [summary, ...rest] = message.split("\n");
-          if (!useRepoStore.getState().commitDraft.summary.trim()) setCommitDraft({ summary, description: rest.join("\n").trim(), amend: false });
+          if (!useRepoStore.getState().commitDraft.summary.trim()) setCommitDraft({ ...draftFromMessage(message), amend: false });
           setSelectedCommit(null);
         },
       },

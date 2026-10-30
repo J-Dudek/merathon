@@ -44,20 +44,37 @@ pub fn validate_api_path(path: &str) -> Result<(), String> {
 
 fn http_error(host: &str, e: ureq::Error) -> String {
     match e {
-        ureq::Error::Status(401 | 403, _) => {
-            "Token refusé (401/403) : vérifie sa validité et ses droits, ou reconnecte le compte".into()
-        }
         ureq::Error::Status(code, response) => {
             let body = response.into_string().unwrap_or_default();
             let detail = serde_json::from_str::<Value>(&body)
                 .ok()
                 .and_then(|json| api_error_message(&json))
                 .unwrap_or_else(|| body.chars().take(200).collect());
-            format!("API {host} : erreur {code} {detail}")
+            status_message(host, code, detail.trim())
         }
         // Le détail distingue une URL erronée d'un certificat non reconnu ou d'un proxy.
         ureq::Error::Transport(t) => format!("Impossible de joindre {host} ({t}) : vérifie l'URL de l'instance et ta connexion"),
     }
+}
+
+/// Explication d'un statut HTTP d'erreur, suivie du détail renvoyé par l'API quand il y en a un.
+fn status_message(host: &str, code: u16, detail: &str) -> String {
+    let lower = detail.to_lowercase();
+    let explanation = match code {
+        401 => "Token refusé : vérifie sa validité ou reconnecte le compte".to_string(),
+        // 403 : droits insuffisants pour cette action, ou limite de requêtes ; le token lui-même est valide.
+        403 | 429 if lower.contains("rate limit") => "Limite de requêtes atteinte : réessaie dans quelques minutes".to_string(),
+        429 => "Trop de requêtes : réessaie dans quelques minutes".to_string(),
+        403 => "Action refusée : ton compte ou ton token n'a pas les droits nécessaires".to_string(),
+        404 => "Introuvable : la ressource n'existe pas ou ton token n'y a pas accès".to_string(),
+        405 => "Action impossible dans l'état actuel".to_string(),
+        409 => "Conflit : la ressource a changé entre-temps, actualise puis réessaie".to_string(),
+        422 => "Requête refusée".to_string(),
+        500..=599 => format!("{host} rencontre un problème (erreur {code}) : réessaie plus tard"),
+        _ => format!("Erreur {code}"),
+    };
+    let explanation = if (500..=599).contains(&code) { explanation } else { format!("{host} : {explanation}") };
+    if detail.is_empty() { explanation } else { format!("{explanation} — {detail}") }
 }
 
 /// Message lisible d'une erreur d'API : `message` + `errors[].message` (GitHub), `message` texte ou liste (GitLab).
@@ -181,6 +198,20 @@ mod tests {
         assert_eq!(api_error_message(&gitlab).unwrap(), "Another open merge request already exists for this source branch: !3");
         assert_eq!(api_error_message(&serde_json::json!({"error": "insufficient_scope"})).unwrap(), "insufficient_scope");
         assert!(api_error_message(&serde_json::json!({})).is_none());
+    }
+
+    #[test]
+    fn status_messages_explain_the_code_and_keep_the_detail() {
+        assert_eq!(
+            status_message("api.github.com", 403, "Resource not accessible by personal access token"),
+            "api.github.com : Action refusée : ton compte ou ton token n'a pas les droits nécessaires — Resource not accessible by personal access token"
+        );
+        assert!(status_message("api.github.com", 403, "API rate limit exceeded for user").contains("Limite de requêtes"));
+        assert_eq!(
+            status_message("gitlab.com", 404, "404 Project Not Found"),
+            "gitlab.com : Introuvable : la ressource n'existe pas ou ton token n'y a pas accès — 404 Project Not Found"
+        );
+        assert_eq!(status_message("gitlab.com", 502, ""), "gitlab.com rencontre un problème (erreur 502) : réessaie plus tard");
     }
 
     #[test]

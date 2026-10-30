@@ -3,9 +3,10 @@ import { useUiStore } from "../store/useUiStore";
 import { useTabsStore } from "../store/useTabsStore";
 import { AppWindow, Archive, ArchiveRestore, ArrowDown, ArrowUp, BookOpen, ChevronDown, CloudDownload, FolderOpen, FolderPlus, GitBranch, History, Info, Monitor, Moon, RefreshCw, Settings, SquarePlus, Sun, X, type LucideIcon } from "lucide-react";
 import {
-  createBranch, fetchRemote, openNewWindow, pull, push, stashApply, stashSave,
+  createBranch, fetchRemote, openNewWindow, pull, stashApply, stashSave,
 } from "../ipc/commands";
 import { reportMerge, runGit } from "../lib/actions";
+import { pushBranch } from "../lib/threadReplies";
 import { chooseAndInitRepo, chooseAndOpenRepo, openRepoAt } from "../lib/repoActions";
 import { ContextMenu, useContextMenu, type MenuEntry } from "./ContextMenu";
 import { SearchBar } from "./SearchBar";
@@ -89,8 +90,8 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
       });
       if (!ok) return;
     }
-    await runGit(() => push(repoPath, { force }), {
-      busy: "Push…",
+    await pushBranch(repoPath, info.head_branch, {
+      force,
       success: head?.upstream ? `Push de ${info.head_branch} terminé` : `${info.head_branch} publiée sur le remote`,
     });
   }

@@ -137,6 +137,18 @@ export async function refreshOpenPullRequests(account: ForgeAccount, projectPath
   return { before, after: open };
 }
 
+/** PR ouvertes du projet déjà en cache, sans les charger : celles que la liste du dépôt a chargées. */
+export function useCachedOpenPullRequests(forge: LinkedForge | null): ForgePR[] {
+  const [, refreshed] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    listeners.add(refreshed);
+    return () => {
+      listeners.delete(refreshed);
+    };
+  }, []);
+  return forge ? cache.get(`${forge.account.id}|${forge.projectPath}|open`)?.open ?? [] : [];
+}
+
 /**
  * PR / MR du projet, filtrées par état (côté forge) et par personne (localement). Les données en cache sont
  * affichées tout de suite et actualisées en arrière-plan ; `loading` n'est vrai qu'au premier chargement.
@@ -168,7 +180,8 @@ export function usePullRequests(forge: LinkedForge | null) {
       cache.set(key, { open, filtered: filtered ?? open });
       // Les badges lisent les PR ouvertes : le cache du filtre « ouvertes » suit aussi.
       cache.set(`${account.id}|${projectPath}|open`, { open, filtered: open });
-      refreshed();
+      // Les autres lecteurs du cache (panneau de commit) suivent aussi.
+      listeners.forEach((l) => l());
     } catch (e) {
       setError(errorMessage(e));
     } finally {

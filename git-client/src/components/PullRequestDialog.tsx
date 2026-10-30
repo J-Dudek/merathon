@@ -1,5 +1,5 @@
 import { ArrowRight, X } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRepoStore } from "../store/useRepoStore";
 import { confirmAction, useUiStore } from "../store/useUiStore";
@@ -10,9 +10,9 @@ import { errorMessage } from "../lib/actions";
 import { pullRequestTitle } from "../lib/branches";
 import type { ForgeAccount, ForgeIssue, ForgeMilestone, ForgeUser, PrTemplate, PullRequestOptions } from "../types/forge";
 import { Button, Modal, inputClass } from "./Modal";
-import { fieldLabel } from "../lib/fieldLabel";
 import { CLOSING_KEYWORD, addClosingRef, closesIssue, issueNumberFromBranch } from "../lib/issueRefs";
 import { IssueRefTextarea } from "./IssueRefTextarea";
+import { TagPicker, UserPicker } from "./UserPicker";
 
 /** Pull request à préparer : branche source, projet visé et, pour une branche locale, de quoi la pousser avant. */
 export interface PullRequestTarget {
@@ -199,8 +199,8 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
   }
 
   return (
-    <Modal title={`Nouvelle ${noun} ${forgeName}`} onClose={() => !creating && onClose()} width="w-[620px]">
-      <div className="p-4 flex flex-col gap-3">
+    <Modal title={`Nouvelle ${noun} ${forgeName}`} onClose={() => !creating && onClose()} width="w-[620px]" resizeKey="pull-request-create">
+      <div className="p-4 flex flex-col gap-3 min-h-full">
         <div className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
           <span className="px-1.5 py-0.5 rounded bg-overlay/10 text-[var(--color-text)] font-semibold">{forgeName}</span>
           <span className="font-mono truncate">{projectPath}</span>
@@ -229,7 +229,7 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
           <input autoFocus className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
 
-        <div className="flex flex-col gap-1">
+        <div className="flex-1 flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className={labelClass}>Description (Markdown)</span>
             {templates.length > 0 && (
@@ -271,7 +271,8 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
           )}
           <IssueRefTextarea
             label="Description"
-            className={`${inputClass} ${templateName ? "h-56" : "h-28"} resize-y font-mono`}
+            wrapperClassName="flex-1 flex flex-col"
+            className={`${inputClass} ${templateName ? "h-56" : "h-28"} flex-auto resize-y font-mono`}
             placeholder="Contexte, changements, comment tester… « # » pour citer une issue"
             value={description}
             onChange={setDescription}
@@ -360,135 +361,5 @@ function Check({ checked, onChange, children }: { checked: boolean; onChange: (v
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>{children}</span>
     </label>
-  );
-}
-
-function UserPicker({ label, choices, value, onChange, self }: {
-  label: string;
-  choices: ForgeUser[];
-  value: ForgeUser[];
-  onChange: (users: ForgeUser[]) => void;
-  /** Utilisateur du compte, proposé en raccourci « M'assigner ». */
-  self?: ForgeUser;
-}) {
-  const byName = new Map(choices.map((u) => [u.username, u]));
-  return (
-    <TagPicker
-      label={label}
-      choices={choices.map((u) => ({ key: u.username, label: u.name !== u.username ? `${u.name} (@${u.username})` : `@${u.username}` }))}
-      value={value.map((u) => u.username)}
-      onChange={(names) => onChange(names.map((n) => byName.get(n)!).filter(Boolean))}
-      action={self && !value.some((u) => u.username === self.username)
-        ? { label: "Moi", run: () => onChange([...value, self]) }
-        : undefined}
-    />
-  );
-}
-
-/** Sélection multiple avec recherche : puces des valeurs choisies + suggestions filtrées. */
-function TagPicker({ label, choices, value, onChange, action }: {
-  label: string;
-  choices: { key: string; label: string; color?: string }[];
-  value: string[];
-  onChange: (keys: string[]) => void;
-  action?: { label: string; run: () => void };
-}) {
-  const [query, setQuery] = useState("");
-  const [focused, setFocused] = useState(false);
-  /** Suggestion désignée au clavier (flèches), choisie par Entrée. */
-  const [active, setActive] = useState(0);
-  const listId = useId();
-  const q = query.trim().toLowerCase();
-  const suggestions = choices.filter((c) => !value.includes(c.key) && c.label.toLowerCase().includes(q)).slice(0, 8);
-  const colorOf = (key: string) => choices.find((c) => c.key === key)?.color;
-  const open = focused && suggestions.length > 0;
-  const current = Math.min(active, suggestions.length - 1);
-
-  function pick(key: string) {
-    onChange([...value, key]);
-    setQuery("");
-    setActive(0);
-  }
-
-  return (
-    <div className="flex flex-col gap-1 min-w-0 relative">
-      <div className="flex items-center">
-        <span className={labelClass}>{label}</span>
-        {action && (
-          <button className="ml-auto text-[10px] text-[var(--color-accent-text)] hover:underline" onClick={action.run}>
-            {action.label}
-          </button>
-        )}
-      </div>
-      {value.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {value.map((key) => (
-            <span key={key} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-overlay/10 text-[11px] text-[var(--color-text)]">
-              {colorOf(key) && <span className="w-2 h-2 rounded-full" style={{ background: colorOf(key) }} aria-hidden />}
-              {key}
-              <button className="text-[var(--color-muted)] hover:text-[var(--color-text)]" aria-label={`Retirer ${key}`} onClick={() => onChange(value.filter((v) => v !== key))}>
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      {/* Liste de suggestions au clavier : flèches pour choisir, Entrée pour ajouter, Échap pour fermer. */}
-      <input
-        className={inputClass}
-        placeholder={choices.length ? "Rechercher…" : "Aucun choix disponible"}
-        {...fieldLabel(`${label} : ajouter`)}
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls={listId}
-        aria-activedescendant={open ? `${listId}-${current}` : undefined}
-        disabled={!choices.length}
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setActive(0);
-          setFocused(true);
-        }}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-            e.preventDefault();
-            setFocused(true);
-            const n = suggestions.length;
-            if (n) setActive((current + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
-          } else if (e.key === "Enter" && open) {
-            e.preventDefault();
-            pick(suggestions[current].key);
-          } else if (e.key === "Escape" && open) {
-            e.stopPropagation();
-            setFocused(false);
-          }
-        }}
-      />
-      <ul
-        id={listId}
-        role="listbox"
-        aria-label={`Suggestions : ${label}`}
-        className={open ? "absolute z-10 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[var(--color-bg-elevated)] border border-overlay/10 rounded shadow-xl" : "hidden"}
-      >
-        {open && suggestions.map((c, i) => (
-          <li
-            key={c.key}
-            id={`${listId}-${i}`}
-            role="option"
-            aria-selected={i === current}
-            className={`px-2 py-1 text-xs text-[var(--color-text)] cursor-pointer flex items-center gap-2 ${i === current ? "bg-overlay/15" : "hover:bg-overlay/10"}`}
-            // Le champ garde le focus (la liste resterait sinon fermée avant le clic) ; le choix se fait au relâchement.
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => pick(c.key)}
-          >
-            {c.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} aria-hidden />}
-            <span className="truncate">{c.label}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

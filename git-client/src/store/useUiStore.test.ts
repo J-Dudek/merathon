@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { clampGraphWidth, clampSideWidth, defaultSideWidths, MIN_GRAPH_WIDTH, useUiStore } from "./useUiStore";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { clampGraphWidth, clampSideWidth, defaultSideWidths, MAX_TOASTS, MIN_GRAPH_WIDTH, useUiStore } from "./useUiStore";
 
 describe("side panel widths", () => {
   beforeEach(() => {
@@ -46,5 +46,46 @@ describe("graph width", () => {
     useUiStore.getState().setGraphWidth(null);
     expect(useUiStore.getState().graphWidth).toBeNull();
     expect(localStorage.getItem("merathon.graph-width")).toBeNull();
+  });
+});
+
+describe("toasts", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    const { toasts, dismiss, holdToasts } = useUiStore.getState();
+    toasts.forEach((t) => dismiss(t.id));
+    holdToasts(false);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const messages = () => useUiStore.getState().toasts.map((t) => t.message);
+
+  it("caps the stack, dropping the oldest information before errors", () => {
+    const { notify } = useUiStore.getState();
+    notify("error", "e1");
+    for (let i = 1; i <= MAX_TOASTS + 1; i++) notify("success", `s${i}`);
+    expect(messages()).toEqual(["e1", "s3", "s4", "s5", "s6"]);
+  });
+
+  it("replaces an identical message instead of stacking it", () => {
+    const { notify } = useUiStore.getState();
+    notify("success", "Fetch terminé");
+    notify("info", "autre");
+    vi.advanceTimersByTime(4000);
+    notify("success", "Fetch terminé");
+    expect(messages()).toEqual(["autre", "Fetch terminé"]);
+    vi.advanceTimersByTime(1500);
+    expect(messages()).toEqual(["Fetch terminé"]);
+    vi.advanceTimersByTime(4000);
+    expect(messages()).toEqual([]);
+  });
+
+  it("does not restart running delays when the hold state does not change", () => {
+    const { notify, holdToasts } = useUiStore.getState();
+    notify("success", "a");
+    vi.advanceTimersByTime(4000);
+    holdToasts(false);
+    vi.advanceTimersByTime(1000);
+    expect(messages()).toEqual([]);
   });
 });

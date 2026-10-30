@@ -40,6 +40,7 @@ pub fn run() {
             commands::get_commit_file_diff,
             commands::compare_refs,
             commands::diff_commits,
+            commands::commit_trailers,
             commands::branch_divergence,
             commands::rebase_pull_request,
             commands::discard_pull_request_rebase,

@@ -29,11 +29,11 @@ const SETTING: Record<PrEventKind, Exclude<keyof NotificationSettings, "enabled"
 
 const prKey = (pr: PrSummary) => `${pr.projectPath}#${pr.number}`;
 
-/** Ce qui a changé sur une PR entre deux listes ; `authored` : ouverte par moi (mes propres commits ne sont pas signalés). */
+/** Ce qui a changé sur une PR entre deux listes ; `authored` : ouverte par moi (mes propres commits ne sont pas signalés, ni mes pushs). */
 function changes(prev: PrSummary, pr: PrSummary, authored: boolean): PrEventKind[] {
   const kinds: PrEventKind[] = [];
   const commits = pr.headSha !== prev.headSha;
-  if (commits && !authored) kinds.push("commits");
+  if (commits && !authored && !pr.pushedByMe) kinds.push("commits");
   if (pr.commentCount !== undefined && prev.commentCount !== undefined) {
     if (pr.commentCount > prev.commentCount) kinds.push("comments");
   } else if (pr.updatedAt > prev.updatedAt && !commits && pr.ci === prev.ci && pr.review === prev.review) {

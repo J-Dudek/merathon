@@ -6,6 +6,7 @@ import {
   branchDivergence, discardPullRequestRebase, fetchRemoteQuietly, forcePushPullRequest, rebasePullRequest,
 } from "../ipc/commands";
 import { runGit } from "../lib/actions";
+import { replyToPushedThreads } from "../lib/threadReplies";
 import { plural } from "../lib/strings";
 import type { LocalBranchUpdate, PrRebase } from "../types/git";
 import type { PullRequestDetails } from "../types/forge";
@@ -132,6 +133,8 @@ export function PullRequestBranchSync({ details, remoteName, onCheckout, onPushe
     const clean = pushed.local_branch === "updated" || pushed.local_branch === "absent";
     useUiStore.getState().notify(clean ? "success" : "info", pushedMessage(sourceBranch, pushed.local_branch));
     setState({ kind: "up_to_date" });
+    // Avant le rechargement de la PR, pour qu'il montre les réponses.
+    await replyToPushedThreads(path, { remote: remoteName, branch: sourceBranch, from: head, to: pushed.new_head }, details.pr.number);
     onPushed();
   }
 

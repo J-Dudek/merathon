@@ -1,6 +1,6 @@
 import { Channel, invoke as tauriInvoke, type InvokeArgs } from "@tauri-apps/api/core";
 import type {
-  BranchDivergence, BranchInfo, CommitDetails, CommitFile, PrPush, PrRebase, CommitInfo, FileDiff, FileStatus, Identity, MergeResult,
+  BranchDivergence, BranchInfo, CommitDetails, CommitFile, CommitTrailers, PrPush, PrRebase, CommitInfo, FileDiff, FileStatus, Identity, MergeResult,
   InteractiveOutcome, LfsStatus, RefComparison, RemoteInfo, RepoInfo, StashInfo, SubmoduleInfo, TagInfo, TodoCommit,
 } from "../types/git";
 import type { DeviceCode, ForgeAccount, Provider, SavedAccount } from "../types/forge";
@@ -74,6 +74,9 @@ export const compareRefs = (path: string, base: string, head: string) =>
   invoke<RefComparison>("compare_refs", { path, base, head });
 /** Fichiers qui diffèrent entre deux commits quelconques (`git diff base head`). */
 export const diffCommits = (path: string, base: string, head: string) => invoke<CommitFile[]>("diff_commits", { path, base, head });
+/** Trailers des commits de `to` absents de `from` (`git log from..to`), pour les commits qui en ont. */
+export const commitTrailers = (path: string, from: string | null, to: string) =>
+  invoke<CommitTrailers[]>("commit_trailers", { path, from, to });
 export const getCompareFileDiff = (path: string, base: string, head: string, filePath: string) =>
   invoke<FileDiff>("get_compare_file_diff", { path, base, head, filePath });
 

@@ -8,13 +8,14 @@ import { seenKey, useSeenPrsStore } from "../store/useSeenPrsStore";
 import { useCelebrationStore } from "../store/useCelebrationStore";
 import { errorMessage } from "../lib/actions";
 import type {
-  DraftComment, ForgeAccount, ForgeCheck, ForgeComment, ForgeIssue, ForgePR, MergeMethod, PullRequestDetails, PullRequestEdit,
-  ReviewEvent,
+  DraftComment, ForgeAccount, ForgeCheck, ForgeComment, ForgeIssue, ForgePR, ForgeUser, MergeMethod, PullRequestDetails, PullRequestEdit,
+  PullRequestPeople, ReviewEvent,
 } from "../types/forge";
 import { Button, Modal, inputClass } from "./Modal";
 import { PullRequestFiles } from "./PullRequestFiles";
 import { PullRequestBranchSync } from "./PullRequestBranchSync";
 import { IssueRefTextarea } from "./IssueRefTextarea";
+import { UserPicker } from "./UserPicker";
 import { fieldLabel } from "../lib/fieldLabel";
 
 const labelClass = "text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]";
@@ -66,6 +67,14 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
   const [edit, setEdit] = useState<PullRequestEdit | null>(null);
   /** Issues du projet, chargées à la première édition pour l'auto-complétion « # ». */
   const [issues, setIssues] = useState<ForgeIssue[] | null>(null);
+  /** Relecteurs et assignés en cours de modification ; null hors édition. */
+  const [people, setPeople] = useState<PullRequestPeople | null>(null);
+  /** Membres du projet proposables, chargés à la première modification des relecteurs ou assignés. */
+  const [members, setMembers] = useState<ForgeUser[] | null>(null);
+  /** Branche cible en cours de modification ; null hors édition. */
+  const [target, setTarget] = useState<string | null>(null);
+  /** Branches du projet, chargées à la première modification de la cible. */
+  const [branches, setBranches] = useState<string[] | null>(null);
   /** Les choix de merge ne sont initialisés qu'au premier chargement, pas à chaque actualisation. */
   const initialized = useRef(false);
 
@@ -201,8 +210,77 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
     }, `${ref} modifiée`, true);
   }
 
+  /** Logins affichés, convertis en utilisateurs ; sans id connu, GitLab le reprend de la MR à l'enregistrement. */
+  function currentPeople(d: PullRequestDetails, users: ForgeUser[]): PullRequestPeople {
+    const toUser = (login: string): ForgeUser =>
+      users.find((u) => u.username === login) ?? { id: 0, username: login, name: d.names[login] ?? login };
+    return { reviewers: d.pr.reviewers.map(toUser), assignees: d.pr.assignees.map(toUser) };
+  }
+
+  function startPeopleEdit() {
+    if (!details) return;
+    setPeople(currentPeople(details, members ?? []));
+    if (!members) {
+      client().getPullRequestOptions(projectPath)
+        .then((o) => setMembers(o.users))
+        .catch((e) => {
+          setMembers([]);
+          notify("error", `Membres du projet indisponibles : ${errorMessage(e)}`);
+        });
+    }
+  }
+
+  const logins = (users: ForgeUser[]) => users.map((u) => u.username).sort().join(",");
+  const peopleDirty = !!people && !!details
+    && (logins(people.reviewers) !== [...details.pr.reviewers].sort().join(",")
+      || logins(people.assignees) !== [...details.pr.assignees].sort().join(","));
+
+  function savePeople() {
+    if (!people) return;
+    if (!peopleDirty) {
+      setPeople(null);
+      return;
+    }
+    const changes = people;
+    run("people", async () => {
+      await client().setPeople(projectPath, number, changes);
+      setPeople(null);
+    }, "Relecteurs et assignés mis à jour", true);
+  }
+
+  function startTargetEdit() {
+    if (!details) return;
+    setTarget(details.pr.targetBranch);
+    if (!branches) {
+      client().getBranches(projectPath)
+        .then(setBranches)
+        .catch((e) => {
+          setBranches([]);
+          notify("error", `Branches du projet indisponibles : ${errorMessage(e)}`);
+        });
+    }
+  }
+
+  function saveTarget() {
+    if (!details || !target) return;
+    if (target === details.pr.targetBranch) {
+      setTarget(null);
+      return;
+    }
+    const branch = target;
+    run("target", async () => {
+      await client().setTargetBranch(projectPath, number, branch);
+      setTarget(null);
+    }, `${ref} cible maintenant ${branch}`, true);
+  }
+
   async function requestClose() {
     if (pending) return;
+    if (peopleDirty && !(await confirmAction(
+      "Abandonner les modifications ?",
+      "Les relecteurs et assignés modifiés ne seront pas enregistrés.",
+      true,
+    ))) return;
     if (editDirty && !(await confirmAction(
       "Abandonner les modifications ?",
       "Le titre et la description modifiés ne seront pas enregistrés.",
@@ -231,7 +309,19 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
       {!details && !loadError && <p className="p-4 text-xs text-[var(--color-muted)]">Chargement…</p>}
       {details && (
         <div className={`p-4 flex flex-col gap-4 ${tab === "files" ? "h-full" : ""}`}>
-          <Header details={details} account={account} forgeName={forgeName} onCheckout={onCheckout && (() => onCheckout(details.pr))} />
+          <Header
+            details={details}
+            account={account}
+            forgeName={forgeName}
+            onCheckout={onCheckout && (() => onCheckout(details.pr))}
+            target={target}
+            branches={branches}
+            onTargetChange={setTarget}
+            onEditTarget={startTargetEdit}
+            onSaveTarget={saveTarget}
+            onCancelTarget={() => setTarget(null)}
+            pending={pending}
+          />
 
 <div className="flex gap-1 border-b border-overlay/10 -mx-4 px-4">
             <TabButton active={tab === "conversation"} onClick={() => setTab("conversation")}>
@@ -263,7 +353,26 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
 
           {tab === "conversation" && (
             <>
-            <People details={details} />
+            {people ? (
+              <PeopleForm
+                people={people}
+                onChange={setPeople}
+                members={members}
+                // GitHub refuse qu'on demande une relecture à l'auteur de la PR.
+                reviewerChoices={(members ?? []).filter((u) => !isGitHub || u.username !== details.pr.author)}
+                self={members?.find((u) => u.username === account.username)}
+                isGitHub={isGitHub}
+                pending={pending}
+                onCancel={() => setPeople(null)}
+                onSave={savePeople}
+              />
+            ) : (
+              <People
+                details={details}
+                onEdit={details.pr.state === "open" ? startPeopleEdit : undefined}
+                disabled={!!pending}
+              />
+            )}
 
             {details.checks.length > 0 && <Checks checks={details.checks} />}
 
@@ -416,11 +525,21 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function Header({ details, account, forgeName, onCheckout }: {
+function Header({ details, account, forgeName, onCheckout, target, branches, onTargetChange, onEditTarget, onSaveTarget, onCancelTarget, pending }: {
   details: PullRequestDetails;
   account: ForgeAccount;
   forgeName: string;
   onCheckout?: () => void;
+  /** Branche cible choisie pendant la modification ; null hors édition. */
+  target: string | null;
+  /** null : branches en cours de chargement. */
+  branches: string[] | null;
+  onTargetChange: (branch: string) => void;
+  /** Proposé tant que la PR / MR est ouverte et qu'aucune action n'est en cours. */
+  onEditTarget: () => void;
+  onSaveTarget: () => void;
+  onCancelTarget: () => void;
+  pending: string | null;
 }) {
   const { pr } = details;
   const state = STATE_STYLES[pr.state];
@@ -437,7 +556,32 @@ function Header({ details, account, forgeName, onCheckout }: {
         <span className="font-mono text-xs text-[var(--color-text)] truncate">{pr.sourceBranch}</span>
         <ArrowRight size={12} className="text-[var(--color-muted)] shrink-0" />
         <span className="sr-only">vers</span>
-        <span className="font-mono text-xs text-[var(--color-text)] truncate">{pr.targetBranch}</span>
+        {target === null ? (
+          <>
+            <span className="font-mono text-xs text-[var(--color-text)] truncate">{pr.targetBranch}</span>
+            {pr.state === "open" && !pending && (
+              <button
+                className="shrink-0 text-[var(--color-muted)] hover:text-[var(--color-text)]"
+                onClick={onEditTarget}
+                aria-label="Changer la branche cible"
+                title="Changer la branche cible"
+              >
+                <Pencil size={11} />
+              </button>
+            )}
+          </>
+        ) : (
+          <TargetPicker
+            value={target}
+            current={pr.targetBranch}
+            source={pr.sourceBranch}
+            branches={branches}
+            onChange={onTargetChange}
+            onSave={onSaveTarget}
+            onCancel={onCancelTarget}
+            pending={pending}
+          />
+        )}
         <div className="ml-auto flex gap-2 shrink-0">
           {pr.state === "open" && onCheckout && <Button onClick={onCheckout}>Checkout</Button>}
           <Button onClick={() => openUrl(pr.url)} title={`Ouvrir sur ${forgeName}`}>
@@ -456,8 +600,50 @@ function Header({ details, account, forgeName, onCheckout }: {
   );
 }
 
-/** Relecteurs demandés et ayant donné un avis, avec leur verdict. */
-function People({ details }: { details: PullRequestDetails }) {
+/** Choix d'une nouvelle branche cible ; Entrée enregistre, Échap annule. */
+function TargetPicker({ value, current, source, branches, onChange, onSave, onCancel, pending }: {
+  value: string;
+  current: string;
+  source: string;
+  branches: string[] | null;
+  onChange: (branch: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  pending: string | null;
+}) {
+  // La cible actuelle reste proposée même hors des 100 premières branches ; la source ne peut pas être sa propre cible.
+  const choices = [...new Set([current, ...(branches ?? [])])].filter((b) => b !== source).sort((a, b) => a.localeCompare(b));
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <select
+        autoFocus
+        className={`${inputClass} font-mono w-56!`}
+        aria-label="Branche cible"
+        value={value}
+        disabled={!branches || pending === "target"}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onSave();
+          } else if (e.key === "Escape") {
+            e.stopPropagation();
+            onCancel();
+          }
+        }}
+      >
+        {choices.map((b) => <option key={b} value={b}>{b}</option>)}
+      </select>
+      <Button variant="primary" onClick={onSave} disabled={!!pending || !branches}>
+        {pending === "target" ? "…" : "Valider"}
+      </Button>
+      <Button onClick={onCancel} disabled={pending === "target"}>Annuler</Button>
+    </div>
+  );
+}
+
+/** Relecteurs demandés et ayant donné un avis, avec leur verdict. `onEdit` : PR / MR ouverte, modifiable. */
+function People({ details, onEdit, disabled }: { details: PullRequestDetails; onEdit?: () => void; disabled: boolean }) {
   const { pr, approvedBy, changesRequestedBy, approvalsLeft, names } = details;
   const reviewers = [...new Set([...pr.reviewers, ...approvedBy, ...changesRequestedBy])];
   const verdict = (login: string) => {
@@ -466,7 +652,17 @@ function People({ details }: { details: PullRequestDetails }) {
     return <CircleDashed size={12} className="text-[var(--color-muted)]" role="img" aria-label="en attente" />;
   };
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-3 relative">
+      {onEdit && (
+        <button
+          className="absolute right-0 top-0 inline-flex items-center gap-1 text-[11px] text-[var(--color-accent-text)] hover:underline disabled:opacity-50"
+          onClick={onEdit}
+          disabled={disabled}
+          title="Modifier les relecteurs et les assignés"
+        >
+          <Pencil size={11} /> Modifier les personnes
+        </button>
+      )}
       <section className="flex flex-col gap-1 min-w-0">
         <h3 className={labelClass}>Relecteurs{approvalsLeft ? ` · ${approvalsRequired(approvalsLeft)}` : ""}</h3>
         {reviewers.length === 0 && <span className="text-xs text-[var(--color-muted)] italic">Aucun</span>}
@@ -479,6 +675,61 @@ function People({ details }: { details: PullRequestDetails }) {
         {pr.assignees.length === 0 && <span className="text-xs text-[var(--color-muted)] italic">Aucun</span>}
         {pr.assignees.map((login) => <span key={login} title={login} className="text-xs text-[var(--color-text)]">{names[login] ?? login}</span>)}
       </section>
+    </div>
+  );
+}
+
+/** Modification des relecteurs et assignés ; Ctrl+Entrée enregistre. */
+function PeopleForm({ people, onChange, members, reviewerChoices, self, isGitHub, pending, onCancel, onSave }: {
+  people: PullRequestPeople;
+  onChange: (people: PullRequestPeople) => void;
+  /** null : membres en cours de chargement. */
+  members: ForgeUser[] | null;
+  reviewerChoices: ForgeUser[];
+  self?: ForgeUser;
+  isGitHub: boolean;
+  pending: string | null;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-2"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          onSave();
+        }
+      }}
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <UserPicker
+          label={isGitHub ? "Relecteurs demandés" : "Relecteurs"}
+          choices={reviewerChoices}
+          value={people.reviewers}
+          onChange={(reviewers) => onChange({ ...people, reviewers })}
+          self={isGitHub ? undefined : self}
+        />
+        <UserPicker
+          label="Assignés"
+          choices={members ?? []}
+          value={people.assignees}
+          onChange={(assignees) => onChange({ ...people, assignees })}
+          self={self}
+        />
+      </div>
+      {!members && <p className="text-[11px] text-[var(--color-muted)]">Chargement des membres du projet…</p>}
+      {isGitHub && (
+        <p className="text-[11px] text-[var(--color-muted)]">
+          Ajouter quelqu'un qui a déjà donné son avis lui redemande une relecture.
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button onClick={onCancel} disabled={pending === "people"}>Annuler</Button>
+        <Button variant="primary" onClick={onSave} disabled={!!pending} title="Ctrl+Entrée">
+          {pending === "people" ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </div>
     </div>
   );
 }

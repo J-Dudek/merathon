@@ -147,6 +147,12 @@ pub fn diff_commits(path: String, base: String, head: String) -> Result<Vec<git:
     with_repo(&path, |r| git::diff_commits(r, &base, &head))
 }
 
+/// Trailers des commits de `to` absents de `from` : fils de revue traités par les commits poussés.
+#[tauri::command(async)]
+pub fn commit_trailers(path: String, from: Option<String>, to: String) -> Result<Vec<git::CommitTrailers>, GitError> {
+    with_repo(&path, |r| git::commit_trailers(r, from.as_deref(), &to))
+}
+
 #[tauri::command(async)]
 pub fn get_compare_file_diff(path: String, base: String, head: String, file_path: String) -> Result<git::FileDiff, GitError> {
     with_repo(&path, |r| git::get_compare_file_diff(r, &base, &head, &file_path))

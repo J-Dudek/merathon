@@ -144,8 +144,15 @@ let nextToastId = 1;
 
 /** Durée d'affichage d'une notification d'information ou de succès ; une erreur reste jusqu'à sa fermeture. */
 const TOAST_DELAY = 5000;
+/** Notifications affichées au plus : au-delà, les plus anciennes partent, informations avant erreurs. */
+export const MAX_TOASTS = 5;
 const toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
 let toastsHeld = false;
+
+function clearToastTimer(id: number) {
+  clearTimeout(toastTimers.get(id));
+  toastTimers.delete(id);
+}
 
 export const useUiStore = create<UiStore>((set, get) => ({
   toasts: [],
@@ -161,17 +168,30 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
   notify: (kind, message) => {
     const id = nextToastId++;
-    set((s) => ({ toasts: [...s.toasts, { id, kind, message }] }));
+    // Un message identique déjà affiché est remplacé : il repasse en bas avec un délai neuf au lieu de s'empiler.
+    let toasts = get().toasts.filter((t) => {
+      const same = t.kind === kind && t.message === message;
+      if (same) clearToastTimer(t.id);
+      return !same;
+    });
+    toasts.push({ id, kind, message });
+    while (toasts.length > MAX_TOASTS) {
+      const oldest = toasts.find((t) => t.kind !== "error" && t.id !== id) ?? toasts[0];
+      clearToastTimer(oldest.id);
+      toasts = toasts.filter((t) => t !== oldest);
+    }
+    set({ toasts });
     if (kind !== "error" && !toastsHeld) toastTimers.set(id, setTimeout(() => get().dismiss(id), TOAST_DELAY));
   },
 
   dismiss: (id) => {
-    clearTimeout(toastTimers.get(id));
-    toastTimers.delete(id);
+    clearToastTimer(id);
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
   },
 
   holdToasts: (held) => {
+    // Sans changement, les délais en cours ne sont pas relancés.
+    if (held === toastsHeld) return;
     toastsHeld = held;
     toastTimers.forEach(clearTimeout);
     toastTimers.clear();

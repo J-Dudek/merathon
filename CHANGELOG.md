@@ -2,6 +2,26 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.10.0](https://github.com/J-Dudek/merathon/compare/v2.9.1...v2.10.0) (2026-10-30)
+
+### Nouveautés
+
+- retrait notification sur push sur sa propre MR (f51cf48)
+- traduction erreur git (95c9f73)
+- recherche  de fichier et recherche dans fichier sur les MR/PR (4e6cd90)
+- modification branche cible sur MR (14cecbd)
+- modification des attributions sur MR (79b6230)
+- ajout resize sur creation MR/PR (7768c3c)
+- lier un commit aux fils de revue de sa PR / MR (47a7805)
+
+### Corrections
+
+- fermeture modale de notification quand le focus est dessus (188fe2d)
+
+### Autres changements
+
+- chore update cargo lock (0329465)
+
 ## [2.9.1](https://github.com/J-Dudek/merathon/compare/v2.9.0...v2.9.1) (2026-10-28)
 
 ### Corrections

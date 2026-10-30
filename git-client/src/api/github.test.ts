@@ -267,6 +267,53 @@ describe("GitHubClient.updatePullRequest", () => {
   });
 });
 
+describe("GitHubClient.setPeople", () => {
+  const user = (username: string) => ({ id: 1, username, name: username });
+  const current = { number: 7, assignees: [{ login: "ana" }], requested_reviewers: [{ login: "bob" }] };
+
+  it("replaces the assignees and only adds reviewers through REST", async () => {
+    const get = vi.fn().mockResolvedValue(current);
+    const send = vi.fn().mockResolvedValue(null);
+    const graphql = vi.fn();
+    await new GitHubClient(get as never, send as never, graphql as never)
+      .setPeople("o", "r", 7, { assignees: [], reviewers: [user("bob"), user("cleo")] });
+    expect(send.mock.calls).toEqual([
+      ["PATCH", "/repos/o/r/issues/7", { assignees: [] }],
+      ["POST", "/repos/o/r/pulls/7/requested_reviewers", { reviewers: ["cleo"] }],
+    ]);
+    expect(graphql).not.toHaveBeenCalled();
+  });
+
+  it("removes a reviewer with the GraphQL mutation, keeping requested teams", async () => {
+    const get = vi.fn().mockResolvedValue(current);
+    const send = vi.fn().mockResolvedValue(null);
+    const graphql = vi.fn()
+      .mockResolvedValueOnce({
+        repository: { pullRequest: { id: "PR_1", reviewRequests: { nodes: [{ requestedReviewer: { id: "T_1" } }, { requestedReviewer: {} }] } } },
+        u0: { id: "U_cleo" },
+      })
+      .mockResolvedValueOnce({});
+    await new GitHubClient(get as never, send as never, graphql as never)
+      .setPeople("o", "r", 7, { assignees: [user("ana")], reviewers: [user("cleo")] });
+    expect(send).not.toHaveBeenCalled();
+    expect(graphql.mock.calls[0][1]).toEqual({ owner: "o", repo: "r", number: 7, u0: "cleo" });
+    expect(graphql.mock.calls[1][0]).toContain("union: false");
+    expect(graphql.mock.calls[1][1]).toEqual({ id: "PR_1", users: ["U_cleo"], teams: ["T_1"] });
+  });
+});
+
+describe("GitHubClient target branch", () => {
+  it("lists branches and changes the base of the pull request", async () => {
+    const get = vi.fn().mockResolvedValue([{ name: "main" }, { name: "develop" }]);
+    const send = vi.fn().mockResolvedValue(null);
+    const gh = new GitHubClient(get as never, send as never);
+    expect(await gh.getBranches("o", "r")).toEqual(["main", "develop"]);
+    expect(get).toHaveBeenCalledWith("/repos/o/r/branches?per_page=100");
+    await gh.setTargetBranch("o", "r", 7, "develop");
+    expect(send).toHaveBeenCalledWith("PATCH", "/repos/o/r/pulls/7", { base: "develop" });
+  });
+});
+
 describe("GitHubClient.setDraft", () => {
   it("uses the GraphQL mutation matching the requested state", async () => {
     const get = vi.fn().mockResolvedValue({ number: 7, node_id: "PR_kw" });
@@ -365,7 +412,8 @@ describe("GitHubClient inline review", () => {
       mergeable: "MERGEABLE", commits: { nodes: [{ commit: { statusCheckRollup: { state: "SUCCESS" } } }] }, ...extra,
     });
     const graphql = vi.fn().mockResolvedValue({
-      assigned: { nodes: [node(1), {}] },
+      viewer: { login: "me" },
+      assigned: { nodes: [node(1, { commits: { nodes: [{ commit: { statusCheckRollup: null, committer: { user: { login: "me" } } } }] } }), {}] },
       reviewing: { nodes: [node(1), node(2, { reviewDecision: "CHANGES_REQUESTED" })] },
       authored: { nodes: [node(3, { latestOpinionatedReviews: { nodes: [{ state: "APPROVED" }] }, mergeable: "CONFLICTING" })] },
     });
@@ -373,7 +421,7 @@ describe("GitHubClient inline review", () => {
     const mine = await gh.getMyPullRequests();
 
     expect(graphql.mock.calls[0][1]).toMatchObject({ assigned: expect.stringContaining("assignee:@me"), authored: expect.stringContaining("author:@me") });
-    expect(mine.assigned.map((p) => [p.number, p.review])).toEqual([[1, "pending"], [2, "changes_requested"]]);
+    expect(mine.assigned.map((p) => [p.number, p.review, p.pushedByMe])).toEqual([[1, "pending", true], [2, "changes_requested", false]]);
     expect(mine.authored[0]).toMatchObject({ number: 3, projectPath: "o/r", review: "approved", ci: "success", conflicts: true, headSha: "sha" });
   });
 });

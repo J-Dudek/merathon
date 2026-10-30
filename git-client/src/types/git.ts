@@ -130,6 +130,13 @@ export interface RefComparison {
   files: CommitFile[];
 }
 
+/** Trailers (`Clé: valeur` en fin de message) d'un commit. */
+export interface CommitTrailers {
+  hash: string;
+  short_hash: string;
+  trailers: [string, string][];
+}
+
 /** Position d'une branche par rapport à sa cible. */
 export interface BranchDivergence {
   /** Commit de tête de la branche, tel que connu localement. */

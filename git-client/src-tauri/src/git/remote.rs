@@ -154,8 +154,10 @@ pub fn head_upstream(repo: &Repository) -> Result<(String, String, String), GitE
     let refname = head.name().map_err(|_| GitError::Other("HEAD invalide".into()))?.to_string();
     let branch_name = head.shorthand().unwrap_or("").to_string();
     let local = repo.find_branch(&branch_name, BranchType::Local)?;
-    let upstream = local.upstream().map_err(|_| {
-        GitError::Other(format!("La branche « {branch_name} » ne suit aucune branche distante : pousse-la d'abord"))
+    let upstream = local.upstream().map_err(|_| match repo.branch_upstream_name(&refname) {
+        // Suivi configuré, mais la branche de suivi a disparu : supprimée sur le serveur puis retirée par un fetch.
+        Ok(name) => upstream_gone(&branch_name, name.as_str().unwrap_or_default()),
+        Err(_) => GitError::Other(format!("La branche « {branch_name} » ne suit aucune branche distante : pousse-la d'abord")),
     })?;
     let upstream_name = upstream.name()?.unwrap_or("").to_string();
     let remote_buf = repo.branch_upstream_remote(&refname)?;
@@ -163,12 +165,24 @@ pub fn head_upstream(repo: &Repository) -> Result<(String, String, String), GitE
     Ok((branch_name, remote_name, upstream_name))
 }
 
+/// Branche suivie supprimée sur le serveur (souvent après le merge de sa PR / MR).
+fn upstream_gone(branch: &str, upstream: &str) -> GitError {
+    let upstream = upstream.strip_prefix("refs/remotes/").unwrap_or(upstream);
+    GitError::Other(format!(
+        "La branche distante {upstream} n'existe plus : elle a été supprimée sur le serveur, souvent après le merge \
+         de sa PR / MR. Bascule sur une autre branche, ou pousse « {branch} » pour la recréer"
+    ))
+}
+
 /// Fetch puis intègre la branche suivie : fast-forward si possible, sinon merge ou rebase.
 pub fn pull(repo: &Repository, rebase: bool, creds: CredsLookup) -> Result<MergeResult, GitError> {
-    let (_, remote_name, upstream_name) = head_upstream(repo)?;
+    let (branch_name, remote_name, upstream_name) = head_upstream(repo)?;
     fetch(repo, &remote_name, creds)?;
 
-    let upstream = repo.find_branch(&upstream_name, BranchType::Remote)?;
+    // Le fetch (avec prune) vient de retirer la branche suivie : elle n'existe plus sur le serveur.
+    let upstream = repo
+        .find_branch(&upstream_name, BranchType::Remote)
+        .map_err(|_| upstream_gone(&branch_name, &upstream_name))?;
     let annotated = repo.reference_to_annotated_commit(upstream.get())?;
     let (analysis, _) = repo.merge_analysis(&[&annotated])?;
 
@@ -289,6 +303,30 @@ mod tests {
         let result = pull(&clone, false, &no_creds).unwrap();
         assert!(result.success);
         assert!(clone_path.join("b.txt").exists());
+    }
+
+    #[test]
+    fn pull_explains_a_branch_deleted_on_the_remote() {
+        let (root, work, url) = setup_remote();
+        let head = work.head().unwrap().peel_to_commit().unwrap();
+        work.branch("feat", &head, false).unwrap();
+        push_branch(&work, "origin", "feat", false, &no_creds).unwrap();
+
+        let clone_path = root.path().join("work2");
+        clone_repo(&url, clone_path.to_str().unwrap(), &no_creds).unwrap();
+        let clone = Repository::open(&clone_path).unwrap();
+        let remote_feat = clone.find_branch("origin/feat", BranchType::Remote).unwrap().get().peel_to_commit().unwrap();
+        clone.branch("feat", &remote_feat, false).unwrap().set_upstream(Some("origin/feat")).unwrap();
+        clone.set_head("refs/heads/feat").unwrap();
+
+        delete_remote_branch(&work, "origin/feat", &no_creds).unwrap();
+
+        // Le fetch du pull retire origin/feat : le message le dit au lieu de « cannot locate remote-tracking branch ».
+        let first = pull(&clone, false, &no_creds).unwrap_err().to_string();
+        assert!(first.contains("origin/feat n'existe plus"), "{first}");
+        // Ensuite la branche de suivi est absente dès le départ : même explication, pas « ne suit aucune branche ».
+        let again = pull(&clone, false, &no_creds).unwrap_err().to_string();
+        assert!(again.contains("origin/feat n'existe plus"), "{again}");
     }
 
     #[test]
