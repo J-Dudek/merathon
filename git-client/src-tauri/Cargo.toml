@@ -26,7 +26,9 @@ tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 # Mises à jour automatiques (téléchargement signé depuis les releases GitHub) et redémarrage.
 # Sans la fonctionnalité `zip` : les releases publient les paquets bruts (AppImage, deb, exe, msi),
-# jamais d'archive .zip / .tar.gz ; elle n'apportait que la crate zip 4.x (RUSTSEC-2026-0367/0368/0369).
+# jamais d'archive .zip ; elle n'apportait que la crate zip 4.x (RUSTSEC-2026-0367/0368/0369).
+# Seule exception, le `.app.tar.gz` de macOS : le plugin le décompresse avec tar et flate2,
+# qu'il embarque toujours sur macOS, indépendamment de `zip`.
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-process = "2"
 # Notifications système (activité des PR / MR quand la fenêtre est en arrière-plan).
