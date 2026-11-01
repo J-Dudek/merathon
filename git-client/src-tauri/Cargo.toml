@@ -49,6 +49,12 @@ portable-pty = "0.9"
 [dev-dependencies]
 tempfile = "3"
 
+# OpenSSL (tiré par git2 via libssh2) compilé dans le binaire sous macOS : sinon il est lié à celui
+# de Homebrew, absent du Mac de la plupart des utilisateurs, et introuvable pour la cible Intel
+# quand on compile le binaire universel depuis un Mac Apple Silicon.
+[target.'cfg(target_os = "macos")'.dependencies]
+openssl-sys = { version = "0.9", features = ["vendored"] }
+
 # Notifications Linux par une connexion D-Bus gardée ouverte (voir src/notifications.rs).
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = "5"
