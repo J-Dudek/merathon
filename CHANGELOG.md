@@ -2,17 +2,6 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
-## [2.11.0](https://github.com/J-Dudek/merathon/compare/v2.10.0...v2.11.0) (2026-11-01)
-
-### Nouveautés
-
-- **macos :** publier le paquet macOS dans les releases (7db658c)
-- **macos :** paquet macOS signé ad hoc, documenté dans le README (a76462d)
-
-### Corrections
-
-- **macos :** OpenSSL compilé dans le binaire (82b337f)
-
 ## [2.10.0](https://github.com/J-Dudek/merathon/compare/v2.9.1...v2.10.0) (2026-10-30)
 
 ### Nouveautés

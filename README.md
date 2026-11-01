@@ -28,17 +28,16 @@ Les paquets de chaque version sont publiés dans les [releases GitHub](https://g
 
 - **Linux** : `.deb` (Debian/Ubuntu) ou `.AppImage` (universel). Le paquet `.deb` remplace automatiquement l'ancien paquet `j6n`.
 - **Windows** : `.msi` ou `.exe`. Les installeurs ne sont pas encore signés : au premier lancement, cliquer sur **Informations complémentaires** puis **Exécuter quand même**.
-- **macOS** : `.dmg` universel (Apple Silicon et Intel). Ouvrir le `.dmg` et glisser Merathon dans **Applications**. L'application n'est pas encore notarisée par Apple : au premier lancement, macOS la bloque. Il faut alors ouvrir **Réglages Système → Confidentialité et sécurité** et cliquer sur **Ouvrir quand même**, ou lancer `xattr -dr com.apple.quarantine /Applications/Merathon.app` dans un terminal.
 
 Les empreintes SHA-256 de tous les fichiers sont dans `SHA256SUMS.txt`. Une fois installée, l'application se met à jour toute seule.
 
 ### Configuration minimale
 
-| | Linux | Windows | macOS |
-| --- | --- | --- | --- |
-| **Système** | Ubuntu 22.04, Debian 12, ou toute distribution avec **glibc ≥ 2.35** | Windows 10 ou 11 | macOS 11 Big Sur ou plus récent |
-| **Architecture** | x86_64 (amd64) | x86_64 (64 bits) | Apple Silicon (arm64) et Intel (x86_64), dans le même binaire |
-| **Moteur web** | WebKitGTK 4.1 (`libwebkit2gtk-4.1-0`) et GTK 3 (`libgtk-3-0`), installés automatiquement avec le `.deb` | [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) : déjà présent sur Windows 11, téléchargé par l'installeur sur Windows 10 s'il manque | WebKit du système, mis à jour avec Safari : **Safari 16.4 ou plus récent**, exigé par Tailwind CSS 4 |
+| | Linux | Windows |
+| --- | --- | --- |
+| **Système** | Ubuntu 22.04, Debian 12, ou toute distribution avec **glibc ≥ 2.35** | Windows 10 ou 11 |
+| **Architecture** | x86_64 (amd64) | x86_64 (64 bits) |
+| **Moteur web** | WebKitGTK 4.1 (`libwebkit2gtk-4.1-0`) et GTK 3 (`libgtk-3-0`), installés automatiquement avec le `.deb` | [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) : déjà présent sur Windows 11, téléchargé par l'installeur sur Windows 10 s'il manque |
 
 Sous Linux, les versions plus anciennes ne sont pas prises en charge : Ubuntu 20.04, par exemple, ne fournit pas `libwebkit2gtk-4.1-0`, et l'installation du `.deb` échoue avec « Depends: libwebkit2gtk-4.1-0 but it is not installable ». L'AppImage a la même exigence de glibc. Sous WSL avec une distribution trop ancienne, le plus simple est d'installer la version Windows. Sous WSL (WSLg), Merathon s'affiche en X11 pour que la barre des tâches Windows montre son icône plutôt que le pingouin ; `GDK_BACKEND=wayland merathon` force Wayland. Il passe aussi WebKitGTK en rendu logiciel (`WEBKIT_DISABLE_DMABUF_RENDERER=1`, `LIBGL_ALWAYS_SOFTWARE=1`) : selon le GPU et son pilote Windows, le rendu accéléré laisse des zones non redessinées, comme des rectangles blancs sur le graphe. Une variable déjà définie est respectée : `LIBGL_ALWAYS_SOFTWARE=0 merathon` réactive l'accélération matérielle.
 
@@ -119,9 +118,9 @@ Un client Git de bureau doit être **rapide sur de gros historiques**, **sûr** 
 
 ### Tauri 2 plutôt qu'Electron
 
-- **Léger** : Tauri utilise le moteur web du système (WebKitGTK sous Linux, WebView2 sous Windows, WebKit sous macOS) au lieu d'embarquer Chromium et Node.js. Le paquet `.deb` pèse environ 8 Mo, quand une application Electron dépasse souvent les 80 Mo. La mémoire consommée au repos est aussi bien plus faible, ce qui compte pour un outil qu'on ne ferme jamais.
+- **Léger** : Tauri utilise le moteur web du système (WebKitGTK sous Linux, WebView2 sous Windows) au lieu d'embarquer Chromium et Node.js. Le paquet `.deb` pèse environ 8 Mo, quand une application Electron dépasse souvent les 80 Mo. La mémoire consommée au repos est aussi bien plus faible, ce qui compte pour un outil qu'on ne ferme jamais.
 - **Sûr par construction** : le webview n'a aucun accès au système. Il ne peut appeler que les commandes Rust déclarées une à une, avec les permissions listées dans `capabilities/`. Une faille dans l'interface ne donne donc accès ni aux fichiers, ni au réseau, ni aux tokens (voir [Sécurité](#sécurité)).
-- **Livré clé en main** : installeurs Linux, Windows et macOS, mises à jour signées, multi-fenêtres et boîtes de dialogue natives sont fournis par Tauri et ses plugins, sans outillage maison.
+- **Livré clé en main** : installeurs Linux et Windows, mises à jour signées, multi-fenêtres et boîtes de dialogue natives sont fournis par Tauri et ses plugins, sans outillage maison.
 
 ### Rust et libgit2 (`git2`) pour le moteur Git
 
@@ -151,7 +150,7 @@ Un client Git de bureau doit être **rapide sur de gros historiques**, **sûr** 
 
 ### Les compromis assumés
 
-- **Moteur web du système** : WebKitGTK, WebView2 et WebKit ne rendent pas exactement pareil. L'interface évite donc les fonctionnalités web trop récentes, et la CI fait tourner les tests sous Linux et sous Windows.
+- **Moteur web du système** : WebKitGTK et WebView2 ne rendent pas exactement pareil. L'interface évite donc les fonctionnalités web trop récentes, et la CI fait tourner les tests sous Linux et sous Windows.
 - **libgit2 ne couvre pas tout Git** : Git LFS passe par la commande `git` (qui doit alors être installée), et certaines options avancées de Git n'ont pas d'équivalent.
 - **Deux langages** : Rust et TypeScript demandent deux compétences. En échange, chacun fait ce qu'il fait le mieux : Rust la sécurité et la performance, TypeScript l'interface.
 
@@ -172,8 +171,6 @@ Un client Git de bureau doit être **rapide sur de gros historiques**, **sûr** 
   ```
 
   **Windows** : Microsoft C++ Build Tools et WebView2 (préinstallé sur Windows 10/11).
-
-  **macOS** : les outils en ligne de commande de Xcode (`xcode-select --install`). Pour produire le binaire universel, ajouter aussi la cible Intel ou Apple Silicon qui manque : `rustup target add x86_64-apple-darwin aarch64-apple-darwin`.
 
 - Optionnel : [git](https://git-scm.com) et [git-lfs](https://git-lfs.com) dans le `PATH` pour les dépôts utilisant Git LFS.
   Voir la [doc Tauri](https://v2.tauri.app/start/prerequisites/) pour les autres plateformes.
@@ -246,11 +243,7 @@ cd git-client
 npm run tauri build
 ```
 
-Les installeurs sont générés dans `git-client/src-tauri/target/release/bundle/` (`.deb` / `.AppImage` sous Linux, `.msi` / `.exe` sous Windows, `.app` / `.dmg` sous macOS).
-
-Sans la clé privée de signature des mises à jour (voir plus bas), le build se termine sur « A public key has been found, but no private key », après avoir produit les installeurs. Pour un build local sans erreur, désactiver les archives de mise à jour : `npm run tauri build -- -c '{"bundle":{"createUpdaterArtifacts":false}}'`.
-
-Sous macOS, `npm run tauri build -- --target universal-apple-darwin` produit un seul binaire pour Apple Silicon et Intel, dans `git-client/src-tauri/target/universal-apple-darwin/release/bundle/`.
+Les installeurs sont générés dans `git-client/src-tauri/target/release/bundle/` (`.deb` / `.AppImage` sous Linux, `.msi` / `.exe` sous Windows).
 
 ## Intégration continue et releases
 
@@ -262,10 +255,8 @@ Sous macOS, `npm run tauri build -- --target universal-apple-darwin` produit un 
      - `feat:` → version mineure,
      - `fix:`, `perf:`, `refactor:`, `build:` ou message libre → correctif,
      - uniquement `docs:`, `ci:`, `test:`, `chore:`, `style:` → pas de release ;
-  3. génération des paquets Linux (`.deb`, `.AppImage`), Windows (`.msi`, `.exe`) et macOS (`.dmg`, archive de mise à jour `.app.tar.gz`) avec la nouvelle version appliquée (`package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`), pendant que les tests tournent ; rien n'est encore publié ;
+  3. génération des paquets Linux (`.deb`, `.AppImage`) et Windows (`.msi`, `.exe`) avec la nouvelle version appliquée (`package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`), pendant que les tests tournent ; rien n'est encore publié ;
   4. seulement si **les tests et tous les paquets** réussissent : commit `chore(release): vX.Y.Z` sur `main`, tag `vX.Y.Z` et release GitHub, publiée automatiquement. Le commit de version est vérifié identique aux fichiers dont les paquets ont été générés. Si un test ou une plateforme échoue, rien n'est tagué ni publié.
-
-Le paquet macOS (`.dmg` universel et archive de mise à jour `.app.tar.gz`) est produit sur un runner macOS par le workflow réutilisable `.github/workflows/build-macos.yml`, appelé par `release.yml` comme les autres paquets : s'il échoue, rien n'est publié.
 
 La branche `main` étant protégée, le commit de version est poussé avec le secret `RELEASE_TOKEN` : un token autorisé à contourner la protection (GitHub App ou token *fine-grained* limité à ce dépôt, permission « Contents : read and write »).
 

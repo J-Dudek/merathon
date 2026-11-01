@@ -1,7 +1,7 @@
 {
   "name": "merathon",
   "private": true,
-  "version": "2.11.0",
+  "version": "2.10.0",
   "description": "Merathon — Git Repository Manager : client Git graphique de bureau",
   "author": "Julien Dudek",
   "license": "MIT",
@@ -52,7 +52,6 @@
     "vitest": "^5.0.5"
   },
   "allowScripts": {
-    "esbuild@0.27.2": true,
-    "fsevents": false
+    "esbuild@0.27.2": true
   }
 }
