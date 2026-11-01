@@ -1,0 +1,64 @@
+# Workflow du dépôt PUBLIC (merathon), maintenu ici : .github/public-workflows/ de git-management.
+# publish-public.yml le copie dans .github/workflows/ du dépôt public à chaque release ;
+# une modification faite directement dans le dépôt public serait écrasée.
+#
+# Reçoit le résultat de git-management : pose le statut et commente la PR.
+# Pas de merge automatique.
+name: Résultat git-management
+
+on:
+  repository_dispatch:
+    types: [git-management-result]
+
+permissions:
+  statuses: write
+  pull-requests: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Statut et commentaire
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.client_payload.number }}
+          STATE: ${{ github.event.client_payload.state }}
+        run: |
+          set -euo pipefail
+          [[ "$NUMBER" =~ ^[0-9]+$ ]] || { echo "numéro invalide"; exit 1; }
+
+          case "$STATE" in
+            merged)
+              gh_state=success
+              desc="Traitée et mergée sur git-management"
+              body="✅ Cette PR a été traitée et mergée sur git-management. Ses changements arriveront ici avec la prochaine release."
+              ;;
+            closed)
+              gh_state=failure
+              desc="Fermée sans merge sur git-management"
+              body="❌ Cette PR a été fermée sans merge sur git-management."
+              ;;
+            manual)
+              gh_state=pending
+              desc="Révision manuelle requise sur git-management"
+              body="⚠️ Cette PR modifie .github/ : elle n'est pas rejouée automatiquement sur git-management. Elle doit être relue puis lancée à la main."
+              ;;
+            conflict)
+              gh_state=error
+              desc="Conflit lors du rejeu sur git-management"
+              body="⚠️ Cette PR n'a pas pu être rejouée sur git-management (conflit avec la version interne). Un rebase sur la dernière release peut aider."
+              ;;
+            *)
+              echo "état inconnu : $STATE"; exit 1
+              ;;
+          esac
+
+          # Le SHA est relu sur la PR : c'est lui que l'interface affiche.
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" --jq .head.sha)"
+
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${sha}" \
+            -f state="$gh_state" \
+            -f context=git-management \
+            -f description="$desc"
+
+          gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"

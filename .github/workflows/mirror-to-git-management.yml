@@ -1,0 +1,40 @@
+# Workflow du dépôt PUBLIC (merathon), maintenu ici : .github/public-workflows/ de git-management.
+# publish-public.yml le copie dans .github/workflows/ du dépôt public à chaque release ;
+# une modification faite directement dans le dépôt public serait écrasée.
+#
+# Envoie chaque PR (y compris depuis un fork) à git-management, qui la rejoue en interne.
+# pull_request_target a accès aux secrets : ce workflow ne fait JAMAIS de checkout du code
+# de la PR et n'envoie que son numéro.
+name: Miroir PR vers git-management
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  statuses: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Statut « en attente »
+        if: github.event.action != 'closed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/${REPO}/statuses/${SHA}" \
+            -f state=pending \
+            -f context=git-management \
+            -f description="En attente de traitement sur git-management"
+
+      - name: Notifier git-management
+        env:
+          GH_TOKEN: ${{ secrets.GIT_MANAGEMENT_TOKEN }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api repos/J-Dudek/git-management/dispatches \
+            -f event_type=public-pr \
+            -f "client_payload[number]=${NUMBER}"
