@@ -3,6 +3,7 @@ use serde::Serialize;
 use super::error::GitError;
 use super::merge::{conflicted_paths, resolve_annotated, MergeResult};
 use super::repository::signature;
+use super::worktree::ensure_not_checked_out_elsewhere;
 
 #[derive(Debug, Serialize)]
 pub struct RebaseResult {
@@ -11,6 +12,10 @@ pub struct RebaseResult {
 }
 
 fn checkout_ref(repo: &Repository, refname: &str) -> Result<(), GitError> {
+    // Vérifié avant de toucher aux fichiers : `set_head` ne refuserait qu'après leur réécriture.
+    if let Some(branch) = refname.strip_prefix("refs/heads/") {
+        ensure_not_checked_out_elsewhere(repo, branch)?;
+    }
     let target = repo.find_reference(refname)?.peel_to_commit()?;
     // On met à jour la copie de travail avant de déplacer HEAD : si le checkout échoue
     // (modifications locales en conflit), HEAD reste inchangé.
@@ -39,6 +44,7 @@ pub fn checkout_remote_branch(repo: &Repository, remote_branch: &str) -> Result<
         .ok_or_else(|| GitError::Other(format!("nom de branche distante invalide : {remote_branch}")))?;
 
     if repo.find_branch(&local_name, BranchType::Local).is_err() {
+        ensure_branch_name_free(repo, &local_name, None)?;
         let commit = remote.get().peel_to_commit()?;
         let mut local = repo.branch(&local_name, &commit, false)?;
         local.set_upstream(Some(remote_branch))?;
@@ -54,7 +60,29 @@ pub fn checkout_commit(repo: &Repository, hash: &str) -> Result<(), GitError> {
     Ok(())
 }
 
+/// Git range les branches comme des fichiers : `toto` et `toto/a5` ne peuvent pas coexister.
+/// `ignored` : branche renommée, qui libère son nom. Vérifié ici car libgit2 répond par une erreur de dossier illisible.
+pub(crate) fn ensure_branch_name_free(repo: &Repository, name: &str, ignored: Option<&str>) -> Result<(), GitError> {
+    for branch in repo.branches(Some(BranchType::Local))? {
+        let (branch, _) = branch?;
+        let Ok(Some(other)) = branch.name() else { continue };
+        if Some(other) == ignored {
+            continue;
+        }
+        let nested = name.strip_prefix(other).is_some_and(|rest| rest.starts_with('/'));
+        let parent = other.strip_prefix(name).is_some_and(|rest| rest.starts_with('/'));
+        if nested || parent {
+            return Err(GitError::Conflict(format!(
+                "Nom de branche impossible : {name} entre en conflit avec la branche {other}, car git ne permet pas d'avoir à la fois « a » et « a/b ». Choisis un autre nom, par exemple {}",
+                name.replace('/', "-"),
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub fn create_branch(repo: &Repository, name: &str, from_ref: &str) -> Result<(), GitError> {
+    ensure_branch_name_free(repo, name, None)?;
     let obj = repo.revparse_single(from_ref)?;
     let commit = obj.peel_to_commit()?;
     repo.branch(name, &commit, false)?;
@@ -68,6 +96,7 @@ pub fn delete_branch(repo: &Repository, name: &str) -> Result<(), GitError> {
 }
 
 pub fn rename_branch(repo: &Repository, old: &str, new: &str) -> Result<(), GitError> {
+    ensure_branch_name_free(repo, new, Some(old))?;
     let mut branch = repo.find_branch(old, BranchType::Local)?;
     branch.rename(new, false)?;
     Ok(())
@@ -283,6 +312,31 @@ mod tests {
         let hash = repo.head().unwrap().target().unwrap().to_string();
         create_branch(&repo, "from-hash", &hash).unwrap();
         assert!(repo.find_branch("from-hash", BranchType::Local).is_ok());
+    }
+
+    #[test]
+    fn explains_a_branch_name_nested_in_another_one() {
+        let (_dir, repo) = base_repo();
+        create_branch(&repo, "toto", "HEAD").unwrap();
+        let err = create_branch(&repo, "toto/a5", "HEAD").unwrap_err().to_string();
+        assert!(err.contains("conflit avec la branche toto") && err.contains("toto-a5"), "{err}");
+
+        create_branch(&repo, "lot/a", "HEAD").unwrap();
+        let err = create_branch(&repo, "lot", "HEAD").unwrap_err().to_string();
+        assert!(err.contains("conflit avec la branche lot/a"), "{err}");
+
+        // Simple préfixe du nom, sans « / » : aucun conflit.
+        create_branch(&repo, "toto-a5", "HEAD").unwrap();
+    }
+
+    #[test]
+    fn renames_a_branch_into_its_own_folder() {
+        let (_dir, repo) = base_repo();
+        create_branch(&repo, "toto", "HEAD").unwrap();
+        create_branch(&repo, "autre", "HEAD").unwrap();
+        assert!(rename_branch(&repo, "autre", "toto/a5").unwrap_err().to_string().contains("conflit"));
+        rename_branch(&repo, "toto", "toto/a5").unwrap();
+        assert!(repo.find_branch("toto/a5", BranchType::Local).is_ok());
     }
 
     #[test]

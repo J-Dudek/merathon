@@ -1,6 +1,6 @@
 [package]
 name = "merathon"
-version = "2.10.0"
+version = "2.12.0"
 description = "Merathon — Git Repository Manager : client Git graphique de bureau"
 authors = ["Julien Dudek"]
 license = "MIT"
@@ -43,6 +43,9 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 rustls-native-certs = "0.8"
 webpki-roots = "1"
 portable-pty = "0.9"
+# Création et lecture des clés SSH (voir src/ssh_setup.rs). Sans `std` ni les fonctionnalités par défaut : elles feraient
+# entrer dans Cargo.lock, même sans les compiler, crypto-bigint (RUSTSEC-2026-0387) et rsa (RUSTSEC-2023-0071).
+ssh-key = { version = "0.6", default-features = false, features = ["ed25519", "encryption", "getrandom"] }
 
 [dev-dependencies]
 tempfile = "3"

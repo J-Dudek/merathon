@@ -9,6 +9,7 @@ use git2::Repository;
 use tauri::{AppHandle, Manager};
 use crate::accounts::{Account, AccountStore, AuthKind, Provider, SavedAccount};
 use crate::oauth;
+use crate::ssh_setup;
 use crate::git::{self, GitError};
 
 fn with_repo<T>(path: &str, f: impl FnOnce(&Repository) -> Result<T, GitError>) -> Result<T, GitError> {
@@ -457,6 +458,66 @@ pub async fn clone_repository(app: AppHandle, url: String, path: String) -> Resu
 }
 
 #[tauri::command(async)]
+pub fn ssh_setup_info() -> Result<ssh_setup::SshSetupInfo, String> {
+    Ok(ssh_setup::setup_info(&ssh_setup::ssh_dir()?))
+}
+
+#[tauri::command(async)]
+pub fn ssh_create_key(name: Option<String>, comment: String, passphrase: Option<String>) -> Result<ssh_setup::SshKeyInfo, String> {
+    ssh_setup::create_key(&ssh_setup::ssh_dir()?, name.as_deref(), &comment, passphrase.as_deref())
+}
+
+#[tauri::command(async)]
+pub fn ssh_all_keys() -> Result<Vec<ssh_setup::SshKeyInfo>, String> {
+    Ok(ssh_setup::all_keys(&ssh_setup::ssh_dir()?))
+}
+
+#[tauri::command(async)]
+pub fn list_git_profiles() -> Result<git::ProfilesInfo, GitError> {
+    git::list_profiles(&git::home_dir()?)
+}
+
+#[tauri::command(async)]
+pub fn save_git_profile(profile: git::ProfileInput) -> Result<git::GitProfile, GitError> {
+    git::save_profile(&git::home_dir()?, &profile)
+}
+
+#[tauri::command(async)]
+pub fn delete_git_profile(id: String) -> Result<(), GitError> {
+    git::delete_profile(&git::home_dir()?, &id)
+}
+
+#[tauri::command(async)]
+pub fn git_identity_status(path: String) -> Result<git::IdentityStatus, GitError> {
+    with_repo(&path, |r| git::identity_status(&git::home_dir()?, r))
+}
+
+#[tauri::command(async)]
+pub fn clear_local_identity(path: String) -> Result<(), GitError> {
+    with_repo(&path, git::clear_local_identity)
+}
+
+#[tauri::command(async)]
+pub fn ssh_existing_key(name: String) -> Result<ssh_setup::SshKeyInfo, String> {
+    ssh_setup::existing_key(&ssh_setup::ssh_dir()?, &name)
+}
+
+#[tauri::command(async)]
+pub fn ssh_host_status(host: String) -> Result<ssh_setup::HostStatus, String> {
+    ssh_setup::host_status(&ssh_setup::ssh_dir()?, &host)
+}
+
+#[tauri::command(async)]
+pub fn ssh_trust_host(host: String, fingerprint: String) -> Result<(), String> {
+    ssh_setup::trust_host(&ssh_setup::ssh_dir()?, &host, &fingerprint)
+}
+
+#[tauri::command(async)]
+pub fn ssh_check_connection(host: String, key: String) -> Result<ssh_setup::SshCheck, String> {
+    ssh_setup::check_connection(&ssh_setup::ssh_dir()?, &host, &key)
+}
+
+#[tauri::command(async)]
 pub fn list_submodules(path: String) -> Result<Vec<git::SubmoduleInfo>, GitError> {
     with_repo(&path, git::list_submodules)
 }
@@ -465,6 +526,24 @@ pub fn list_submodules(path: String) -> Result<Vec<git::SubmoduleInfo>, GitError
 #[tauri::command]
 pub async fn update_submodules(app: AppHandle, path: String, names: Vec<String>) -> Result<(), GitError> {
     network(&app, move |creds| with_repo(&path, |r| git::update_submodules(r, &names, creds))).await
+}
+
+#[tauri::command(async)]
+pub fn list_worktrees(path: String) -> Result<Vec<git::WorktreeInfo>, GitError> {
+    with_repo(&path, git::list_worktrees)
+}
+
+/// `create` : crée d'abord `branch` depuis HEAD. Les fichiers LFS écrits par libgit2 sont des pointeurs : on remet leur contenu.
+#[tauri::command(async)]
+pub fn add_worktree(path: String, target: String, branch: String, create: bool) -> Result<(), GitError> {
+    with_repo(&path, |r| git::add_worktree(r, &target, &branch, create))?;
+    let _ = with_repo(&target, git::lfs::lfs_checkout);
+    Ok(())
+}
+
+#[tauri::command(async)]
+pub fn remove_worktree(path: String, name: String) -> Result<(), GitError> {
+    with_repo(&path, |r| git::remove_worktree(r, &name))
 }
 
 /// `remote` absent : fetch de tous les remotes.

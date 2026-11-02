@@ -1,4 +1,5 @@
 import { Plus, X } from "lucide-react";
+import { usePendingByRepo } from "../lib/pendingPullRequests";
 import { useRepoStore } from "../store/useRepoStore";
 import { useTabsStore, type RepoTab } from "../store/useTabsStore";
 
@@ -12,6 +13,7 @@ export function TabBar() {
   const activePath = useRepoStore((s) => s.repoPath);
 
   const pathOf = (tab: RepoTab) => (tab.id === activeId ? activePath : tab.path);
+  const pending = usePendingByRepo([...new Set(tabs.map(pathOf).filter((p): p is string => !!p))]);
 
   return (
     <div className="flex items-stretch h-8 shrink-0 bg-[var(--color-bg-secondary)] border-b border-overlay/10 overflow-x-auto">
@@ -20,10 +22,12 @@ export function TabBar() {
           const path = pathOf(tab);
           const active = tab.id === activeId;
           const name = path?.split(/[\\/]/).pop() || "Nouvel onglet";
+          const count = path ? pending[path] ?? 0 : 0;
+          const activity = count > 0 ? `${count} PR / MR avec du nouveau` : null;
           return (
             <div
               key={tab.id}
-              title={path ?? undefined}
+              title={path ? [path, activity].filter(Boolean).join("\n") : undefined}
               onClick={() => switchTab(tab.id)}
               onAuxClick={(e) => e.button === 1 && closeTab(tab.id)}
               className={`group flex items-center gap-2 pl-3 pr-1 min-w-0 max-w-52 cursor-pointer border-r border-overlay/10 border-b-2 text-xs ${
@@ -32,9 +36,11 @@ export function TabBar() {
                   : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/5 border-b-transparent"
               }`}
             >
+              {activity && <span className="shrink-0 w-2 h-2 rounded-full bg-[var(--color-accent)]" aria-hidden />}
               {/* Vrai bouton : l'onglet s'active aussi au clavier (le clic remonte au conteneur). */}
               <button type="button" aria-current={active ? "page" : undefined} className="truncate text-left">
                 {name}
+                {activity && <span className="sr-only"> ({activity})</span>}
               </button>
               <button
                 className={`shrink-0 w-4 h-4 leading-4 rounded text-[11px] hover:bg-overlay/15 ${active ? "" : "opacity-0 group-hover:opacity-100 focus:opacity-100"}`}

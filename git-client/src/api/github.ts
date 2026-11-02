@@ -188,6 +188,11 @@ export class GitHubClient {
     return user.login;
   }
 
+  /** Le token doit avoir le scope `write:public_key`, que Merathon ne demande pas à la connexion. */
+  async addSshKey(title: string, key: string): Promise<void> {
+    await this.send("POST", "/user/keys", { title, key });
+  }
+
   async listRepos(): Promise<ForgeRepo[]> {
     const data = await this.get<RawRepo[]>(
       "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member"

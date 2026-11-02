@@ -41,7 +41,7 @@ export function tabPath(tab: RepoTab, activeId: number): string | null {
   return tab.id === activeId ? useRepoStore.getState().repoPath : tab.path;
 }
 
-function samePath(a: string | null, b: string | null): boolean {
+export function samePath(a: string | null, b: string | null): boolean {
   return !!a && !!b && trimEndChars(a, "\\/") === trimEndChars(b, "\\/");
 }
 

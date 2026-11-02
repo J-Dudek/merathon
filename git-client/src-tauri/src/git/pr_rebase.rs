@@ -163,7 +163,7 @@ pub fn force_push_pull_request(
     let url = remote.url().unwrap_or("").to_string();
     let stale: Cell<Option<Oid>> = Cell::new(None);
     let rejected: RefCell<Vec<String>> = RefCell::new(Vec::new());
-    let mut callbacks = remote_callbacks(creds(&url));
+    let mut callbacks = remote_callbacks(creds(&url), repo.path());
     callbacks.push_negotiation(|updates| {
         for update in updates {
             if update.dst_refname().ok() == Some(target.as_str()) && update.src() != expected {
@@ -210,6 +210,10 @@ fn update_local_branch(repo: &Repository, branch: &str, old: Oid, new: Oid) -> R
     };
     if local.get().target() != Some(old) {
         return Ok(LocalBranchUpdate::Diverged);
+    }
+    // Extraite dans un autre worktree : la déplacer désynchroniserait ses fichiers.
+    if super::worktree::checked_out_elsewhere(repo, branch)?.is_some() {
+        return Ok(LocalBranchUpdate::Dirty);
     }
     let mut reference = local.into_reference();
     if repo.head().ok().and_then(|h| h.name().ok().map(str::to_string)).as_deref() == reference.name().ok() {

@@ -62,7 +62,11 @@ fn trusted_credential_helpers() -> Vec<String> {
     helpers
 }
 
-fn trusted_ssh_command() -> String {
+/// `core.sshCommand` de la configuration de l'utilisateur, ou clé du profil du dossier : celle du dépôt n'est pas lue.
+fn trusted_ssh_command(dir: &Path) -> String {
+    if let Some(key) = super::profiles::ssh_key_for(dir) {
+        return format!("ssh -i \"{}\" -o IdentitiesOnly=yes", key.to_string_lossy().replace('\\', "/"));
+    }
     git2::Config::open_default()
         .and_then(|c| c.get_string("core.sshCommand"))
         .unwrap_or_else(|_| "ssh".into())
@@ -84,7 +88,7 @@ fn git(dir: &Path, creds: Option<&Credentials>) -> Command {
         ("core.hooksPath", no_hooks.to_string_lossy().to_string()),
         ("core.fsmonitor", "false".into()),
         ("core.askPass", String::new()),
-        ("core.sshCommand", trusted_ssh_command()),
+        ("core.sshCommand", trusted_ssh_command(dir)),
         ("protocol.ext.allow", "never".into()),
         // Filtre LFS imposé : la config locale ne peut pas le remplacer par une autre commande.
         ("filter.lfs.clean", "git-lfs clean -- %f".into()),

@@ -29,6 +29,11 @@ describe("filterMemo", () => {
     expect(titles("closes #12")).toEqual(["Lier une issue à une pull request"]);
   });
 
+  it("trouve les worktrees par leur commande", () => {
+    expect(titles("worktree prune")).toEqual(["Nettoyer un worktree disparu"]);
+    expect(titles("git worktree add")).toHaveLength(2);
+  });
+
   it("exige tous les mots et retire les rubriques vides", () => {
     expect(titles("push force")).toContain("Forcer un push");
     expect(filterMemo(GIT_MEMO, "zzz introuvable")).toEqual([]);

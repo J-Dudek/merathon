@@ -169,6 +169,7 @@ export const GIT_MEMO: MemoGroup[] = [
           "Pour partir d'ailleurs : clic droit sur un commit du graphe → « Créer une branche ici… », ou clic droit sur une branche → « Créer une branche depuis… ».",
           "La case « Basculer sur la nouvelle branche » la rend courante aussitôt.",
         ],
+        warning: "Une branche ne peut pas en « contenir » une autre : toto/a5 est refusée tant que toto existe, et inversement. Choisis par exemple toto-a5.",
       },
       {
         title: "Changer de branche",
@@ -235,6 +236,38 @@ export const GIT_MEMO: MemoGroup[] = [
           "Saisis le nom (« origin » en général) puis l'URL.",
           "Clic droit sur un remote → « Supprimer le remote » pour le retirer.",
         ],
+      },
+      {
+        title: "Avoir une identité par dossier",
+        command: 'git config --global includeIf."gitdir:~/dev/pro/".path ~/.gitconfig-pro',
+        summary:
+          "Une règle includeIf applique un fichier de configuration à tous les dépôts d'un dossier : même e-mail de commit et même clé SSH (core.sshCommand) sans rien régler dépôt par dépôt. " +
+          "Pour Merathon comme pour git en ligne de commande, le réglage propre à un dépôt passe avant la règle.",
+        example: "Sur ton poste pro, ~/dev/pro/ utilise ton compte GitLab, ~/dev/client/ une instance auto-hébergée et ~/dev/perso/ GitHub, chacun avec son e-mail et sa clé.",
+        steps: [
+          "Préférences → « Profils Git » → « Nouveau profil ».",
+          "Choisis le dossier, le nom et l'e-mail des commits, puis le compte et la clé SSH (existante, ou à créer).",
+          "Si le dépôt ouvert signe avec un autre e-mail que son profil, une alerte apparaît au-dessus du résumé du commit ; « Utiliser le profil » retire le réglage propre au dépôt.",
+          "En HTTPS, le token reste choisi d'après l'instance du remote, et non d'après le dossier.",
+        ],
+        warning:
+          "Si [user] est écrit après une règle includeIf dans ~/.gitconfig, il passe avant le profil : l'alerte le signale. Une copie de ~/.gitconfig est gardée dans ~/.gitconfig.merathon-original et ~/.gitconfig.merathon-backup.",
+      },
+      {
+        title: "Configurer une clé SSH",
+        command: "ssh-keygen -t ed25519",
+        summary:
+          "Une clé SSH remplace le token pour les dépôts dont le remote est en SSH (git@hôte:…). La clé privée reste sur ta machine ; seule la clé publique est enregistrée sur GitHub ou GitLab. " +
+          "À la première connexion, l'empreinte du serveur est vérifiée puis mémorisée dans ~/.ssh/known_hosts.",
+        example: "Tes dépôts sont clonés en git@github.com:… et tu veux que fetch et push fonctionnent aussi en ligne de commande, sans saisir de token.",
+        steps: [
+          "Onglet « Comptes » : clic droit sur le compte → « Configurer SSH… ».",
+          "Choisis une clé existante, ou crée ~/.ssh/id_ed25519 s'il n'existe pas. Une clé existante n'est jamais écrasée.",
+          "Valide : la clé est enregistrée sur le compte, puis la connexion est testée.",
+          "Si le token n'a pas le droit d'ajouter des clés (GitHub : scope write:public_key), copie la clé publique et ajoute-la sur la page proposée.",
+        ],
+        warning:
+          "Sans passphrase, quiconque copie le fichier de la clé privée accède à tes dépôts. Avec une passphrase, ajoute la clé à ton agent SSH (ssh-add) : Merathon ne la demande pas lors des fetch et push.",
       },
       {
         title: "Récupérer les nouveautés sans les intégrer",
@@ -496,6 +529,110 @@ export const GIT_MEMO: MemoGroup[] = [
         summary: "Les commandes sans bouton dédié restent accessibles dans le terminal intégré, ouvert dans le dépôt.",
         example: "Tu veux savoir qui a écrit une ligne (blame) ou retrouver un commit perdu après un reset (reflog).",
         steps: ["Ouvre le panneau du bas (Ctrl+J) puis l'onglet « Terminal ».", "F5 rafraîchit l'affichage après une commande."],
+      },
+    ],
+  },
+  {
+    id: "worktrees",
+    label: "Worktrees",
+    entries: [
+      {
+        title: "Comprendre les worktrees",
+        command: "git worktree list",
+        summary:
+          "Un worktree est une copie de travail supplémentaire du même dépôt, dans un autre dossier et sur une autre branche. " +
+          "Tous partagent les commits, les branches, les tags, les remotes et les stashs : un commit fait dans l'un est aussitôt visible dans les autres, sans push ni fetch. " +
+          "Chacun garde ses propres fichiers, son index et sa branche courante. " +
+          "Le dossier d'origine est le worktree principal ; dans les autres, .git est un simple fichier qui pointe vers le dépôt principal, sans second historique.",
+        example:
+          "Tu es au milieu d'une fonctionnalité quand un correctif urgent arrive : au lieu de stasher et de changer de branche, tu ouvres le correctif dans un second dossier, sans toucher à ton travail en cours.",
+        steps: [
+          "Déplie la section « Worktrees » de la barre latérale : chaque ligne indique la branche extraite.",
+          "Le worktree affiché est mis en évidence, et celui d'origine porte la mention « principal ».",
+          "Survole une ligne pour voir son dossier.",
+        ],
+        warning:
+          "Seuls les fichiers versionnés sont présents dans un nouveau worktree : les fichiers ignorés (node_modules, .env, builds…) n'y sont pas, il faut les réinstaller ou les recopier.",
+      },
+      {
+        title: "Créer un worktree sur une nouvelle branche",
+        command: "git worktree add -b <branche> <dossier>",
+        summary: "Crée la branche depuis le commit courant, puis l'extrait dans un nouveau dossier.",
+        example: "Tu démarres hotfix/login depuis main, tout en gardant ta branche de fonctionnalité ouverte dans son dossier.",
+        steps: [
+          "Section « Worktrees » → bouton + (au survol du titre).",
+          "Saisis le nom de la nouvelle branche : elle part de la branche courante.",
+          "Valide ou modifie le dossier proposé (<dépôt>-<branche>, à côté du dépôt) : il doit être absolu et ne pas exister.",
+          "Le worktree s'ouvre dans un nouvel onglet.",
+        ],
+      },
+      {
+        title: "Extraire une branche existante dans un worktree",
+        command: "git worktree add <dossier> <branche>",
+        summary: "Extrait une branche locale déjà créée dans un nouveau dossier, sans changer de branche là où tu es.",
+        example: "Un collègue te demande de relire ta branche feature/export pendant que tu travailles sur une autre : tu la lances à côté pour comparer les deux.",
+        steps: [
+          "Clic droit sur la branche, dans la section « Local » ou le graphe.",
+          "Choisis « Extraire dans un nouveau worktree… ».",
+          "Valide ou modifie le dossier proposé.",
+        ],
+      },
+      {
+        title: "Passer d'un worktree à l'autre",
+        command: "cd <dossier>",
+        summary: "Chaque worktree est un dossier distinct : y aller suffit, rien n'est réécrit sur le disque, contrairement à un changement de branche.",
+        example: "Tu lances une longue compilation dans un worktree et tu continues à coder dans un autre pendant ce temps.",
+        steps: [
+          "Clique sur le worktree dans la section « Worktrees » : il s'ouvre dans un onglet, ou son onglet s'affiche s'il est déjà ouvert.",
+          "Clic droit → « Ouvrir dans une nouvelle fenêtre » pour les voir côte à côte.",
+        ],
+      },
+      {
+        title: "Retrouver le worktree d'une branche",
+        command: "git worktree list",
+        summary:
+          "Une branche ne peut être extraite que dans un seul worktree à la fois : sinon, un commit dans l'un déplacerait la branche sous les fichiers de l'autre. " +
+          "Ailleurs, elle ne peut donc être ni extraite, ni avancée, ni supprimée.",
+        example: "Le checkout de main est refusé car main est déjà extraite dans ton dossier principal : il suffit d'aller y travailler.",
+        steps: [
+          "Clic droit sur la branche : « Checkout » est grisé avec la mention « Extraite dans un autre worktree ».",
+          "Choisis « Ouvrir son worktree » pour y aller.",
+        ],
+      },
+      {
+        title: "Supprimer un worktree",
+        command: "git worktree remove <dossier>",
+        summary: "Supprime le dossier et sa référence dans le dépôt. La branche et ses commits restent : tu peux la rouvrir plus tard, ou la supprimer à part.",
+        example: "Ton correctif est mergé : le dossier ne sert plus, et sa branche pourra être supprimée ensuite.",
+        steps: [
+          "Ouvre un autre worktree : celui qui est affiché ne peut pas être supprimé, pas plus que le principal.",
+          "Clic droit sur le worktree → « Supprimer… ».",
+          "La confirmation indique combien de fichiers seraient perdus ; l'onglet du worktree se ferme ensuite.",
+        ],
+        warning:
+          "Tout le contenu du dossier est effacé, y compris les modifications non commitées et les fichiers non suivis ou ignorés. Commite ou recopie d'abord ce que tu veux garder ; un stash est une autre option, car il est partagé entre les worktrees.",
+      },
+      {
+        title: "Nettoyer un worktree disparu",
+        command: "git worktree prune",
+        summary: "Si le dossier a été supprimé ou déplacé hors de git, le dépôt garde sa référence et sa branche reste considérée comme extraite. Il faut retirer cette référence.",
+        example: "Tu as effacé le dossier avec ton gestionnaire de fichiers : git considère encore sa branche comme extraite tant que la référence existe.",
+        steps: [
+          "Le worktree apparaît avec la mention « introuvable » dans la section « Worktrees ».",
+          "Clic droit → « Retirer de la liste… » : seule la référence est retirée, la branche reste.",
+        ],
+      },
+      {
+        title: "Déplacer ou verrouiller un worktree",
+        command: "git worktree move <dossier> <nouveau-dossier> ; git worktree lock <dossier>",
+        summary:
+          "move déplace le dossier en gardant le lien avec le dépôt. lock le protège de la suppression et du nettoyage, par exemple s'il est sur un disque externe ; git worktree unlock lève la protection.",
+        example: "Ton worktree est sur une clé USB souvent débranchée : verrouillé, il ne sera pas nettoyé par erreur.",
+        steps: [
+          "Ces opérations se font en ligne de commande : ouvre le panneau du bas (Ctrl+J) puis l'onglet « Terminal ».",
+          "Un worktree verrouillé porte la mention « verrouillé » et ne peut pas être supprimé depuis l'application.",
+        ],
+        warning: "Ne déplace pas le dossier à la main : le lien serait rompu. Passe par git worktree move.",
       },
     ],
   },

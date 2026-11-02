@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  Accessibility, Bell, BookOpen, Bug, Check, Copy, ExternalLink, FolderGit2, Info, Keyboard, Monitor, Moon, Palette, RefreshCw, RotateCcw, Scale, ScrollText,
+  Accessibility, Bell, BookOpen, Bug, Check, Copy, ExternalLink, FolderCog, FolderGit2, Info, Keyboard, Monitor, Moon, Palette, RefreshCw, RotateCcw, Scale, ScrollText,
   SquareTerminal, Sun, Trophy, type LucideIcon,
 } from "lucide-react";
 import { getTauriVersion, getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Modal } from "./Modal";
+import { GitProfilesSection } from "./GitProfilesSection";
 import { Kbd } from "./Kbd";
 import { Tooltip } from "./Tooltip";
 import {
@@ -34,6 +35,7 @@ const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "appearance", label: "Apparence", icon: Palette },
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
   { id: "sync", label: "Synchronisation", icon: RefreshCw },
+  { id: "profiles", label: "Profils Git", icon: FolderCog },
   { id: "shortcuts", label: "Raccourcis", icon: Keyboard },
   { id: "activity", label: "Mon activité", icon: Trophy },
   { id: "accessibility", label: "Accessibilité", icon: Accessibility },
@@ -41,7 +43,7 @@ const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
 ];
 
 /** Rubriques sans réglage : pas de bouton « Réinitialiser ». */
-const READ_ONLY: Section[] = ["shortcuts", "activity", "accessibility", "about"];
+const READ_ONLY: Section[] = ["profiles", "shortcuts", "activity", "accessibility", "about"];
 
 /** Préférences de l'application : appliquées immédiatement et partagées entre les fenêtres. */
 export function PreferencesDialog({ onClose }: { onClose: () => void }) {
@@ -93,6 +95,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
             {section === "appearance" && <AppearanceSection />}
             {section === "terminal" && <TerminalSection />}
             {section === "sync" && <SyncSection />}
+            {section === "profiles" && <GitProfilesSection />}
             {section === "shortcuts" && <ShortcutsSection />}
             {section === "activity" && <ActivitySection />}
             {section === "accessibility" && <AccessibilitySection />}

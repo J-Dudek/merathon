@@ -2,6 +2,24 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.12.0](https://github.com/J-Dudek/merathon/compare/v2.11.0...v2.12.0) (2026-11-02)
+
+### Nouveautés
+
+- ajout gestion des profils git pour le multi compte (1e7f1b0)
+- ajout génération de clés ssh (8071987)
+- ajout de la fonctionnalité worktree (voir dans Menu>Mémo Git) (64a364c)
+- pastille sur l'onglet ou il y a des notifications (13dc6e6)
+
+### Corrections
+
+- chemins Windows des profils Git et de leurs clés SSH (f89f62f)
+- design and docs (8028244)
+
+### Autres changements
+
+- **deps :** forcer minimatch 11 pour corriger GHSA-g3hv-75wg-m249 (82ef806)
+
 ## [2.10.0](https://github.com/J-Dudek/merathon/compare/v2.9.1...v2.10.0) (2026-10-30)
 
 ### Nouveautés

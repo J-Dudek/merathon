@@ -64,7 +64,7 @@ pub fn update_submodules(repo: &Repository, names: &[String], creds: CredsLookup
             .unwrap_or_default();
 
         let mut fetch = FetchOptions::new();
-        fetch.remote_callbacks(remote_callbacks(creds(&url)));
+        fetch.remote_callbacks(remote_callbacks(creds(&url), repo.path()));
         let mut opts = SubmoduleUpdateOptions::new();
         opts.fetch(fetch);
         sm.update(true, Some(&mut opts))

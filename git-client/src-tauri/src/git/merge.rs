@@ -109,6 +109,7 @@ pub fn fast_forward_branch(repo: &Repository, branch_name: &str, target: &str) -
     if head_name.is_some() && head_name.as_deref() == reference.name().ok() {
         return fast_forward(repo, target);
     }
+    super::worktree::ensure_not_checked_out_elsewhere(repo, branch_name)?;
     let current = reference.peel_to_commit()?.id();
     let to = resolve_annotated(repo, target)?.id();
     if current == to {

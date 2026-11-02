@@ -25,6 +25,9 @@ const MIN_HEIGHT = 200;
 /** Marge gardée autour de la fenêtre agrandie ou redimensionnée. */
 const MARGIN = 16;
 
+/** Fenêtres ouvertes, de la plus ancienne à celle du dessus. */
+const openModals: string[] = [];
+
 const storageKey = (key: string) => `merathon.modal.${key}`;
 
 function loadSize(key?: string): ModalSize {
@@ -56,12 +59,20 @@ export function Modal({ title, onClose, children, width = "w-[420px]", height = 
   const sized = size.maximized || custom;
 
   useEffect(() => {
+    openModals.push(titleId);
+    return () => {
+      openModals.splice(openModals.lastIndexOf(titleId), 1);
+    };
+  }, [titleId]);
+
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      // Fenêtre ouverte depuis une autre : Échap ne ferme que celle du dessus.
+      if (e.key === "Escape" && openModals[openModals.length - 1] === titleId) onClose();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, titleId]);
 
   function update(next: ModalSize) {
     setSize(next);

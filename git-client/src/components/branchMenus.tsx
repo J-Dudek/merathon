@@ -9,6 +9,8 @@ import {
 } from "../ipc/commands";
 import { reportMerge, runGit } from "../lib/actions";
 import { pushBranch } from "../lib/threadReplies";
+import { createWorktree } from "../lib/worktrees";
+import { openRepoAt } from "../lib/repoActions";
 import { ancestorsOf, canFastForward } from "../lib/ancestry";
 import { branchKey } from "../lib/graphFilter";
 import { useGraphFilterStore } from "../store/useGraphFilterStore";
@@ -28,6 +30,7 @@ export function useBranchMenus() {
   const commits = useRepoStore((s) => s.commits);
   const branches = useRepoStore((s) => s.branches);
   const accounts = useAccountsStore((s) => s.accounts);
+  const worktrees = useRepoStore((s) => s.worktrees);
   const graphFilter = useGraphFilterStore((s) => (repoPath ? s.filters[repoPath] : undefined));
   const [pullRequest, setPullRequest] = useState<PullRequestTarget | null>(null);
   const path = repoPath ?? "";
@@ -72,6 +75,9 @@ export function useBranchMenus() {
     return entries;
   }
 
+  /** Autre worktree où cette branche locale est extraite. */
+  const elsewhere = (b: BranchInfo) => (b.is_remote ? undefined : worktrees.find((w) => !w.is_current && w.branch === b.name));
+
   async function newBranchFrom(from: string) {
     const result = await useUiStore.getState().ask({
       title: "Nouvelle branche",
@@ -94,7 +100,12 @@ export function useBranchMenus() {
     const entries: MenuEntry[] = [
       b.is_remote
         ? { label: "Checkout (branche locale de suivi)", action: () => runGit(() => checkoutRemoteBranch(path, b.name)) }
-        : { label: `Checkout ${b.name}`, action: () => runGit(() => checkoutBranch(path, b.name)) },
+        : {
+            label: `Checkout ${b.name}`,
+            disabled: !!elsewhere(b),
+            hint: elsewhere(b) && "Extraite dans un autre worktree",
+            action: () => runGit(() => checkoutBranch(path, b.name)),
+          },
       {
         label: `Merger ${b.name} dans ${head}`,
         disabled: inHead,
@@ -125,7 +136,7 @@ export function useBranchMenus() {
         action: () => runGit(() => fastForward(path, b.name), { success: `${current} avancée jusqu'à ${b.name}` }),
       });
     }
-    if (b.is_remote || b.is_head) return entries;
+    if (b.is_remote || b.is_head || elsewhere(b)) return entries;
     const moveTo = (target: string) => ({
       label: `Fast-forward ${b.name} jusqu'à ${target}`,
       hint: "Avance cette branche sans la checkout",
@@ -136,6 +147,15 @@ export function useBranchMenus() {
     if (upstream && upstream.target_hash !== info?.head_hash && canFastForward(commits, b.target_hash, upstream.target_hash))
       entries.push(moveTo(upstream.name));
     return entries;
+  }
+
+  /** Ouvre le worktree de la branche, ou l'extrait dans un nouveau. La branche courante est déjà affichée. */
+  function worktreeEntries(b: BranchInfo): MenuEntry[] {
+    if (b.is_head) return [];
+    const other = elsewhere(b);
+    return other
+      ? [{ label: "Ouvrir son worktree", hint: other.path, action: () => openRepoAt(other.path) }]
+      : [{ label: "Extraire dans un nouveau worktree…", action: () => createWorktree(b.name, false) }];
   }
 
   function localMenu(b: BranchInfo): MenuEntry[] {
@@ -155,6 +175,7 @@ export function useBranchMenus() {
       ...pullRequestEntries(b),
       "separator",
       { label: `Créer une branche depuis ${b.name}…`, action: () => newBranchFrom(b.name) },
+      ...worktreeEntries(b),
       {
         label: "Renommer…",
         action: async () => {
@@ -182,7 +203,8 @@ export function useBranchMenus() {
       {
         label: "Supprimer",
         danger: true,
-        disabled: b.is_head,
+        disabled: b.is_head || !!elsewhere(b),
+        hint: elsewhere(b) && "Extraite dans un autre worktree",
         action: async () => {
           if (await confirmAction(`Supprimer la branche « ${b.name} » ?`, "Les commits non mergés ailleurs ne seront plus référencés.", true))
             await runGit(() => deleteBranch(path, b.name));

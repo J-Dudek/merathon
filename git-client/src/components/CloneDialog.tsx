@@ -3,9 +3,11 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { openRepoAt } from "../lib/repoActions";
 import { useUiStore } from "../store/useUiStore";
-import { cloneRepository } from "../ipc/commands";
+import { cloneRepository, listGitProfiles } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
+import { profileForAccount, profileForDir } from "../lib/gitProfiles";
 import type { ForgeRepo } from "../types/forge";
+import type { GitProfile } from "../types/git";
 import { Button, Modal, inputClass } from "./Modal";
 import { trimEndChars } from "../lib/strings";
 import { fieldLabel } from "../lib/fieldLabel";
@@ -29,6 +31,19 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
   const [reposError, setReposError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [cloning, setCloning] = useState(false);
+  const [profiles, setProfiles] = useState<GitProfile[]>([]);
+  const [dirChosen, setDirChosen] = useState(false);
+  const targetProfile = profileForDir(profiles, parentDir);
+
+  useEffect(() => {
+    listGitProfiles().then((info) => setProfiles(info.profiles)).catch(() => {});
+  }, []);
+
+  // Dossier du profil lié au compte, tant que l'utilisateur n'en a pas choisi un autre.
+  useEffect(() => {
+    const dir = accountId ? profileForAccount(profiles, accountId)?.dir : undefined;
+    if (dir && !dirChosen) setParentDir(dir);
+  }, [accountId, profiles, dirChosen]);
 
   useEffect(() => {
     const account = accounts.find((a) => a.id === accountId);
@@ -57,7 +72,9 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
 
   async function chooseDir() {
     const dir = await open({ directory: true, multiple: false });
-    if (typeof dir === "string") setParentDir(dir);
+    if (typeof dir !== "string") return;
+    setParentDir(dir);
+    setDirChosen(true);
   }
 
   async function handleClone() {
@@ -152,6 +169,13 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
             }}
           />
         </label>
+
+        {targetProfile && (
+          <p className="text-[11px] text-[var(--color-text)]">
+            Profil « {targetProfile.label} » : commits signés {targetProfile.user_email ?? "selon ce profil"}
+            {targetProfile.ssh_key ? `, clé ${targetProfile.ssh_key}` : ""}.
+          </p>
+        )}
 
         <p className="text-[10px] text-[var(--color-muted)]">
           Les identifiants du compte correspondant à l'hôte de l'URL sont utilisés automatiquement (HTTPS),

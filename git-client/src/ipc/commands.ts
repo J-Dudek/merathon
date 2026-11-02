@@ -1,7 +1,7 @@
 import { Channel, invoke as tauriInvoke, type InvokeArgs } from "@tauri-apps/api/core";
 import type {
-  BranchDivergence, BranchInfo, CommitDetails, CommitFile, CommitTrailers, PrPush, PrRebase, CommitInfo, FileDiff, FileStatus, Identity, MergeResult,
-  InteractiveOutcome, LfsStatus, RefComparison, RemoteInfo, RepoInfo, StashInfo, SubmoduleInfo, TagInfo, TodoCommit,
+  BranchDivergence, BranchInfo, CommitDetails, CommitFile, CommitTrailers, PrPush, PrRebase, CommitInfo, FileDiff, FileStatus, GitProfile, GitProfileInput, GitProfilesInfo, Identity, IdentityStatus, MergeResult,
+  InteractiveOutcome, LfsStatus, RefComparison, RemoteInfo, RepoInfo, SshCheck, SshHostStatus, SshKeyInfo, SshSetupInfo, StashInfo, SubmoduleInfo, TagInfo, TodoCommit, WorktreeInfo,
 } from "../types/git";
 import type { DeviceCode, ForgeAccount, Provider, SavedAccount } from "../types/forge";
 import { describeCommand } from "../lib/journal";
@@ -178,9 +178,31 @@ export const addRemote = (path: string, name: string, url: string) => invoke<voi
 export const removeRemote = (path: string, name: string) => invoke<void>("remove_remote", { path, name });
 /** Renvoie un avertissement si les sous-modules n'ont pas pu être récupérés. */
 export const cloneRepository = (url: string, path: string) => invoke<string | null>("clone_repository", { url, path });
+// Hors journal (`tauriInvoke`) : ces commandes ne touchent pas au dépôt, et la passphrase ne doit être conservée nulle part.
+export const sshSetupInfo = () => tauriInvoke<SshSetupInfo>("ssh_setup_info");
+/** `name` absent : `id_ed25519`. */
+export const sshCreateKey = (comment: string, passphrase: string | null, name?: string) =>
+  tauriInvoke<SshKeyInfo>("ssh_create_key", { name: name ?? null, comment, passphrase });
+export const sshAllKeys = () => tauriInvoke<SshKeyInfo[]>("ssh_all_keys");
+export const listGitProfiles = () => tauriInvoke<GitProfilesInfo>("list_git_profiles");
+export const saveGitProfile = (profile: GitProfileInput) => tauriInvoke<GitProfile>("save_git_profile", { profile });
+export const deleteGitProfile = (id: string) => tauriInvoke<void>("delete_git_profile", { id });
+export const gitIdentityStatus = (path: string) => tauriInvoke<IdentityStatus>("git_identity_status", { path });
+/** Retire le nom et l'e-mail propres au dépôt : il reprend ceux de son profil. */
+export const clearLocalIdentity = (path: string) => tauriInvoke<void>("clear_local_identity", { path });
+export const sshExistingKey = (name: string) => tauriInvoke<SshKeyInfo>("ssh_existing_key", { name });
+export const sshHostStatus = (host: string) => tauriInvoke<SshHostStatus>("ssh_host_status", { host });
+export const sshTrustHost = (host: string, fingerprint: string) => tauriInvoke<void>("ssh_trust_host", { host, fingerprint });
+export const sshCheckConnection = (host: string, key: string) => tauriInvoke<SshCheck>("ssh_check_connection", { host, key });
 export const listSubmodules = (path: string) => invoke<SubmoduleInfo[]>("list_submodules", { path });
 /** `names` vide : tous les sous-modules. */
 export const updateSubmodules = (path: string, names: string[] = []) => invoke<void>("update_submodules", { path, names });
+export const listWorktrees = (path: string) => invoke<WorktreeInfo[]>("list_worktrees", { path });
+/** `create` : crée d'abord `branch` depuis HEAD. */
+export const addWorktree = (path: string, target: string, branch: string, create: boolean) =>
+  invoke<void>("add_worktree", { path, target, branch, create });
+/** Supprime le worktree lié et son dossier. */
+export const removeWorktree = (path: string, name: string) => invoke<void>("remove_worktree", { path, name });
 /** `remote` null : tous les remotes. */
 export const fetchRemote = (path: string, remote: string | null = null) =>
   invoke<void>("fetch_remote", { path, remote });

@@ -52,6 +52,8 @@ export interface ForgeClient {
   submitReview(projectPath: string, number: number, ctx: ReviewContext, review: ReviewSubmission): Promise<SubmittedReview>;
   /** Met la branche source à jour avec la cible : merge (GitHub) ou rebase (GitLab), côté forge. */
   updateBranch(projectPath: string, number: number, sha: string): Promise<void>;
+  /** Enregistre une clé SSH publique sur le compte. */
+  addSshKey(title: string, publicKey: string): Promise<void>;
 }
 
 /** Client d'API d'un compte : les requêtes passent par le backend, qui seul détient le token. */
@@ -69,6 +71,7 @@ export function forgeClient(account: ForgeAccount): ForgeClient {
     };
     return {
       getCurrentUser: () => client.getCurrentUser(),
+      addSshKey: (title, key) => client.addSshKey(title, key),
       listRepos: () => client.listRepos(),
       getPullRequests: (path, state) => client.getPullRequests(...split(path), state),
       getPullRequest: (path, n) => client.getPullRequest(...split(path), n),
@@ -100,6 +103,7 @@ export function forgeClient(account: ForgeAccount): ForgeClient {
   const client = new GitLabClient(get, send);
   return {
     getCurrentUser: () => client.getCurrentUser(),
+    addSshKey: (title, key) => client.addSshKey(title, key),
     listRepos: () => client.listRepos(),
     getPullRequests: (path, state) => client.getMergeRequests(path, state),
     getPullRequest: (path, n) => client.getMergeRequest(path, n),

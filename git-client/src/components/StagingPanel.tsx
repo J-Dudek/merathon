@@ -1,3 +1,4 @@
+import { IdentityProblem } from "./IdentityProblem";
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, List, ListTree, MessageSquare, Minus, Plus, Undo2, X } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -510,6 +511,7 @@ export function StagingPanel() {
       </div>
 
       <div className="p-2 border-t border-overlay/10 flex flex-col gap-1.5 shrink-0">
+        <IdentityProblem />
         <input
           className={commitInput}
           placeholder="Résumé du commit"

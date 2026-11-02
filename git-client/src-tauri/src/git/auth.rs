@@ -1,5 +1,5 @@
 use std::cell::Cell;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use git2::{Cred, CredentialType, RemoteCallbacks};
 
 /// Identifiants HTTPS issus d'un compte enregistré, utilisables uniquement pour son hôte.
@@ -43,7 +43,9 @@ enum Candidate {
 
 /// Ordre dans lequel les méthodes d'authentification sont essayées.
 /// libgit2 rappelle le callback après chaque échec : on avance d'un cran à chaque appel.
-fn candidates(allowed: CredentialType, has_token: bool, ssh_keys: &[PathBuf]) -> Vec<Candidate> {
+/// `profile_key` : clé du profil du dossier. Elle passe avant l'agent, qui pourrait proposer celle d'un autre compte, et
+/// remplace les clés par défaut ; l'agent reste nécessaire pour une clé à passphrase, que Merathon ne peut pas ouvrir.
+fn candidates(allowed: CredentialType, has_token: bool, ssh_keys: &[PathBuf], profile_key: Option<&PathBuf>) -> Vec<Candidate> {
     let mut list = Vec::new();
     if allowed.contains(CredentialType::USER_PASS_PLAINTEXT) {
         if has_token {
@@ -52,8 +54,13 @@ fn candidates(allowed: CredentialType, has_token: bool, ssh_keys: &[PathBuf]) ->
         list.push(Candidate::CredentialHelper);
     }
     if allowed.contains(CredentialType::SSH_KEY) {
-        list.push(Candidate::SshAgent);
-        list.extend(ssh_keys.iter().cloned().map(Candidate::SshKey));
+        if let Some(key) = profile_key {
+            list.push(Candidate::SshKey(key.clone()));
+            list.push(Candidate::SshAgent);
+        } else {
+            list.push(Candidate::SshAgent);
+            list.extend(ssh_keys.iter().cloned().map(Candidate::SshKey));
+        }
     }
     list
 }
@@ -61,17 +68,19 @@ fn candidates(allowed: CredentialType, has_token: bool, ssh_keys: &[PathBuf]) ->
 fn default_ssh_keys() -> Vec<PathBuf> {
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
     let Some(home) = home else { return Vec::new() };
-    ["id_ed25519", "id_ecdsa", "id_rsa"]
+    crate::ssh_setup::KEY_NAMES
         .iter()
         .map(|name| PathBuf::from(&home).join(".ssh").join(name))
         .filter(|p| p.exists())
         .collect()
 }
 
-pub fn remote_callbacks<'a>(creds: Option<Credentials>) -> RemoteCallbacks<'a> {
+/// `location` : dépôt ou cible d'un clone ; il détermine le profil, donc la clé SSH à utiliser.
+pub fn remote_callbacks<'a>(creds: Option<Credentials>, location: &Path) -> RemoteCallbacks<'a> {
     let mut callbacks = RemoteCallbacks::new();
     let attempt = Cell::new(0usize);
     let ssh_keys = default_ssh_keys();
+    let profile_key = super::profiles::ssh_key_for(location);
 
     callbacks.credentials(move |url, username_from_url, allowed| {
         if allowed.contains(CredentialType::USERNAME) {
@@ -80,7 +89,7 @@ pub fn remote_callbacks<'a>(creds: Option<Credentials>) -> RemoteCallbacks<'a> {
 
         // Le token n'est proposé qu'au serveur du compte, en HTTPS (pas après une redirection ailleurs).
         let token_ok = creds.as_ref().is_some_and(|c| c.allowed_for(url));
-        let list = candidates(allowed, token_ok, &ssh_keys);
+        let list = candidates(allowed, token_ok, &ssh_keys, profile_key.as_ref());
         let n = attempt.get();
         attempt.set(n + 1);
 
@@ -115,20 +124,28 @@ mod tests {
 
     #[test]
     fn https_with_token_tries_token_first() {
-        let list = candidates(CredentialType::USER_PASS_PLAINTEXT, true, &[]);
+        let list = candidates(CredentialType::USER_PASS_PLAINTEXT, true, &[], None);
         assert_eq!(list, vec![Candidate::Token, Candidate::CredentialHelper]);
     }
 
     #[test]
     fn https_without_token_falls_back_to_helper() {
-        let list = candidates(CredentialType::USER_PASS_PLAINTEXT, false, &[]);
+        let list = candidates(CredentialType::USER_PASS_PLAINTEXT, false, &[], None);
         assert_eq!(list, vec![Candidate::CredentialHelper]);
+    }
+
+    #[test]
+    fn profile_key_comes_first_and_replaces_default_keys() {
+        let defaults = vec![PathBuf::from("/k/id_ed25519")];
+        let key = PathBuf::from("/k/pro");
+        let list = candidates(CredentialType::SSH_KEY, false, &defaults, Some(&key));
+        assert_eq!(list, vec![Candidate::SshKey(key), Candidate::SshAgent]);
     }
 
     #[test]
     fn ssh_tries_agent_then_key_files() {
         let keys = vec![PathBuf::from("/k/id_ed25519")];
-        let list = candidates(CredentialType::SSH_KEY, true, &keys);
+        let list = candidates(CredentialType::SSH_KEY, true, &keys, None);
         assert_eq!(list, vec![Candidate::SshAgent, Candidate::SshKey(keys[0].clone())]);
     }
 

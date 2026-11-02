@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Archive, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Cloud, EyeOff, FileBox, GitBranch, Package, Plus, RefreshCw, Tag, type LucideIcon } from "lucide-react";
+import { Archive, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Cloud, EyeOff, FileBox, FolderGit2, GitBranch, Package, Plus, RefreshCw, Tag, type LucideIcon } from "lucide-react";
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore, confirmAction, promptText } from "../store/useUiStore";
 import {
@@ -9,6 +9,7 @@ import {
 import { errorMessage, runGit } from "../lib/actions";
 import { ContextMenu, useContextMenu, type MenuEntry } from "./ContextMenu";
 import { openRepoAt } from "../lib/repoActions";
+import { createWorktree, deleteWorktree } from "../lib/worktrees";
 import { useBranchMenus } from "./branchMenus";
 import { branchKey, effectiveFilter, EMPTY_FILTER } from "../lib/graphFilter";
 import { useGraphFilterStore } from "../store/useGraphFilterStore";
@@ -17,7 +18,7 @@ import { prFreshness, seenKey, useSeenPrsStore } from "../store/useSeenPrsStore"
 import { PullRequestReviewDialog } from "./PullRequestReviewDialog";
 import { branchOnRemote, branchTree, flattenTree, localOnlyBranches, pullRequestsByBranch, type BranchNode } from "../lib/branches";
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
-import type { BranchInfo, StashInfo, SubmoduleInfo, TagInfo } from "../types/git";
+import type { BranchInfo, StashInfo, SubmoduleInfo, TagInfo, WorktreeInfo } from "../types/git";
 import type { ForgePR } from "../types/forge";
 
 const SUBMODULE_STATES: Record<SubmoduleInfo["state"], { label: string; color: string }> = {
@@ -51,6 +52,7 @@ export function Sidebar() {
   const stashes = useRepoStore((s) => s.stashes);
   const remotes = useRepoStore((s) => s.remotes);
   const submodules = useRepoStore((s) => s.submodules);
+  const worktrees = useRepoStore((s) => s.worktrees);
   const lfs = useRepoStore((s) => s.lfs);
   const commits = useRepoStore((s) => s.commits);
   const setSelectedCommit = useRepoStore((s) => s.setSelectedCommit);
@@ -220,10 +222,34 @@ export function Sidebar() {
     ];
   }
 
+  function worktreeMenu(w: WorktreeInfo): MenuEntry[] {
+    const remove: MenuEntry = {
+      label: w.valid ? "Supprimer…" : "Retirer de la liste…",
+      danger: true,
+      disabled: w.is_main || w.is_current || w.locked,
+      hint: removalBlocker(w),
+      action: () => deleteWorktree(w),
+    };
+    if (!w.valid) return [remove];
+    return [
+      { label: "Ouvrir dans un onglet", action: () => openRepoAt(w.path) },
+      { label: "Ouvrir dans une nouvelle fenêtre", action: () => openNewWindow(w.path) },
+      { label: "Copier le chemin", action: () => navigator.clipboard.writeText(w.path) },
+      "separator",
+      remove,
+    ];
+  }
+
+  async function handleNewWorktree() {
+    const branch = await promptText("Nouveau worktree", { placeholder: "nom-de-branche", message: `Nouvelle branche depuis ${info?.head_branch ?? "HEAD"}` });
+    if (branch) await createWorktree(branch, true);
+  }
+
   const remoteNames = Array.from(new Set([...remotes.map((r) => r.name), ...remoteBranches.map((b) => b.name.split("/")[0])]));
 
   return (
-    <div className="flex flex-col h-full bg-[var(--color-bg-secondary)] text-sm select-none overflow-y-auto py-1">
+    // pr-4 : sous Linux, la barre de défilement superposée capte les clics sur les ~20 px du bord droit (boutons + des sections…).
+    <div className="flex flex-col h-full bg-[var(--color-bg-secondary)] text-sm select-none overflow-y-auto py-1 pr-4">
       <Group title="Local" count={local.length}>
         <BranchTree
           nodes={localTree}
@@ -339,6 +365,24 @@ export function Sidebar() {
         </Group>
       )}
 
+      <Group title="Worktrees" count={worktrees.length} defaultOpen={false} onAdd={handleNewWorktree} addTitle="Nouveau worktree">
+        {worktrees.map((w) => {
+          const state = worktreeState(w);
+          return (
+            <Row
+              key={w.path}
+              icon={FolderGit2}
+              label={w.branch ?? w.head_hash?.slice(0, 7) ?? w.name ?? w.path}
+              active={w.is_current}
+              title={w.path}
+              onClick={() => w.valid && !w.is_current && openRepoAt(w.path)}
+              onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
+              trailing={state && <span className={`text-[10px] shrink-0 ${w.valid ? "text-[var(--color-muted)]" : "text-amber-300"}`}>{state}</span>}
+            />
+          );
+        })}
+      </Group>
+
       {lfs?.uses_lfs && (
         <Group
           title="LFS"
@@ -401,6 +445,19 @@ export function Sidebar() {
       {pullRequestDialog}
     </div>
   );
+}
+
+/** Pourquoi un worktree ne peut pas être supprimé. */
+function removalBlocker(w: WorktreeInfo): string | undefined {
+  if (w.is_main) return "Worktree principal";
+  if (w.is_current) return "Worktree affiché";
+  return w.locked ? "Verrouillé" : undefined;
+}
+
+function worktreeState(w: WorktreeInfo): string | null {
+  if (!w.valid) return "introuvable";
+  if (w.locked) return "verrouillé";
+  return w.is_main ? "principal" : null;
 }
 
 function Group({ title, count, children, defaultOpen = true, onAdd, addTitle, addIcon: AddIcon = Plus }: {

@@ -5,26 +5,15 @@ import { defaultWindowIcon } from "@tauri-apps/api/app";
 import { isWsl } from "../ipc/commands";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useDisplayStore } from "../store/useDisplayStore";
-import { prFreshness, seenKey, useSeenPrsStore, type SeenPr } from "../store/useSeenPrsStore";
+import { useSeenPrsStore, type SeenPr } from "../store/useSeenPrsStore";
 import { cachedMyPullRequests, onMyPullRequests } from "./myPullRequests";
+import { pendingPullRequests } from "./pendingPullRequests";
 import { restoreMyPullRequests } from "./prNotifications";
 import type { MyPullRequests } from "../types/forge";
 
-/**
- * PR / MR avec du nouveau, tous comptes confondus : modifiées depuis leur dernière consultation, ou à traiter et jamais
- * ouvertes. Une PR que j'ai ouverte et jamais consultée dans Merathon ne compte pas.
- */
+/** Nombre de PR / MR avec du nouveau, tous comptes confondus. */
 export function pendingCount(lists: { accountId: string; data: MyPullRequests }[], seen: Record<string, SeenPr>): number {
-  const counted = new Set<string>();
-  for (const { accountId, data } of lists) {
-    const authored = new Set(data.authored.map((pr) => pr.projectPath + "#" + pr.number));
-    for (const pr of [...data.assigned, ...data.authored]) {
-      const key = seenKey(accountId, pr.projectPath, pr.number);
-      const kind = prFreshness(seen[key], pr).kind;
-      if (kind === "updated" || (kind === "unread" && !authored.has(pr.projectPath + "#" + pr.number))) counted.add(key);
-    }
-  }
-  return counted.size;
+  return pendingPullRequests(lists, seen).length;
 }
 
 const isWindows = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);

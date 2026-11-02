@@ -14,6 +14,8 @@ vi.mock("../ipc/commands", () => {
     listStashes: vi.fn(async () => []),
     listRemotes: vi.fn(async () => []),
     listSubmodules: vi.fn(async () => []),
+    listWorktrees: vi.fn(async () => []),
+    gitIdentityStatus: vi.fn(async () => null),
     lfsStatus: vi.fn(async () => null),
     getStatus: vi.fn(async () => []),
   };

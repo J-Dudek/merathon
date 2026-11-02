@@ -143,6 +143,10 @@ const MR_STATES: Record<RawMergeRequest["state"], ForgePR["state"]> = {
 export class GitLabClient {
   constructor(private get: ApiGet, private send: ApiSend = () => Promise.reject(new Error("Écriture non disponible"))) {}
 
+  async addSshKey(title: string, key: string): Promise<void> {
+    await this.send("POST", "/user/keys", { title, key });
+  }
+
   private encodeProject(project: string): string {
     // Numeric ID passé tel quel, sinon encode le chemin
     if (/^\d+$/.test(project)) return project;

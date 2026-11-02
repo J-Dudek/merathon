@@ -22,6 +22,9 @@ pub enum GitError {
 /// suffixes techniques « class=… ; code=… ») ; un code sans explication garde le seul message d'origine.
 fn describe_git(e: &git2::Error) -> String {
     let message = e.message().trim_end_matches('.');
+    if message.contains("HEAD of a linked repository") || message.ends_with("is already checked out") {
+        return format!("Cette branche est extraite dans un autre worktree ({message})");
+    }
     let hint = match e.code() {
         ErrorCode::Auth => Some("Authentification refusée par le dépôt distant : vérifie ta clé SSH, ton token ou ton gestionnaire d'identifiants"),
         ErrorCode::Certificate => Some("Certificat du serveur non reconnu : vérifie l'URL du dépôt distant ou la configuration du proxy"),
@@ -83,6 +86,8 @@ mod tests {
     fn keeps_the_plain_message_when_there_is_nothing_to_add() {
         let other = git2::Error::new(ErrorCode::NotFound, ErrorClass::Reference, "reference 'refs/heads/x' not found");
         assert_eq!(GitError::from(other).to_string(), "reference 'refs/heads/x' not found");
+        let linked = git2::Error::new(ErrorCode::GenericError, ErrorClass::Reference, "Cannot delete branch 'refs/heads/x' as it is the current HEAD of a linked repository.");
+        assert!(GitError::from(linked).to_string().starts_with("Cette branche est extraite dans un autre worktree"));
         assert_eq!(GitError::Conflict("Résous tous les conflits".into()).to_string(), "Résous tous les conflits");
     }
 }

@@ -354,8 +354,8 @@ export function FreshnessTags({ freshness }: { freshness: PrFreshness }) {
 }
 
 /**
- * Ligne d'une PR / MR. `subtitle` remplace la ligne de détail par défaut ; `meta` s'affiche en dessous
- * (dans la barre latérale étroite, des badges à droite écraseraient le titre).
+ * Ligne d'une PR / MR. `subtitle` remplace la ligne de détail par défaut. `meta` et les étiquettes s'affichent en
+ * dessous, à la ligne si besoin : dans la barre latérale étroite, à droite, elles écraseraient le titre.
  */
 export function PRRow({ pr, freshness, approved, typeLabel, indent, onClick, onContextMenu, subtitle, hint, meta }: {
   pr: ForgePR;
@@ -371,6 +371,8 @@ export function PRRow({ pr, freshness, approved, typeLabel, indent, onClick, onC
   meta?: React.ReactNode;
 }) {
   const state = PR_STATE_ICONS[pr.state];
+  const unread = freshness.kind === "unread";
+  const tagged = !!meta || freshness.kind === "updated" || approved || pr.draft;
   return (
     // Entrée ou Espace : détail ; touche Menu ou Maj+F10 : menu (comme le clic droit).
     <div
@@ -401,13 +403,18 @@ export function PRRow({ pr, freshness, approved, typeLabel, indent, onClick, onC
           <p className="text-[10px] text-[var(--color-muted)] truncate">
             {subtitle ?? `${typeLabel}#${pr.number} · ${pr.author} · ${pr.sourceBranch} → ${pr.targetBranch}`}
           </p>
-          {meta && <div className="mt-1 flex flex-wrap items-center gap-1">{meta}</div>}
+          {tagged && (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              {meta}
+              {!unread && <FreshnessTags freshness={freshness} />}
+              {approved && (
+                <span className={`text-[9px] px-1 rounded border shrink-0 ${MY_PR_STATUSES.approved.className}`}>{MY_PR_STATUSES.approved.label}</span>
+              )}
+              {pr.draft && <span className="text-[9px] border border-overlay/20 px-1 rounded text-[var(--color-muted)] shrink-0"><span className="sr-only">, </span>draft</span>}
+            </div>
+          )}
         </div>
-        <FreshnessTags freshness={freshness} />
-        {approved && (
-          <span className={`text-[9px] px-1 rounded border shrink-0 ${MY_PR_STATUSES.approved.className}`}>{MY_PR_STATUSES.approved.label}</span>
-        )}
-        {pr.draft && <span className="text-[9px] border border-overlay/20 px-1 rounded text-[var(--color-muted)] shrink-0"><span className="sr-only">, </span>draft</span>}
+        {unread && <FreshnessTags freshness={freshness} />}
       </div>
     </div>
   );

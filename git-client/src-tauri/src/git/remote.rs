@@ -22,7 +22,7 @@ pub fn init_repo(path: &str) -> Result<(), GitError> {
 
 pub fn clone_repo(url: &str, path: &str, creds: CredsLookup) -> Result<(), GitError> {
     let mut fetch_opts = FetchOptions::new();
-    fetch_opts.remote_callbacks(remote_callbacks(creds(url)));
+    fetch_opts.remote_callbacks(remote_callbacks(creds(url), std::path::Path::new(path)));
 
     RepoBuilder::new()
         .fetch_options(fetch_opts)
@@ -57,7 +57,7 @@ pub fn fetch(repo: &Repository, remote_name: &str, creds: CredsLookup) -> Result
     let url = remote.url().unwrap_or("").to_string();
     let mut fetch_opts = FetchOptions::new();
     fetch_opts
-        .remote_callbacks(remote_callbacks(creds(&url)))
+        .remote_callbacks(remote_callbacks(creds(&url), repo.path()))
         .prune(FetchPrune::On)
         .download_tags(AutotagOption::All);
     remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None)?;
@@ -76,7 +76,7 @@ fn push_refspecs(repo: &Repository, remote_name: &str, refspecs: &[String], cred
     let url = remote.url().unwrap_or("").to_string();
 
     let rejected: RefCell<Vec<String>> = RefCell::new(Vec::new());
-    let mut callbacks = remote_callbacks(creds(&url));
+    let mut callbacks = remote_callbacks(creds(&url), repo.path());
     callbacks.push_update_reference(|refname, status| {
         if let Some(msg) = status {
             rejected.borrow_mut().push(format!("{refname} : {msg}"));
