@@ -109,6 +109,82 @@ body {
 }
 
 /*
+ * Texte Markdown d'une PR / MR (voir MarkdownBody). Tailwind retire les styles par défaut des éléments : ils sont rétablis ici.
+ * Les polices d'emoji prennent le relais d'Inter, qui n'en contient pas.
+ */
+.markdown-body {
+  --markdown-border: color-mix(in srgb, var(--overlay) 15%, transparent);
+  --markdown-code: color-mix(in srgb, var(--overlay) 10%, transparent);
+  color: var(--color-text);
+  font-family: 'Inter', system-ui, sans-serif, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: 0.75rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.markdown-body > :first-child { margin-top: 0; }
+.markdown-body > :last-child { margin-bottom: 0; }
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body pre,
+.markdown-body blockquote,
+.markdown-body table,
+.markdown-body details { margin-block: 0.5em; }
+/* Un retour à la ligne simple est conservé, comme dans les commentaires de GitHub. */
+.markdown-body p { white-space: pre-line; }
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 { font-weight: 700; line-height: 1.3; margin-block: 0.9em 0.4em; }
+.markdown-body h4 { font-size: 1.25em; border-bottom: 1px solid var(--markdown-border); padding-bottom: 0.2em; }
+.markdown-body h5 { font-size: 1.1em; }
+.markdown-body h6 { font-size: 1em; }
+.markdown-body ul { list-style: disc; padding-left: 1.5em; }
+.markdown-body ol { list-style: decimal; padding-left: 1.5em; }
+.markdown-body ul ul { list-style: circle; }
+.markdown-body li > ul,
+.markdown-body li > ol { margin-block: 0.15em; }
+.markdown-body .task-list-item { list-style: none; margin-left: -1.25em; }
+.markdown-body .task-list-item input { margin-right: 0.4em; vertical-align: middle; }
+.markdown-body a {
+  color: var(--color-accent-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.markdown-body a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.markdown-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  background: var(--markdown-code);
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+.markdown-body pre {
+  background: var(--markdown-code);
+  border-radius: 4px;
+  padding: 0.6em 0.75em;
+  overflow-x: auto;
+}
+.markdown-body pre code { background: none; padding: 0; overflow-wrap: normal; }
+.markdown-body blockquote {
+  border-left: 3px solid var(--markdown-border);
+  color: var(--color-muted);
+  padding-left: 0.75em;
+}
+.markdown-body table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.markdown-body th,
+.markdown-body td { border: 1px solid var(--markdown-border); padding: 0.25em 0.6em; overflow-wrap: normal; }
+.markdown-body th { font-weight: 600; background: var(--markdown-code); }
+.markdown-body hr { border: 0; border-top: 1px solid var(--markdown-border); margin-block: 0.75em; }
+.markdown-body summary { cursor: pointer; }
+.markdown-body kbd {
+  font-size: 0.9em;
+  border: 1px solid var(--markdown-border);
+  border-radius: 3px;
+  padding: 0 0.3em;
+}
+.markdown-image { display: inline-flex; align-items: center; gap: 0.25em; }
+
+/*
  * Focus clavier des champs (RGAA 10.7) : un contour d'accent net, même quand le champ retire le contour
  * par défaut au profit d'une bordure teintée trop discrète. Les curseurs des préférences ont leur propre style.
  */

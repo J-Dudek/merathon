@@ -16,6 +16,7 @@ import { DiffViewer, type DiffAnnotations } from "./DiffViewer";
 import { Button, inputClass } from "./Modal";
 import { fieldLabel } from "../lib/fieldLabel";
 import { LineCounts } from "./CommitDetails";
+import { MarkdownBody } from "./MarkdownBody";
 
 const STATUS_LETTERS: Record<CommitFile["status"], { letter: string; label: string; color: string }> = {
   added: { letter: "A", label: "ajouté", color: "text-green-400" },
@@ -273,13 +274,14 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
               <Thread
                 key={t.id}
                 thread={t}
+                prUrl={pr.url}
                 busy={busy}
                 onReply={(body) => act(() => client.replyToThread(projectPath, pr.number, t, body), "Réponse publiée")}
                 onResolve={(resolved) => act(() => client.resolveThread(projectPath, pr.number, t, resolved), resolved ? "Fil résolu" : "Fil rouvert")}
               />
             ))}
             {lineDrafts.map((d) => (
-              <DraftCard key={d.id} draft={d} onEdit={() => editDraft(d)} onDelete={() => onDraftsChange(drafts.filter((x) => x.id !== d.id))} />
+              <DraftCard key={d.id} draft={d} prUrl={pr.url} onEdit={() => editDraft(d)} onDelete={() => onDraftsChange(drafts.filter((x) => x.id !== d.id))} />
             ))}
             {composingHere && composing && (
               <Composer
@@ -399,6 +401,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
                   <Thread
                     key={t.id}
                     thread={t}
+                    prUrl={pr.url}
                     busy={busy}
                     onReply={(body) => act(() => client.replyToThread(projectPath, pr.number, t, body), "Réponse publiée")}
                     onResolve={(resolved) => act(() => client.resolveThread(projectPath, pr.number, t, resolved), resolved ? "Fil résolu" : "Fil rouvert")}
@@ -598,21 +601,22 @@ const FileRow = memo(function FileRow({ file, depth, selected, viewed, comments,
   );
 });
 
-function CommentBody({ comment }: { comment: ForgeComment }) {
+function CommentBody({ comment, prUrl }: { comment: ForgeComment; prUrl: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       <div className="flex items-center gap-2 text-[10px] text-[var(--color-muted)]">
         <span className="font-semibold text-[var(--color-text)]">{comment.author}</span>
         <span>{formatDate(comment.createdAt)}</span>
       </div>
-      <p className="text-xs text-[var(--color-text)] whitespace-pre-wrap break-words">{comment.body}</p>
+      <MarkdownBody text={comment.body} prUrl={prUrl} />
     </div>
   );
 }
 
 /** Fil de discussion d'une ligne ; un fil résolu est replié. */
-function Thread({ thread, busy, onReply, onResolve }: {
+function Thread({ thread, prUrl, busy, onReply, onResolve }: {
   thread: ReviewThread;
+  prUrl: string;
   busy: boolean;
   onReply: (body: string) => Promise<boolean>;
   onResolve: (resolved: boolean) => void;
@@ -633,7 +637,7 @@ function Thread({ thread, busy, onReply, onResolve }: {
 
   return (
     <div className="rounded border border-overlay/10 bg-[var(--color-bg-elevated)] p-2 flex flex-col gap-2">
-      {thread.comments.map((c) => <CommentBody key={c.id} comment={c} />)}
+      {thread.comments.map((c) => <CommentBody key={c.id} comment={c} prUrl={prUrl} />)}
       {reply !== null ? (
         <div className="flex flex-col gap-1">
           <textarea
@@ -678,7 +682,7 @@ function Thread({ thread, busy, onReply, onResolve }: {
   );
 }
 
-function DraftCard({ draft, onEdit, onDelete }: { draft: DraftComment; onEdit: () => void; onDelete: () => void }) {
+function DraftCard({ draft, prUrl, onEdit, onDelete }: { draft: DraftComment; prUrl: string; onEdit: () => void; onDelete: () => void }) {
   return (
     <div className="rounded border border-dashed border-[var(--color-accent)]/50 bg-[var(--color-bg-elevated)] p-2 flex flex-col gap-1">
       <div className="flex items-center gap-2 text-[10px]">
@@ -686,7 +690,7 @@ function DraftCard({ draft, onEdit, onDelete }: { draft: DraftComment; onEdit: (
         <button className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)]" onClick={onEdit}>Modifier</button>
         <button className="text-red-300 hover:text-red-200" onClick={onDelete}>Supprimer</button>
       </div>
-      <p className="text-xs text-[var(--color-text)] whitespace-pre-wrap break-words">{draft.body}</p>
+      <MarkdownBody text={draft.body} prUrl={prUrl} />
     </div>
   );
 }

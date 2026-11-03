@@ -15,6 +15,7 @@ import { Button, Modal, inputClass } from "./Modal";
 import { PullRequestFiles } from "./PullRequestFiles";
 import { PullRequestBranchSync } from "./PullRequestBranchSync";
 import { IssueRefTextarea } from "./IssueRefTextarea";
+import { MarkdownBody } from "./MarkdownBody";
 import { UserPicker } from "./UserPicker";
 import { fieldLabel } from "../lib/fieldLabel";
 
@@ -402,13 +403,13 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
                 />
               )}
               {!edit && (details.description.trim()
-                ? <p className="text-xs text-[var(--color-text)] whitespace-pre-wrap break-words font-mono bg-shade/20 rounded p-2">{details.description}</p>
+                ? <MarkdownBody text={details.description} prUrl={details.pr.url} className="bg-shade/20 rounded p-2" />
                 : <p className="text-xs text-[var(--color-muted)] italic">Aucune description</p>)}
             </section>
 
             <section className="flex flex-col gap-2">
               <h3 className={labelClass}>Conversation ({comments.length})</h3>
-              {comments.map((c) => <Comment key={c.id} comment={c} />)}
+              {comments.map((c) => <Comment key={c.id} comment={c} prUrl={details.pr.url} />)}
               <textarea
                 className={`${inputClass} h-20 resize-y font-mono`}
                 placeholder="Commentaire (Markdown) — accompagne aussi l'approbation ou la demande de changements"
@@ -782,7 +783,7 @@ function Checks({ checks }: { checks: ForgeCheck[] }) {
   );
 }
 
-function Comment({ comment }: { comment: ForgeComment }) {
+function Comment({ comment, prUrl }: { comment: ForgeComment; prUrl: string }) {
   return (
     <div className="rounded border border-overlay/10 bg-shade/20">
       <div className="flex items-center gap-2 px-2 py-1 border-b border-overlay/5 text-[10px] text-[var(--color-muted)]">
@@ -791,7 +792,7 @@ function Comment({ comment }: { comment: ForgeComment }) {
         {comment.review === "changes_requested" && <span className="text-amber-400">demande des changements</span>}
         <span className="ml-auto">{formatDate(comment.createdAt)}</span>
       </div>
-      {comment.body && <p className="px-2 py-1.5 text-xs text-[var(--color-text)] whitespace-pre-wrap break-words">{comment.body}</p>}
+      {comment.body && <MarkdownBody text={comment.body} prUrl={prUrl} className="px-2 py-1.5" />}
     </div>
   );
 }
