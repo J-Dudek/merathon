@@ -17,6 +17,7 @@ import { Button, inputClass } from "./Modal";
 import { fieldLabel } from "../lib/fieldLabel";
 import { LineCounts } from "./CommitDetails";
 import { MarkdownBody } from "./MarkdownBody";
+import { EmojiTextarea } from "./EmojiAssist";
 
 const STATUS_LETTERS: Record<CommitFile["status"], { letter: string; label: string; color: string }> = {
   added: { letter: "A", label: "ajouté", color: "text-green-400" },
@@ -640,11 +641,11 @@ function Thread({ thread, prUrl, busy, onReply, onResolve }: {
       {thread.comments.map((c) => <CommentBody key={c.id} comment={c} prUrl={prUrl} />)}
       {reply !== null ? (
         <div className="flex flex-col gap-1">
-          <textarea
+          <EmojiTextarea
             autoFocus
             className={`${inputClass} h-16 resize-y font-mono`}
             value={reply}
-            onChange={(e) => setReply(e.target.value)}
+            onChange={setReply}
             placeholder="Réponse (Markdown)"
             {...fieldLabel("Réponse au commentaire (Markdown)")}
           />
@@ -705,13 +706,13 @@ function Composer({ text, busy, onChange, onCancel, onDraft, onPublish }: {
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <textarea
+      <EmojiTextarea
         autoFocus
         className={`${inputClass} h-20 resize-y font-mono`}
         placeholder="Commentaire (Markdown) · Ctrl+Entrée : ajouter à la revue"
         {...fieldLabel("Commentaire sur la ligne (Markdown)")}
         value={text}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) onDraft();
           if (e.key === "Escape") {
@@ -755,13 +756,13 @@ function SubmitReview({ account, details, drafts, busy, onCancel, onSubmit }: {
 
   return (
     <div className="px-4 py-3 border-b border-overlay/10 bg-shade/20 flex flex-col gap-2">
-      <textarea
+      <EmojiTextarea
         autoFocus
         className={`${inputClass} h-16 resize-y font-mono`}
         placeholder="Commentaire général de la revue (Markdown, facultatif)"
         {...fieldLabel("Commentaire général de la revue (Markdown, facultatif)")}
         value={body}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={setBody}
       />
       <div className="flex items-center gap-4 text-xs text-[var(--color-text)]">
         {verdicts.map((v) => (

@@ -5,8 +5,8 @@ import { kindEmojis, random, type Celebration as CelebrationData, type Effect, t
 /** Couleurs des confettis et feux d'artifice : décoratives, identiques dans les deux thèmes. */
 const PALETTE = ["#e94560", "#f6c445", "#4ade80", "#38bdf8", "#a78bfa", "#fb923c", "#f472b6"];
 const FLAME = ["#f6c445", "#fb923c", "#e94560"];
-/** Polices emoji en couleur : sans elles, WebKitGTK peut dessiner les emojis en noir et blanc ou en carrés. */
-const EMOJI_FONT = '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+/** Police emoji embarquée (voir index.css) : sans elle, WebKitGTK peut dessiner les emojis en noir et blanc ou en carrés. */
+const EMOJI_FONT = '"Merathon Emoji", "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
 
 /** Durée totale selon l'ampleur, en ms ; tout s'estompe pendant les FADE dernières ms. */
 const DURATIONS: Record<Tier, number> = { 0: 4500, 1: 5500, 2: 7500 };
@@ -205,6 +205,8 @@ function rocketStep(ctx: CanvasRenderingContext2D, elapsed: number, dt: number, 
 function play(canvas: HTMLCanvasElement, c: CelebrationData, duration: number): () => void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return () => {};
+  // Un canvas ne déclenche pas le chargement d'une police web : sans cela, les premières images utiliseraient une autre police.
+  void document.fonts.load('16px "Merathon Emoji"', "🎉");
   const dpr = window.devicePixelRatio || 1;
   const w = window.innerWidth;
   const h = window.innerHeight;

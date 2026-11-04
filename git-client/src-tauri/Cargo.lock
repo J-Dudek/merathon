@@ -2438,7 +2438,7 @@ dependencies = [
 
 [[package]]
 name = "merathon"
-version = "2.13.0"
+version = "2.13.1"
 dependencies = [
  "base64 0.22.1",
  "git2",

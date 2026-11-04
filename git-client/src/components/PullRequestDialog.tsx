@@ -273,7 +273,7 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
             label="Description"
             wrapperClassName="flex-1 flex flex-col"
             className={`${inputClass} ${templateName ? "h-56" : "h-28"} flex-auto resize-y font-mono`}
-            placeholder="Contexte, changements, comment tester… « # » pour citer une issue"
+            placeholder="Contexte, changements, comment tester… « # » pour citer une issue, « : » pour un emoji"
             value={description}
             onChange={setDescription}
             issues={issues}

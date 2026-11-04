@@ -21,6 +21,7 @@ import { branchOnRemote, pullRequestsByBranch } from "../lib/branches";
 import { appendThreadTrailers, draftFromMessage, type ThreadLinks } from "../lib/threadTrailers";
 import { useCachedOpenPullRequests, useLinkedForge } from "./PullRequestList";
 import { ReviewThreadPicker } from "./ReviewThreadPicker";
+import { EmojiInput, EmojiTextarea } from "./EmojiAssist";
 
 const STATE_LABELS: Record<Exclude<RepoState, "clean">, string> = {
   merge: "Merge en cours",
@@ -512,22 +513,22 @@ export function StagingPanel() {
 
       <div className="p-2 border-t border-overlay/10 flex flex-col gap-1.5 shrink-0">
         <IdentityProblem />
-        <input
+        <EmojiInput
           className={commitInput}
           placeholder="Résumé du commit"
           {...fieldLabel("Résumé du commit")}
           value={summary}
           maxLength={200}
-          onChange={(e) => setSummary(e.target.value)}
+          onChange={setSummary}
           onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && handleCommit()}
         />
-        <textarea
+        <EmojiTextarea
           className={`${commitInput} resize-none`}
           rows={3}
           placeholder="Description (optionnelle)"
           {...fieldLabel("Description du commit (optionnelle)")}
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={setDescription}
           onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && handleCommit()}
         />
         <ThreadLinksRow

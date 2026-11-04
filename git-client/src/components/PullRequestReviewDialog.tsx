@@ -15,6 +15,7 @@ import { Button, Modal, inputClass } from "./Modal";
 import { PullRequestFiles } from "./PullRequestFiles";
 import { PullRequestBranchSync } from "./PullRequestBranchSync";
 import { IssueRefTextarea } from "./IssueRefTextarea";
+import { EmojiTextarea } from "./EmojiAssist";
 import { MarkdownBody } from "./MarkdownBody";
 import { UserPicker } from "./UserPicker";
 import { fieldLabel } from "../lib/fieldLabel";
@@ -410,12 +411,12 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
             <section className="flex flex-col gap-2">
               <h3 className={labelClass}>Conversation ({comments.length})</h3>
               {comments.map((c) => <Comment key={c.id} comment={c} prUrl={details.pr.url} />)}
-              <textarea
+              <EmojiTextarea
                 className={`${inputClass} h-20 resize-y font-mono`}
                 placeholder="Commentaire (Markdown) — accompagne aussi l'approbation ou la demande de changements"
                 {...fieldLabel("Commentaire de la conversation (Markdown)")}
                 value={reply}
-                onChange={(e) => setReply(e.target.value)}
+                onChange={setReply}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendComment();
                 }}
@@ -496,7 +497,7 @@ function EditForm({ edit, onChange, issues, search, pending, onCancel, onSave }:
       <IssueRefTextarea
         label="Description (Markdown)"
         className={`${inputClass} h-40 resize-y font-mono`}
-        placeholder="Contexte, changements, comment tester… « # » pour citer une issue"
+        placeholder="Contexte, changements, comment tester… « # » pour citer une issue, « : » pour un emoji"
         value={edit.description}
         onChange={(description) => onChange({ ...edit, description })}
         issues={issues}

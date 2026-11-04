@@ -101,22 +101,38 @@
   --color-shade: var(--shade);
 }
 
+/*
+ * Emojis en couleur sur tous les postes, avec ou sans police d'emoji installée : Noto Color Emoji est embarquée (public/fonts).
+ * Elle passe en tête des polices, car DejaVu Sans, souvent la police sans-serif sous Linux, contient des émoticônes en noir et blanc.
+ * unicode-range la réserve aux emojis : le texte, les flèches, © ou les chiffres gardent la police de l'interface.
+ * Format bitmap (CBDT) et non COLRv1, que toutes les versions de WebKitGTK ne savent pas dessiner.
+ */
+@font-face {
+  font-family: "Merathon Emoji";
+  src: url("/fonts/NotoColorEmoji.ttf") format("truetype");
+  font-display: swap;
+  unicode-range: U+200D, U+FE0F, U+2600-27BF, U+2B50, U+2B55, U+1F000-1FAFF;
+}
+
+/* La classe font-mono des champs et des diffs reçoit aussi les emojis (polices par défaut de Tailwind ensuite). */
+@theme {
+  --font-mono: "Merathon Emoji", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 body {
   background-color: var(--color-bg-primary);
   color: var(--color-text);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: "Merathon Emoji", 'Inter', system-ui, sans-serif, "Segoe UI Emoji", "Apple Color Emoji";
   overflow: hidden;
 }
 
 /*
  * Texte Markdown d'une PR / MR (voir MarkdownBody). Tailwind retire les styles par défaut des éléments : ils sont rétablis ici.
- * Les polices d'emoji prennent le relais d'Inter, qui n'en contient pas.
  */
 .markdown-body {
   --markdown-border: color-mix(in srgb, var(--overlay) 15%, transparent);
   --markdown-code: color-mix(in srgb, var(--overlay) 10%, transparent);
   color: var(--color-text);
-  font-family: 'Inter', system-ui, sans-serif, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji";
   font-size: 0.75rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -152,7 +168,7 @@ body {
 }
 .markdown-body a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 .markdown-body code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: "Merathon Emoji", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.92em;
   background: var(--markdown-code);
   border-radius: 3px;
@@ -280,7 +296,7 @@ textarea:focus-visible {
   filter: drop-shadow(0 8px 24px rgb(0 0 0 / 0.35));
 }
 .celebrate-emoji {
-  font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  font-family: "Merathon Emoji", "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
 }
 .celebrate-bounce {
   display: inline-block;

@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ForgeIssue } from "../types/forge";
 import { CLOSING_KEYWORD, insertIssueRef, issueQueryAt, matchIssues, uniqueIssues, type IssueQuery } from "../lib/issueRefs";
 import { caretPosition } from "../lib/caret";
+import { useEmojiAssist } from "./EmojiAssist";
 
 const MAX_SUGGESTIONS = 8;
 /** Délai avant d'interroger la forge, pour ne pas lancer une requête à chaque touche. */
@@ -10,7 +11,7 @@ const POPUP_WIDTH = 360;
 
 /**
  * Zone de texte Markdown où « # » propose les issues du projet : celles déjà chargées, filtrées sur place, complétées
- * par une recherche sur la forge. Entrée insère `#12`, Maj+Entrée `Closes #12` (issue fermée au merge).
+ * par une recherche sur la forge. Entrée insère `#12`, Maj+Entrée `Closes #12` (issue fermée au merge). « : » propose des emojis.
  */
 export function IssueRefTextarea({ value, onChange, issues, search, label, className, wrapperClassName, placeholder }: {
   value: string;
@@ -36,6 +37,7 @@ export function IssueRefTextarea({ value, onChange, issues, search, label, class
   const [position, setPosition] = useState({ top: 0, left: 0 });
   /** Curseur à replacer après l'insertion d'une référence, une fois le texte rendu. */
   const pendingCaret = useRef<number | null>(null);
+  const emoji = useEmojiAssist(ref, value, onChange);
 
   const term = query?.query.trim() ?? "";
   const known = uniqueIssues([...issues, ...Object.values(found).flat()]);
@@ -107,17 +109,25 @@ export function IssueRefTextarea({ value, onChange, issues, search, label, class
         aria-autocomplete="list"
         aria-controls={listId}
         aria-activedescendant={open && suggestions.length ? `${listId}-${current}` : undefined}
-        className={className}
+        {...emoji.aria}
+        className={`${className ?? ""} pr-9`}
         placeholder={placeholder}
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
           sync();
+          emoji.sync();
         }}
-        onSelect={sync}
-        onBlur={() => setQuery(null)}
+        onSelect={() => {
+          sync();
+          emoji.sync();
+        }}
+        onBlur={() => {
+          setQuery(null);
+          emoji.close();
+        }}
         onKeyDown={(e) => {
-          if (!open) return;
+          if (emoji.onKeyDown(e) || !open) return;
           const n = suggestions.length;
           if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {
             e.preventDefault();
@@ -131,6 +141,7 @@ export function IssueRefTextarea({ value, onChange, issues, search, label, class
           }
         }}
       />
+      {emoji.overlay}
       <div
         className={open ? "absolute z-10 bg-[var(--color-bg-elevated)] border border-overlay/10 rounded shadow-xl" : "hidden"}
         style={{ top: position.top, left: position.left, width: POPUP_WIDTH, maxWidth: "100%" }}

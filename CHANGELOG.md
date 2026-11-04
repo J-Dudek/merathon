@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.13.1](https://github.com/J-Dudek/merathon/compare/v2.13.0...v2.13.1) (2026-11-04)
+
+### Autres changements
+
+- feat gestion des emoji (f75546d)
+
 ## [2.13.0](https://github.com/J-Dudek/merathon/compare/v2.12.0...v2.13.0) (2026-11-03)
 
 ### Nouveautés

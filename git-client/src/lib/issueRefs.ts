@@ -15,7 +15,7 @@ export function issueQueryAt(text: string, caret: number): IssueQuery | null {
   return m ? { start: caret - m[1].length - 1, query: m[1] } : null;
 }
 
-const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+export const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 /** Issues dont le numéro commence par la saisie ou dont le titre la contient (casse et accents ignorés) ; numéro exact en tête. */
 export function matchIssues(issues: ForgeIssue[], query: string, limit = 8): ForgeIssue[] {
