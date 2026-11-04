@@ -1,0 +1,16 @@
+{
+  "name": "merathon-record-demo",
+  "private": true,
+  "description": "Enregistre le GIF de démonstration en anglais du README",
+  "scripts": {
+    "build": "cd ../../git-client && npx vite build --outDir ../tools/record-demo/dist --emptyOutDir",
+    "record": "node record.cjs",
+    "encode": "node encode.cjs ../../docs/demo-en.gif",
+    "demo": "npm run build && npm run record && npm run encode"
+  },
+  "dependencies": {
+    "gifenc": "1.0.3",
+    "playwright": "1.59.1",
+    "pngjs": "7.0.0"
+  }
+}

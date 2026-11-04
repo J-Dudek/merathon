@@ -1,0 +1,4 @@
+node_modules/
+dist/
+frames/
+fail-*.png

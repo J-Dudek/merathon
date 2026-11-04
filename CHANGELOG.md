@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.14.0](https://github.com/J-Dudek/merathon/compare/v2.13.2...v2.14.0) (2026-11-04)
+
+### Nouveautés
+
+- README bilingues, démo en anglais et outil d'enregistrement du GIF (e5a488e)
+
 ## [2.13.2](https://github.com/J-Dudek/merathon/compare/v2.13.1...v2.13.2) (2026-11-04)
 
 ### Autres changements
