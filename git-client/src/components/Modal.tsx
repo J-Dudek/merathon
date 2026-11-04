@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Maximize2, Minimize2, X } from "lucide-react";
+import { tr } from "../i18n";
 
 interface Props {
   title: string;
@@ -151,13 +152,13 @@ export function Modal({ title, onClose, children, width = "w-[420px]", height = 
             {resizeKey && (
               <HeaderIcon
                 onClick={toggleMaximized}
-                label={size.maximized ? "Restaurer la taille" : "Agrandir"}
-                title={size.maximized ? "Restaurer la taille (double-clic sur le titre)" : "Agrandir (double-clic sur le titre)"}
+                label={size.maximized ? tr("Restaurer la taille") : tr("Agrandir")}
+                title={size.maximized ? tr("Restaurer la taille (double-clic sur le titre)") : tr("Agrandir (double-clic sur le titre)")}
               >
                 {size.maximized ? <Minimize2 size={14} strokeWidth={1.75} /> : <Maximize2 size={14} strokeWidth={1.75} />}
               </HeaderIcon>
             )}
-            <HeaderIcon onClick={onClose} label="Fermer" title="Fermer (Échap)">
+            <HeaderIcon onClick={onClose} label={tr("Fermer")} title={tr("Fermer (Échap)")}>
               <X size={15} strokeWidth={1.75} />
             </HeaderIcon>
           </div>
@@ -167,7 +168,7 @@ export function Modal({ title, onClose, children, width = "w-[420px]", height = 
           <div
             className="absolute right-0 bottom-0 w-3.5 h-3.5 cursor-nwse-resize touch-none"
             style={{ background: "linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.25) 50%)", borderBottomRightRadius: 8 }}
-            title="Redimensionner (double-clic : taille par défaut)"
+            title={tr("Redimensionner (double-clic : taille par défaut)")}
             onPointerDown={startResize}
             onDoubleClick={() => update({ maximized: false })}
           />

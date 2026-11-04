@@ -19,22 +19,23 @@ import { EmojiTextarea } from "./EmojiAssist";
 import { MarkdownBody } from "./MarkdownBody";
 import { UserPicker } from "./UserPicker";
 import { fieldLabel } from "../lib/fieldLabel";
+import { tr, trn, locale, COLON } from "../i18n";
 
 const labelClass = "text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]";
 
 const STATE_STYLES: Record<ForgePR["state"], { label: string; className: string }> = {
-  open: { label: "Ouverte", className: "bg-green-500/20 text-green-300" },
-  merged: { label: "Mergée", className: "bg-purple-500/20 text-purple-300" },
-  closed: { label: "Fermée", className: "bg-red-500/20 text-red-300" },
+  open: { label: tr("Ouverte"), className: "bg-green-500/20 text-green-300" },
+  merged: { label: tr("Mergée"), className: "bg-purple-500/20 text-purple-300" },
+  closed: { label: tr("Fermée"), className: "bg-red-500/20 text-red-300" },
 };
 
 const METHOD_LABELS: Record<MergeMethod, string> = {
-  merge: "Commit de merge",
+  merge: tr("Commit de merge"),
   squash: "Squash",
   rebase: "Rebase",
 };
 
-const dateFormat = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" });
+const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
 const formatDate = (iso: string) => (iso ? dateFormat.format(new Date(iso)) : "");
 
 /** Panneau de revue d'une PR / MR : détail, CI, commentaires, fichiers modifiés, approbation, merge et fermeture. */
@@ -129,14 +130,14 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
     run("comment", async () => {
       await client().addComment(projectPath, number, body);
       setReply("");
-    }, "Commentaire publié");
+    }, tr("Commentaire publié"));
   }
 
   function sendReview(event: ReviewEvent) {
     const messages: Record<ReviewEvent, string> = {
-      approve: `${ref} approuvée`,
-      unapprove: "Approbation retirée",
-      request_changes: "Changements demandés",
+      approve: tr("{ref} approuvée", { ref }),
+      unapprove: tr("Approbation retirée"),
+      request_changes: tr("Changements demandés"),
     };
     run(event, async () => {
       await client().review(projectPath, number, event, reply.trim());
@@ -147,15 +148,15 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
   async function handleMerge(mode: MergeMode) {
     if (!details) return;
     const { pr } = details;
-    const extra = removeSource ? `, puis suppression de ${pr.sourceBranch}` : "";
+    const extra = removeSource ? tr(", puis suppression de {sourceBranch}", { sourceBranch: pr.sourceBranch }) : "";
     const summary = `${pr.sourceBranch} → ${pr.targetBranch} (${METHOD_LABELS[method].toLowerCase()}${extra}).`;
     const prompts: Record<MergeMode, [string, string]> = {
-      merge: [`Merger ${ref} ?`, `${summary} Cette action est irréversible.`],
+      merge: [tr("Merger {ref} ?", { ref }), tr("{summary} Cette action est irréversible.", { summary })],
       force: [
-        `Forcer le merge de ${ref} ?`,
-        `${summary} Les exigences de la branche (${details.mergeStatus.toLowerCase()}) seront contournées avec tes droits. Cette action est irréversible.`,
+        tr("Forcer le merge de {ref} ?", { ref }),
+        tr("{summary} Les exigences de la branche ({value}) seront contournées avec tes droits. Cette action est irréversible.", { summary, value: details.mergeStatus.toLowerCase() }),
       ],
-      auto: [`Programmer le merge de ${ref} ?`, `${summary} Le merge se fera dès que le pipeline réussit.`],
+      auto: [tr("Programmer le merge de {ref} ?", { ref }), tr("{summary} Le merge se fera dès que le pipeline réussit.", { summary })],
     };
     if (!(await confirmAction(...prompts[mode], true))) return;
     const auto = mode === "auto";
@@ -165,23 +166,23 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
         // Fusion faite sur la forge : comptée dans « Mon activité » comme un merge local. Un auto-merge n'est que programmé.
         if (!auto) useCelebrationStore.getState().track("merge");
       },
-      auto ? `Auto-merge programmé pour ${ref}` : `${ref} mergée`, !auto);
+      auto ? tr("Auto-merge programmé pour {ref}", { ref }) : tr("{ref} mergée", { ref }), !auto);
   }
 
   async function handleState(state: "open" | "closed") {
-    if (state === "closed" && !(await confirmAction(`Fermer ${ref} sans merger ?`, undefined, true))) return;
-    run("state", () => client().setState(projectPath, number, state), state === "closed" ? `${ref} fermée` : `${ref} rouverte`, true);
+    if (state === "closed" && !(await confirmAction(tr("Fermer {ref} sans merger ?", { ref }), undefined, true))) return;
+    run("state", () => client().setState(projectPath, number, state), state === "closed" ? tr("{ref} fermée", { ref }) : tr("{ref} rouverte", { ref }), true);
   }
 
   function handleUpdateBranch() {
     if (!details) return;
     run("update", () => client().updateBranch(projectPath, number, details.headSha),
-      isGitHub ? "Branche mise à jour avec la cible" : "Rebase lancé sur GitLab");
+      isGitHub ? tr("Branche mise à jour avec la cible") : tr("Rebase lancé sur GitLab"));
   }
 
   function handleDraft(draft: boolean) {
     run("draft", () => client().setDraft(projectPath, number, draft),
-      draft ? `${ref} repassée en brouillon` : `${ref} prête pour la relecture`, true);
+      draft ? tr("{ref} repassée en brouillon", { ref }) : tr("{ref} prête pour la relecture", { ref }), true);
   }
 
   /** Titre et description tels qu'on les modifie : sans le préfixe de brouillon de GitLab, conservé à l'enregistrement. */
@@ -209,7 +210,7 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
     run("edit", async () => {
       await client().updatePullRequest(projectPath, number, changes);
       setEdit(null);
-    }, `${ref} modifiée`, true);
+    }, tr("{ref} modifiée", { ref }), true);
   }
 
   /** Logins affichés, convertis en utilisateurs ; sans id connu, GitLab le reprend de la MR à l'enregistrement. */
@@ -227,7 +228,7 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
         .then((o) => setMembers(o.users))
         .catch((e) => {
           setMembers([]);
-          notify("error", `Membres du projet indisponibles : ${errorMessage(e)}`);
+          notify("error", tr("Membres du projet indisponibles : {error}", { error: errorMessage(e) }));
         });
     }
   }
@@ -247,7 +248,7 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
     run("people", async () => {
       await client().setPeople(projectPath, number, changes);
       setPeople(null);
-    }, "Relecteurs et assignés mis à jour", true);
+    }, tr("Relecteurs et assignés mis à jour"), true);
   }
 
   function startTargetEdit() {
@@ -258,7 +259,7 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
         .then(setBranches)
         .catch((e) => {
           setBranches([]);
-          notify("error", `Branches du projet indisponibles : ${errorMessage(e)}`);
+          notify("error", tr("Branches du projet indisponibles : {error}", { error: errorMessage(e) }));
         });
     }
   }
@@ -273,24 +274,24 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
     run("target", async () => {
       await client().setTargetBranch(projectPath, number, branch);
       setTarget(null);
-    }, `${ref} cible maintenant ${branch}`, true);
+    }, tr("{ref} cible maintenant {branch}", { ref, branch }), true);
   }
 
   async function requestClose() {
     if (pending) return;
     if (peopleDirty && !(await confirmAction(
-      "Abandonner les modifications ?",
-      "Les relecteurs et assignés modifiés ne seront pas enregistrés.",
+      tr("Abandonner les modifications ?"),
+      tr("Les relecteurs et assignés modifiés ne seront pas enregistrés."),
       true,
     ))) return;
     if (editDirty && !(await confirmAction(
-      "Abandonner les modifications ?",
-      "Le titre et la description modifiés ne seront pas enregistrés.",
+      tr("Abandonner les modifications ?"),
+      tr("Le titre et la description modifiés ne seront pas enregistrés."),
       true,
     ))) return;
     if (drafts.length && !(await confirmAction(
-      "Abandonner la revue en cours ?",
-      `${drafts.length} commentaire${drafts.length > 1 ? "s" : ""} en attente ne ser${drafts.length > 1 ? "ont" : "a"} pas publié${drafts.length > 1 ? "s" : ""}.`,
+      tr("Abandonner la revue en cours ?"),
+      trn(drafts.length, "{n} commentaire en attente ne sera pas publié.", "{n} commentaires en attente ne seront pas publiés."),
       true,
     ))) return;
     onClose();
@@ -308,7 +309,7 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
       resizeKey="pull-request-review"
     >
       {loadError && <p className="p-4 text-xs text-red-400 break-words">{loadError}</p>}
-      {!details && !loadError && <p className="p-4 text-xs text-[var(--color-muted)]">Chargement…</p>}
+      {!details && !loadError && <p className="p-4 text-xs text-[var(--color-muted)]">{tr("Chargement…")}</p>}
       {details && (
         <div className={`p-4 flex flex-col gap-4 ${tab === "files" ? "h-full" : ""}`}>
           <Header
@@ -327,16 +328,16 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
 
 <div className="flex gap-1 border-b border-overlay/10 -mx-4 px-4">
             <TabButton active={tab === "conversation"} onClick={() => setTab("conversation")}>
-              Conversation ({comments.length})
+              {tr("Conversation ({length})", { length: comments.length })}
             </TabButton>
             <TabButton active={tab === "files"} onClick={() => setTab("files")}>
-              Fichiers modifiés{drafts.length ? ` · ${drafts.length} en attente` : ""}
+              {tr("Fichiers modifiés")}{drafts.length ? tr(" · {length} en attente", { length: drafts.length }) : ""}
             </TabButton>
           </div>
 
           {tab === "files" && !remoteName && (
             <p className="text-xs text-[var(--color-muted)] italic">
-              Les fichiers modifiés se calculent dans le dépôt local : ouvre le dépôt de {projectPath} pour les voir.
+              {tr("Les fichiers modifiés se calculent dans le dépôt local : ouvre le dépôt de {projectPath} pour les voir.", { projectPath })}
             </p>
           )}
           {tab === "files" && remoteName && (
@@ -380,15 +381,15 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
 
             <section className="flex flex-col gap-1">
               <div className="flex items-center">
-                <h3 className={labelClass}>Description</h3>
+                <h3 className={labelClass}>{tr("Description")}</h3>
                 {details.pr.author === account.username && !edit && (
                   <button
                     className="ml-auto inline-flex items-center gap-1 text-[11px] text-[var(--color-accent-text)] hover:underline disabled:opacity-50"
                     onClick={startEdit}
                     disabled={!!pending}
-                    title={`Modifier le titre et la description de ${ref}`}
+                    title={tr("Modifier le titre et la description de {ref}", { ref })}
                   >
-                    <Pencil size={11} /> Modifier
+                    <Pencil size={11} />{" "}{tr("Modifier")}
                   </button>
                 )}
               </div>
@@ -405,16 +406,16 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
               )}
               {!edit && (details.description.trim()
                 ? <MarkdownBody text={details.description} prUrl={details.pr.url} className="bg-shade/20 rounded p-2" />
-                : <p className="text-xs text-[var(--color-muted)] italic">Aucune description</p>)}
+                : <p className="text-xs text-[var(--color-muted)] italic">{tr("Aucune description")}</p>)}
             </section>
 
             <section className="flex flex-col gap-2">
-              <h3 className={labelClass}>Conversation ({comments.length})</h3>
+              <h3 className={labelClass}>{tr("Conversation ({length})", { length: comments.length })}</h3>
               {comments.map((c) => <Comment key={c.id} comment={c} prUrl={details.pr.url} />)}
               <EmojiTextarea
                 className={`${inputClass} h-20 resize-y font-mono`}
-                placeholder="Commentaire (Markdown) — accompagne aussi l'approbation ou la demande de changements"
-                {...fieldLabel("Commentaire de la conversation (Markdown)")}
+                placeholder={tr("Commentaire (Markdown) — accompagne aussi l'approbation ou la demande de changements")}
+                {...fieldLabel(tr("Commentaire de la conversation (Markdown)"))}
                 value={reply}
                 onChange={setReply}
                 onKeyDown={(e) => {
@@ -456,12 +457,12 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
                 onUpdateBranch={handleUpdateBranch}
                 onClose={() => handleState("closed")}
               onDraft={handleDraft}
-                onRefresh={() => run("refresh", async () => {}, "Statut actualisé")}
+                onRefresh={() => run("refresh", async () => {}, tr("Statut actualisé"))}
               />
             )}
             {details.pr.state === "closed" && (
               <div className="flex justify-end">
-                <Button onClick={() => handleState("open")} disabled={!!pending}>Rouvrir</Button>
+                <Button onClick={() => handleState("open")} disabled={!!pending}>{tr("Rouvrir")}</Button>
               </div>
             )}
             </>
@@ -491,22 +492,22 @@ function EditForm({ edit, onChange, issues, search, pending, onCancel, onSave }:
   return (
     <div className="flex flex-col gap-2" onKeyDown={saveOnCtrlEnter}>
       <label className="flex flex-col gap-1">
-        <span className={labelClass}>Titre</span>
+        <span className={labelClass}>{tr("Titre")}</span>
         <input autoFocus className={inputClass} value={edit.title} onChange={(e) => onChange({ ...edit, title: e.target.value })} />
       </label>
       <IssueRefTextarea
-        label="Description (Markdown)"
+        label={tr("Description (Markdown)")}
         className={`${inputClass} h-40 resize-y font-mono`}
-        placeholder="Contexte, changements, comment tester… « # » pour citer une issue, « : » pour un emoji"
+        placeholder={tr("Contexte, changements, comment tester… « # » pour citer une issue, « : » pour un emoji")}
         value={edit.description}
         onChange={(description) => onChange({ ...edit, description })}
         issues={issues}
         search={search}
       />
       <div className="flex justify-end gap-2">
-        <Button onClick={onCancel} disabled={pending === "edit"}>Annuler</Button>
-        <Button variant="primary" onClick={onSave} disabled={!!pending || !edit.title.trim()} title="Ctrl+Entrée">
-          {pending === "edit" ? "Enregistrement…" : "Enregistrer"}
+        <Button onClick={onCancel} disabled={pending === "edit"}>{tr("Annuler")}</Button>
+        <Button variant="primary" onClick={onSave} disabled={!!pending || !edit.title.trim()} title={tr("Ctrl+Entrée")}>
+          {pending === "edit" ? tr("Enregistrement…") : tr("Enregistrer")}
         </Button>
       </div>
     </div>
@@ -549,7 +550,7 @@ function Header({ details, account, forgeName, onCheckout, target, branches, onT
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 text-xs text-[var(--color-muted)] min-w-0">
         <span className={`px-1.5 py-0.5 rounded font-semibold ${state.className}`}>{state.label}</span>
-        {pr.draft && <span className="px-1.5 py-0.5 rounded border border-overlay/20">brouillon</span>}
+        {pr.draft && <span className="px-1.5 py-0.5 rounded border border-overlay/20">{tr("brouillon")}</span>}
         <span className="truncate">
           {pr.author} · {formatDate(pr.createdAt)} · {account.label}
         </span>
@@ -557,7 +558,7 @@ function Header({ details, account, forgeName, onCheckout, target, branches, onT
       <div className="flex items-center gap-2 min-w-0">
         <span className="font-mono text-xs text-[var(--color-text)] truncate">{pr.sourceBranch}</span>
         <ArrowRight size={12} className="text-[var(--color-muted)] shrink-0" />
-        <span className="sr-only">vers</span>
+        <span className="sr-only">{tr("vers")}</span>
         {target === null ? (
           <>
             <span className="font-mono text-xs text-[var(--color-text)] truncate">{pr.targetBranch}</span>
@@ -565,8 +566,8 @@ function Header({ details, account, forgeName, onCheckout, target, branches, onT
               <button
                 className="shrink-0 text-[var(--color-muted)] hover:text-[var(--color-text)]"
                 onClick={onEditTarget}
-                aria-label="Changer la branche cible"
-                title="Changer la branche cible"
+                aria-label={tr("Changer la branche cible")}
+                title={tr("Changer la branche cible")}
               >
                 <Pencil size={11} />
               </button>
@@ -586,8 +587,8 @@ function Header({ details, account, forgeName, onCheckout, target, branches, onT
         )}
         <div className="ml-auto flex gap-2 shrink-0">
           {pr.state === "open" && onCheckout && <Button onClick={onCheckout}>Checkout</Button>}
-          <Button onClick={() => openUrl(pr.url)} title={`Ouvrir sur ${forgeName}`}>
-            <span className="inline-flex items-center gap-1"><ExternalLink size={12} /> Ouvrir sur {forgeName}</span>
+          <Button onClick={() => openUrl(pr.url)} title={tr("Ouvrir sur {forgeName}", { forgeName })}>
+            <span className="inline-flex items-center gap-1"><ExternalLink size={12} />{" "}{tr("Ouvrir sur {forgeName}", { forgeName })}</span>
           </Button>
         </div>
       </div>
@@ -620,7 +621,7 @@ function TargetPicker({ value, current, source, branches, onChange, onSave, onCa
       <select
         autoFocus
         className={`${inputClass} font-mono w-56!`}
-        aria-label="Branche cible"
+        aria-label={tr("Branche cible")}
         value={value}
         disabled={!branches || pending === "target"}
         onChange={(e) => onChange(e.target.value)}
@@ -637,9 +638,9 @@ function TargetPicker({ value, current, source, branches, onChange, onSave, onCa
         {choices.map((b) => <option key={b} value={b}>{b}</option>)}
       </select>
       <Button variant="primary" onClick={onSave} disabled={!!pending || !branches}>
-        {pending === "target" ? "…" : "Valider"}
+        {pending === "target" ? "…" : tr("Valider")}
       </Button>
-      <Button onClick={onCancel} disabled={pending === "target"}>Annuler</Button>
+      <Button onClick={onCancel} disabled={pending === "target"}>{tr("Annuler")}</Button>
     </div>
   );
 }
@@ -649,9 +650,9 @@ function People({ details, onEdit, disabled }: { details: PullRequestDetails; on
   const { pr, approvedBy, changesRequestedBy, approvalsLeft, names } = details;
   const reviewers = [...new Set([...pr.reviewers, ...approvedBy, ...changesRequestedBy])];
   const verdict = (login: string) => {
-    if (approvedBy.includes(login)) return <Check size={12} className="text-green-400" role="img" aria-label="a approuvé" />;
-    if (changesRequestedBy.includes(login)) return <CircleX size={12} className="text-amber-400" role="img" aria-label="demande des changements" />;
-    return <CircleDashed size={12} className="text-[var(--color-muted)]" role="img" aria-label="en attente" />;
+    if (approvedBy.includes(login)) return <Check size={12} className="text-green-400" role="img" aria-label={tr("a approuvé")} />;
+    if (changesRequestedBy.includes(login)) return <CircleX size={12} className="text-amber-400" role="img" aria-label={tr("demande des changements")} />;
+    return <CircleDashed size={12} className="text-[var(--color-muted)]" role="img" aria-label={tr("en attente")} />;
   };
   return (
     <div className="grid grid-cols-2 gap-3 relative">
@@ -660,21 +661,21 @@ function People({ details, onEdit, disabled }: { details: PullRequestDetails; on
           className="absolute right-0 top-0 inline-flex items-center gap-1 text-[11px] text-[var(--color-accent-text)] hover:underline disabled:opacity-50"
           onClick={onEdit}
           disabled={disabled}
-          title="Modifier les relecteurs et les assignés"
+          title={tr("Modifier les relecteurs et les assignés")}
         >
-          <Pencil size={11} /> Modifier les personnes
+          <Pencil size={11} />{" "}{tr("Modifier les personnes")}
         </button>
       )}
       <section className="flex flex-col gap-1 min-w-0">
-        <h3 className={labelClass}>Relecteurs{approvalsLeft ? ` · ${approvalsRequired(approvalsLeft)}` : ""}</h3>
-        {reviewers.length === 0 && <span className="text-xs text-[var(--color-muted)] italic">Aucun</span>}
+        <h3 className={labelClass}>{tr("Relecteurs")}{approvalsLeft ? ` · ${approvalsRequired(approvalsLeft)}` : ""}</h3>
+        {reviewers.length === 0 && <span className="text-xs text-[var(--color-muted)] italic">{tr("Aucun")}</span>}
         {reviewers.map((login) => (
           <span key={login} title={login} className="flex items-center gap-1.5 text-xs text-[var(--color-text)]">{verdict(login)} {names[login] ?? login}</span>
         ))}
       </section>
       <section className="flex flex-col gap-1 min-w-0">
-        <h3 className={labelClass}>Assignés</h3>
-        {pr.assignees.length === 0 && <span className="text-xs text-[var(--color-muted)] italic">Aucun</span>}
+        <h3 className={labelClass}>{tr("Assignés")}</h3>
+        {pr.assignees.length === 0 && <span className="text-xs text-[var(--color-muted)] italic">{tr("Aucun")}</span>}
         {pr.assignees.map((login) => <span key={login} title={login} className="text-xs text-[var(--color-text)]">{names[login] ?? login}</span>)}
       </section>
     </div>
@@ -706,39 +707,39 @@ function PeopleForm({ people, onChange, members, reviewerChoices, self, isGitHub
     >
       <div className="grid grid-cols-2 gap-3">
         <UserPicker
-          label={isGitHub ? "Relecteurs demandés" : "Relecteurs"}
+          label={isGitHub ? tr("Relecteurs demandés") : tr("Relecteurs")}
           choices={reviewerChoices}
           value={people.reviewers}
           onChange={(reviewers) => onChange({ ...people, reviewers })}
           self={isGitHub ? undefined : self}
         />
         <UserPicker
-          label="Assignés"
+          label={tr("Assignés")}
           choices={members ?? []}
           value={people.assignees}
           onChange={(assignees) => onChange({ ...people, assignees })}
           self={self}
         />
       </div>
-      {!members && <p className="text-[11px] text-[var(--color-muted)]">Chargement des membres du projet…</p>}
+      {!members && <p className="text-[11px] text-[var(--color-muted)]">{tr("Chargement des membres du projet…")}</p>}
       {isGitHub && (
         <p className="text-[11px] text-[var(--color-muted)]">
-          Ajouter quelqu'un qui a déjà donné son avis lui redemande une relecture.
+          {tr("Ajouter quelqu'un qui a déjà donné son avis lui redemande une relecture.")}
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <Button onClick={onCancel} disabled={pending === "people"}>Annuler</Button>
-        <Button variant="primary" onClick={onSave} disabled={!!pending} title="Ctrl+Entrée">
-          {pending === "people" ? "Enregistrement…" : "Enregistrer"}
+        <Button onClick={onCancel} disabled={pending === "people"}>{tr("Annuler")}</Button>
+        <Button variant="primary" onClick={onSave} disabled={!!pending} title={tr("Ctrl+Entrée")}>
+          {pending === "people" ? tr("Enregistrement…") : tr("Enregistrer")}
         </Button>
       </div>
     </div>
   );
 }
 
-const approvalsRequired = (n: number) => (n > 1 ? `${n} approbations requises` : "1 approbation requise");
+const approvalsRequired = (n: number) => (n > 1 ? tr("{n} approbations requises", { n }) : tr("1 approbation requise"));
 
-const CHECK_LABELS: Record<ForgeCheck["status"], string> = { success: "réussi", failure: "en échec", pending: "en cours", skipped: "ignoré" };
+const CHECK_LABELS: Record<ForgeCheck["status"], string> = { success: tr("réussi"), failure: tr("en échec"), pending: tr("en cours"), skipped: tr("ignoré") };
 
 const CHECK_ICONS: Record<ForgeCheck["status"], React.ReactNode> = {
   success: <Check size={12} className="text-green-400 shrink-0" />,
@@ -750,27 +751,27 @@ const CHECK_ICONS: Record<ForgeCheck["status"], React.ReactNode> = {
 function Checks({ checks }: { checks: ForgeCheck[] }) {
   const count = (status: ForgeCheck["status"]) => checks.filter((c) => c.status === status).length;
   const summary = [
-    count("failure") && `${count("failure")} en échec`,
-    count("pending") && `${count("pending")} en cours`,
-    count("success") && `${count("success")} réussi${count("success") > 1 ? "s" : ""}`,
+    count("failure") && tr("{count} en échec", { count: count("failure") }),
+    count("pending") && tr("{count} en cours", { count: count("pending") }),
+    count("success") && trn(count("success"), "{n} réussi", "{n} réussis"),
   ].filter(Boolean).join(" · ");
   return (
     <section className="flex flex-col gap-1">
-      <h3 className={labelClass}>CI · {summary || "aucun résultat"}</h3>
+      <h3 className={labelClass}>CI · {summary || tr("aucun résultat")}</h3>
       <ul className="flex flex-col max-h-36 overflow-y-auto rounded bg-shade/20 py-1">
         {checks.map((c, i) => {
           const content = (
             <>
               {CHECK_ICONS[c.status]}
               <span className="truncate">{c.name}</span>
-              <span className="sr-only"> : {CHECK_LABELS[c.status]}</span>
+              <span className="sr-only">{COLON}{CHECK_LABELS[c.status]}</span>
             </>
           );
           const row = "flex items-center gap-2 px-2 py-0.5 text-left text-xs text-[var(--color-text)]";
           return (
             <li key={`${c.name}-${i}`}>
               {c.url ? (
-                <button className={`${row} w-full hover:bg-overlay/5`} onClick={() => openUrl(c.url!)} title="Ouvrir le détail dans le navigateur">
+                <button className={`${row} w-full hover:bg-overlay/5`} onClick={() => openUrl(c.url!)} title={tr("Ouvrir le détail dans le navigateur")}>
                   {content}
                 </button>
               ) : (
@@ -789,8 +790,8 @@ function Comment({ comment, prUrl }: { comment: ForgeComment; prUrl: string }) {
     <div className="rounded border border-overlay/10 bg-shade/20">
       <div className="flex items-center gap-2 px-2 py-1 border-b border-overlay/5 text-[10px] text-[var(--color-muted)]">
         <span className="font-semibold text-[var(--color-text)]">{comment.author}</span>
-        {comment.review === "approved" && <span className="text-green-400">a approuvé</span>}
-        {comment.review === "changes_requested" && <span className="text-amber-400">demande des changements</span>}
+        {comment.review === "approved" && <span className="text-green-400">{tr("a approuvé")}</span>}
+        {comment.review === "changes_requested" && <span className="text-amber-400">{tr("demande des changements")}</span>}
         <span className="ml-auto">{formatDate(comment.createdAt)}</span>
       </div>
       {comment.body && <MarkdownBody text={comment.body} prUrl={prUrl} className="px-2 py-1.5" />}
@@ -816,23 +817,23 @@ function ReviewActions({ details, account, hasReply, pending, onComment, onRevie
         <Button
           onClick={() => onReview("request_changes")}
           disabled={!!pending || !hasReply}
-          title={hasReply ? undefined : "Écris d'abord un commentaire expliquant les changements attendus"}
+          title={hasReply ? undefined : tr("Écris d'abord un commentaire expliquant les changements attendus")}
         >
-          {pending === "request_changes" ? "Envoi…" : "Demander des changements"}
+          {pending === "request_changes" ? tr("Envoi…") : tr("Demander des changements")}
         </Button>
       )}
       {canReview && !isGitHub && details.approvedByMe && (
         <Button onClick={() => onReview("unapprove")} disabled={!!pending}>
-          {pending === "unapprove" ? "Envoi…" : "Retirer mon approbation"}
+          {pending === "unapprove" ? tr("Envoi…") : tr("Retirer mon approbation")}
         </Button>
       )}
       {canReview && !details.approvedByMe && (
         <Button onClick={() => onReview("approve")} disabled={!!pending}>
-          <span className="inline-flex items-center gap-1"><Check size={12} /> {pending === "approve" ? "Envoi…" : "Approuver"}</span>
+          <span className="inline-flex items-center gap-1"><Check size={12} /> {pending === "approve" ? tr("Envoi…") : tr("Approuver")}</span>
         </Button>
       )}
-      <Button variant="primary" onClick={onComment} disabled={!!pending || !hasReply} title="Ctrl+Entrée">
-        {pending === "comment" ? "Envoi…" : "Commenter"}
+      <Button variant="primary" onClick={onComment} disabled={!!pending || !hasReply} title={tr("Ctrl+Entrée")}>
+        {pending === "comment" ? tr("Envoi…") : tr("Commenter")}
       </Button>
     </div>
   );
@@ -855,9 +856,9 @@ function MergeBox({ details, isGitHub, method, onMethod, removeSource, onRemoveS
   onDraft: (draft: boolean) => void;
   onRefresh: () => void;
 }) {
-  const closeLabel = `Fermer la ${isGitHub ? "PR" : "MR"}`;
-  const updateLabel = isGitHub ? "Mettre à jour la branche" : "Rebaser";
-  const mergeLabel = details.canAutoMerge ? "Merger immédiatement" : "Merger";
+  const closeLabel = tr("Fermer la {value}", { value: isGitHub ? "PR" : "MR" });
+  const updateLabel = isGitHub ? tr("Mettre à jour la branche") : tr("Rebaser");
+  const mergeLabel = details.canAutoMerge ? tr("Merger immédiatement") : tr("Merger");
   return (
     <section className="flex flex-col gap-2 rounded border border-overlay/10 p-3">
       <div className="flex items-center gap-2">
@@ -866,19 +867,19 @@ function MergeBox({ details, isGitHub, method, onMethod, removeSource, onRemoveS
           className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-40"
           onClick={onRefresh}
           disabled={!!pending}
-          title="Actualiser le statut"
-          aria-label="Actualiser le statut"
+          title={tr("Actualiser le statut")}
+          aria-label={tr("Actualiser le statut")}
         >
           <RotateCw size={12} />
         </button>
         {details.canUpdateBranch && (
           <Button onClick={onUpdateBranch} disabled={!!pending}>
-            {pending === "update" ? "Envoi…" : updateLabel}
+            {pending === "update" ? tr("Envoi…") : updateLabel}
           </Button>
         )}
         {details.pr.draft && (
           <Button variant="primary" onClick={() => onDraft(false)} disabled={!!pending}>
-            {pending === "draft" ? "Envoi…" : "Marquer comme prête"}
+            {pending === "draft" ? tr("Envoi…") : tr("Marquer comme prête")}
           </Button>
         )}
       </div>
@@ -888,7 +889,7 @@ function MergeBox({ details, isGitHub, method, onMethod, removeSource, onRemoveS
             className={inputClass.replace("w-full", "w-auto")}
             value={method}
             onChange={(e) => onMethod(e.target.value as MergeMethod)}
-            aria-label="Mode de merge"
+            aria-label={tr("Mode de merge")}
           >
             {details.mergeMethods.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
           </select>
@@ -896,31 +897,31 @@ function MergeBox({ details, isGitHub, method, onMethod, removeSource, onRemoveS
         {!isGitHub && (
           <label className="flex items-center gap-2 text-xs text-[var(--color-text)] cursor-pointer">
             <input type="checkbox" checked={removeSource} onChange={(e) => onRemoveSource(e.target.checked)} />
-            Supprimer la branche source
+            {tr("Supprimer la branche source")}
           </label>
         )}
         <div className="ml-auto flex gap-2">
           {!details.pr.draft && (
-            <Button onClick={() => onDraft(true)} disabled={!!pending} title="Repasser en brouillon">
-              {pending === "draft" ? "Envoi…" : "Repasser en brouillon"}
+            <Button onClick={() => onDraft(true)} disabled={!!pending} title={tr("Repasser en brouillon")}>
+              {pending === "draft" ? tr("Envoi…") : tr("Repasser en brouillon")}
             </Button>
           )}
           <Button variant="danger" onClick={onClose} disabled={!!pending}>
-            {pending === "state" ? "Fermeture…" : closeLabel}
+            {pending === "state" ? tr("Fermeture…") : closeLabel}
           </Button>
           {details.canForceMerge && (
             <Button
               variant="danger"
               onClick={() => onMerge("force")}
               disabled={!!pending}
-              title="Merger sans attendre les exigences de la branche (relectures, checks…) : tes droits permettent de les contourner"
+              title={tr("Merger sans attendre les exigences de la branche (relectures, checks…) : tes droits permettent de les contourner")}
             >
-              {pending === "merge" ? "Merge…" : "Forcer le merge"}
+              {pending === "merge" ? tr("Merge…") : tr("Forcer le merge")}
             </Button>
           )}
           {details.canAutoMerge && (
-            <Button onClick={() => onMerge("auto")} disabled={!!pending} title="Merger dès que le pipeline réussit">
-              {pending === "auto" ? "Envoi…" : "Auto-merge"}
+            <Button onClick={() => onMerge("auto")} disabled={!!pending} title={tr("Merger dès que le pipeline réussit")}>
+              {pending === "auto" ? tr("Envoi…") : "Auto-merge"}
             </Button>
           )}
           {!details.canForceMerge && (
@@ -928,9 +929,9 @@ function MergeBox({ details, isGitHub, method, onMethod, removeSource, onRemoveS
               variant="primary"
               onClick={() => onMerge("merge")}
               disabled={!!pending || !details.mergeable}
-              title={details.canAutoMerge ? "Merger maintenant, sans attendre la fin du pipeline" : undefined}
+              title={details.canAutoMerge ? tr("Merger maintenant, sans attendre la fin du pipeline") : undefined}
             >
-              {pending === "merge" ? "Merge…" : mergeLabel}
+              {pending === "merge" ? tr("Merge…") : mergeLabel}
             </Button>
           )}
         </div>

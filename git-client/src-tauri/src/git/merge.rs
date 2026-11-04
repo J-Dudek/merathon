@@ -94,8 +94,7 @@ pub fn fast_forward(repo: &Repository, branch_name: &str) -> Result<(), GitError
         return Ok(());
     }
     if !analysis.is_fast_forward() {
-        return Err(GitError::Other(format!(
-            "Fast-forward impossible : la branche courante a des commits absents de {branch_name}. Utilise un merge ou un rebase."
+        return Err(GitError::Other(tr!("Fast-forward impossible : la branche courante a des commits absents de {branch_name}. Utilise un merge ou un rebase.", "Fast-forward not possible: the current branch has commits missing from {branch_name}. Use a merge or a rebase."
         )));
     }
     advance_head(repo, &annotated, branch_name)
@@ -116,8 +115,7 @@ pub fn fast_forward_branch(repo: &Repository, branch_name: &str, target: &str) -
         return Ok(());
     }
     if !repo.graph_descendant_of(to, current)? {
-        return Err(GitError::Other(format!(
-            "Fast-forward impossible : {branch_name} a des commits absents de {target}. Utilise un merge ou un rebase."
+        return Err(GitError::Other(tr!("Fast-forward impossible : {branch_name} a des commits absents de {target}. Utilise un merge ou un rebase.", "Fast-forward not possible: {branch_name} has commits missing from {target}. Use a merge or a rebase."
         )));
     }
     reference.set_target(to, &format!("fast-forward {branch_name} to {target}"))?;

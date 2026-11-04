@@ -79,7 +79,7 @@ fn push_refspecs(repo: &Repository, remote_name: &str, refspecs: &[String], cred
     let mut callbacks = remote_callbacks(creds(&url), repo.path());
     callbacks.push_update_reference(|refname, status| {
         if let Some(msg) = status {
-            rejected.borrow_mut().push(format!("{refname} : {msg}"));
+            rejected.borrow_mut().push(tr!("{refname} : {msg}", "{refname}: {msg}"));
         }
         Ok(())
     });
@@ -91,8 +91,7 @@ fn push_refspecs(repo: &Repository, remote_name: &str, refspecs: &[String], cred
 
     let rejected = rejected.into_inner();
     if !rejected.is_empty() {
-        return Err(GitError::Other(format!(
-            "Push refusé ({}). Fais un pull avant de pousser, ou force le push.",
+        return Err(GitError::Other(tr!("Push refusé ({}). Fais un pull avant de pousser, ou force le push.", "Push refused ({}). Pull before pushing, or force the push.",
             rejected.join(", ")
         )));
     }
@@ -113,7 +112,7 @@ pub fn push_branch(
     // libgit2 ne met à jour la branche de suivi que si le refspec de fetch la couvre :
     // on l'aligne nous-mêmes sur le commit poussé.
     let mut local = repo.find_branch(branch, BranchType::Local)?;
-    let tip = local.get().target().ok_or_else(|| GitError::Other("branche sans commit".into()))?;
+    let tip = local.get().target().ok_or_else(|| GitError::Other(tr!("branche sans commit", "branch without commits")))?;
     let tracking = format!("{remote_name}/{branch}");
     repo.reference(&format!("refs/remotes/{tracking}"), tip, true, "push: mise à jour de la branche de suivi")?;
 
@@ -129,7 +128,7 @@ pub fn push_branch(
 pub fn delete_remote_branch(repo: &Repository, remote_branch: &str, creds: CredsLookup) -> Result<(), GitError> {
     let (remote_name, branch) = remote_branch
         .split_once('/')
-        .ok_or_else(|| GitError::Other(format!("nom de branche distante invalide : {remote_branch}")))?;
+        .ok_or_else(|| GitError::Other(tr!("nom de branche distante invalide : {remote_branch}", "invalid remote branch name: {remote_branch}")))?;
     push_refspecs(repo, remote_name, &[format!(":refs/heads/{branch}")], creds)?;
     if let Ok(mut r) = repo.find_reference(&format!("refs/remotes/{remote_branch}")) {
         r.delete()?;
@@ -148,16 +147,16 @@ pub fn delete_remote_tag(repo: &Repository, remote_name: &str, tag: &str, creds:
 /// Remote et branche distante suivies par la branche courante.
 pub fn head_upstream(repo: &Repository) -> Result<(String, String, String), GitError> {
     if repo.head_detached().unwrap_or(false) {
-        return Err(GitError::Other("HEAD détaché : bascule sur une branche pour faire un pull/push".into()));
+        return Err(GitError::Other(tr!("HEAD détaché : bascule sur une branche pour faire un pull/push", "Detached HEAD: switch to a branch to pull/push")));
     }
     let head = repo.head()?;
-    let refname = head.name().map_err(|_| GitError::Other("HEAD invalide".into()))?.to_string();
+    let refname = head.name().map_err(|_| GitError::Other(tr!("HEAD invalide", "invalid HEAD")))?.to_string();
     let branch_name = head.shorthand().unwrap_or("").to_string();
     let local = repo.find_branch(&branch_name, BranchType::Local)?;
     let upstream = local.upstream().map_err(|_| match repo.branch_upstream_name(&refname) {
         // Suivi configuré, mais la branche de suivi a disparu : supprimée sur le serveur puis retirée par un fetch.
         Ok(name) => upstream_gone(&branch_name, name.as_str().unwrap_or_default()),
-        Err(_) => GitError::Other(format!("La branche « {branch_name} » ne suit aucune branche distante : pousse-la d'abord")),
+        Err(_) => GitError::Other(tr!("La branche « {branch_name} » ne suit aucune branche distante : pousse-la d'abord", "Branch \"{branch_name}\" does not track any remote branch: push it first")),
     })?;
     let upstream_name = upstream.name()?.unwrap_or("").to_string();
     let remote_buf = repo.branch_upstream_remote(&refname)?;

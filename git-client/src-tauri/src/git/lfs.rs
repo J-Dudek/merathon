@@ -30,13 +30,17 @@ pub struct LfsStatus {
     pub files: Vec<LfsFile>,
 }
 
-const NOT_INSTALLED: &str =
-    "Ce dépôt utilise Git LFS mais git-lfs n'est pas installé (https://git-lfs.com) : installe-le puis réessaie";
+fn not_installed() -> String {
+    tr!(
+        "Ce dépôt utilise Git LFS mais git-lfs n'est pas installé (https://git-lfs.com) : installe-le puis réessaie",
+        "This repository uses Git LFS but git-lfs is not installed (https://git-lfs.com): install it then try again"
+    )
+}
 
 fn workdir(repo: &Repository) -> Result<PathBuf, GitError> {
     repo.workdir()
         .map(Path::to_path_buf)
-        .ok_or_else(|| GitError::Other("dépôt bare".into()))
+        .ok_or_else(|| GitError::Other(tr!("dépôt bare", "bare repository")))
 }
 
 /// Helper d'identification transmis à `git` : ne répond que pour l'hôte du compte, en HTTPS
@@ -127,7 +131,7 @@ fn git(dir: &Path, creds: Option<&Credentials>) -> Command {
 /// Argument passé à git qui ne doit pas pouvoir être pris pour une option.
 fn safe_arg(value: &str) -> Result<&str, GitError> {
     if value.is_empty() || value.starts_with('-') || value.contains(['\0', '\n', '\r']) {
-        return Err(GitError::Other(format!("Valeur refusée : {value:?}")));
+        return Err(GitError::Other(tr!("Valeur refusée : {value:?}", "Value refused: {value:?}")));
     }
     Ok(value)
 }
@@ -135,12 +139,12 @@ fn safe_arg(value: &str) -> Result<&str, GitError> {
 fn run(mut cmd: Command) -> Result<String, GitError> {
     let output = cmd
         .output()
-        .map_err(|e| GitError::Other(format!("Impossible de lancer git : {e}")))?;
+        .map_err(|e| GitError::Other(tr!("Impossible de lancer git : {e}", "Could not run git: {e}")))?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(GitError::Other(if stderr.is_empty() { "commande git échouée".into() } else { stderr }))
+        Err(GitError::Other(if stderr.is_empty() { tr!("commande git échouée", "git command failed") } else { stderr }))
     }
 }
 
@@ -183,7 +187,7 @@ pub fn is_lfs_path(repo: &Repository, path: &str) -> bool {
 }
 
 fn ensure_installed() -> Result<(), GitError> {
-    lfs_version().map(|_| ()).ok_or_else(|| GitError::Other(NOT_INSTALLED.into()))
+    lfs_version().map(|_| ()).ok_or_else(|| GitError::Other(not_installed()))
 }
 
 
@@ -268,8 +272,10 @@ pub fn lfs_push(repo: &Repository, remote: &str, branch: &str, creds: Option<&Cr
         return Ok(());
     }
     if lfs_version().is_none() {
-        return Err(GitError::Other(format!(
-            "{NOT_INSTALLED}. Sans lui, les fichiers LFS ne seraient pas envoyés au serveur."
+        return Err(GitError::Other(tr!(
+            "{}. Sans lui, les fichiers LFS ne seraient pas envoyés au serveur.",
+            "{}. Without it, LFS files would not be sent to the server.",
+            not_installed()
         )));
     }
     let mut cmd = git(&workdir(repo)?, creds);

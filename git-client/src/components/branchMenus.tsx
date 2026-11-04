@@ -18,6 +18,7 @@ import { newPullRequestUrl, remoteForAccount } from "../lib/remoteUrl";
 import { PullRequestDialog, type PullRequestTarget } from "./PullRequestDialog";
 import type { MenuEntry } from "./ContextMenu";
 import type { BranchInfo } from "../types/git";
+import { tr } from "../i18n";
 
 /**
  * Menus d'une branche locale ou distante, communs à la barre latérale et au graphe des commits.
@@ -55,10 +56,10 @@ export function useBranchMenus() {
         ?? (b.upstream?.startsWith(`${remote}/`) ? b.upstream.slice(remote.length + 1) : b.name);
       const github = account.provider === "github";
       const forge = github ? "GitHub" : "GitLab";
-      const noun = github ? "pull request" : "merge request";
+      const noun = github ? tr("pull request") : tr("merge request");
       entries.push(
         {
-          label: `Créer une ${noun} ${forge}…`,
+          label: tr("Créer une {noun} {forge}…", { noun, forge }),
           hint: match.path,
           action: () => setPullRequest({
             account,
@@ -69,7 +70,7 @@ export function useBranchMenus() {
             needsPush: !b.is_remote && (!b.upstream?.startsWith(`${remote}/`) || b.ahead > 0),
           }),
         },
-        { label: `Ouvrir la création de ${noun} sur ${forge}`, action: () => openUrl(newPullRequestUrl(account, match.path, source)) },
+        { label: tr("Ouvrir la création de {noun} sur {forge}", { noun, forge }), action: () => openUrl(newPullRequestUrl(account, match.path, source)) },
       );
     }
     return entries;
@@ -80,14 +81,14 @@ export function useBranchMenus() {
 
   async function newBranchFrom(from: string) {
     const result = await useUiStore.getState().ask({
-      title: "Nouvelle branche",
-      message: `Depuis ${from}`,
-      input: { placeholder: "nom-de-branche" },
-      checkbox: { label: "Basculer sur la nouvelle branche", initial: true },
-      confirmLabel: "Créer",
+      title: tr("Nouvelle branche"),
+      message: tr("Depuis {from}", { from }),
+      input: { placeholder: tr("nom-de-branche") },
+      checkbox: { label: tr("Basculer sur la nouvelle branche"), initial: true },
+      confirmLabel: tr("Créer"),
     });
     const name = result?.value.trim();
-    if (name) await runGit(() => createBranch(path, name, from, result!.checked), { success: `Branche ${name} créée` });
+    if (name) await runGit(() => createBranch(path, name, from, result!.checked), { success: tr("Branche {name} créée", { name }) });
   }
 
   /**
@@ -96,27 +97,27 @@ export function useBranchMenus() {
    */
   function branchActions(b: BranchInfo): MenuEntry[] {
     const inHead = !!info?.head_hash && ancestorsOf(commits, info.head_hash).has(b.target_hash);
-    const inHeadHint = inHead ? `Déjà dans ${head}` : undefined;
+    const inHeadHint = inHead ? tr("Déjà dans {head}", { head }) : undefined;
     const entries: MenuEntry[] = [
       b.is_remote
-        ? { label: "Checkout (branche locale de suivi)", action: () => runGit(() => checkoutRemoteBranch(path, b.name)) }
+        ? { label: tr("Checkout (branche locale de suivi)"), action: () => runGit(() => checkoutRemoteBranch(path, b.name)) }
         : {
             label: `Checkout ${b.name}`,
             disabled: !!elsewhere(b),
-            hint: elsewhere(b) && "Extraite dans un autre worktree",
+            hint: elsewhere(b) && tr("Extraite dans un autre worktree"),
             action: () => runGit(() => checkoutBranch(path, b.name)),
           },
       {
-        label: `Merger ${b.name} dans ${head}`,
+        label: tr("Merger {name} dans {head}", { name: b.name, head }),
         disabled: inHead,
         hint: inHeadHint,
-        action: async () => reportMerge(await runGit(() => mergeBranch(path, b.name)), `Merge de ${b.name} terminé`),
+        action: async () => reportMerge(await runGit(() => mergeBranch(path, b.name)), tr("Merge de {name} terminé", { name: b.name })),
       },
       {
-        label: `Rebaser ${head} sur ${b.name}`,
+        label: tr("Rebaser {head} sur {name}", { head, name: b.name }),
         disabled: inHead,
         hint: inHeadHint,
-        action: async () => reportMerge(await runGit(() => rebaseOnto(path, b.name)), `Rebase sur ${b.name} terminé`),
+        action: async () => reportMerge(await runGit(() => rebaseOnto(path, b.name)), tr("Rebase sur {name} terminé", { name: b.name })),
       },
     ];
     return [...entries, ...fastForwardEntries(b)];
@@ -131,16 +132,16 @@ export function useBranchMenus() {
     const current = info?.head_branch;
     if (current && canFastForward(commits, info?.head_hash, b.target_hash)) {
       entries.push({
-        label: `Fast-forward ${current} jusqu'à ${b.name}`,
-        hint: "Avance la branche courante, sans commit de merge",
-        action: () => runGit(() => fastForward(path, b.name), { success: `${current} avancée jusqu'à ${b.name}` }),
+        label: tr("Fast-forward {current} jusqu'à {name}", { current, name: b.name }),
+        hint: tr("Avance la branche courante, sans commit de merge"),
+        action: () => runGit(() => fastForward(path, b.name), { success: tr("{current} avancée jusqu'à {name}", { current, name: b.name }) }),
       });
     }
     if (b.is_remote || b.is_head || elsewhere(b)) return entries;
     const moveTo = (target: string) => ({
-      label: `Fast-forward ${b.name} jusqu'à ${target}`,
-      hint: "Avance cette branche sans la checkout",
-      action: () => runGit(() => fastForwardBranch(path, b.name, target), { success: `${b.name} avancée jusqu'à ${target}` }),
+      label: tr("Fast-forward {name} jusqu'à {target}", { name: b.name, target }),
+      hint: tr("Avance cette branche sans la checkout"),
+      action: () => runGit(() => fastForwardBranch(path, b.name, target), { success: tr("{name} avancée jusqu'à {target}", { name: b.name, target }) }),
     });
     if (current && canFastForward(commits, b.target_hash, info?.head_hash)) entries.push(moveTo(current));
     const upstream = b.upstream ? branches.find((r) => r.is_remote && r.name === b.upstream) : undefined;
@@ -154,8 +155,8 @@ export function useBranchMenus() {
     if (b.is_head) return [];
     const other = elsewhere(b);
     return other
-      ? [{ label: "Ouvrir son worktree", hint: other.path, action: () => openRepoAt(other.path) }]
-      : [{ label: "Extraire dans un nouveau worktree…", action: () => createWorktree(b.name, false) }];
+      ? [{ label: tr("Ouvrir son worktree"), hint: other.path, action: () => openRepoAt(other.path) }]
+      : [{ label: tr("Extraire dans un nouveau worktree…"), action: () => createWorktree(b.name, false) }];
   }
 
   function localMenu(b: BranchInfo): MenuEntry[] {
@@ -164,29 +165,29 @@ export function useBranchMenus() {
       entries.push(...branchActions(b));
     } else if (b.upstream) {
       entries.push(
-        { label: "Pull", action: async () => reportMerge(await runGit(() => pull(path, false), { busy: "Pull…" }), "Pull terminé") },
+        { label: "Pull", action: async () => reportMerge(await runGit(() => pull(path, false), { busy: tr("Pull…") }), tr("Pull terminé")) },
       );
     }
     entries.push(
       {
-        label: b.upstream ? `Push vers ${b.upstream}` : "Push (publier la branche)",
-        action: () => pushBranch(path, b.name, { success: `Push de ${b.name} terminé` }),
+        label: b.upstream ? tr("Push vers {upstream}", { upstream: b.upstream }) : tr("Push (publier la branche)"),
+        action: () => pushBranch(path, b.name, { success: tr("Push de {name} terminé", { name: b.name }) }),
       },
       ...pullRequestEntries(b),
       "separator",
-      { label: `Créer une branche depuis ${b.name}…`, action: () => newBranchFrom(b.name) },
+      { label: tr("Créer une branche depuis {name}…", { name: b.name }), action: () => newBranchFrom(b.name) },
       ...worktreeEntries(b),
       {
-        label: "Renommer…",
+        label: tr("Renommer…"),
         action: async () => {
-          const name = await promptText("Renommer la branche", { initial: b.name });
+          const name = await promptText(tr("Renommer la branche"), { initial: b.name });
           if (name && name !== b.name) await runGit(() => renameBranch(path, b.name, name));
         },
       },
       {
-        label: "Définir la branche suivie…",
+        label: tr("Définir la branche suivie…"),
         action: async () => {
-          const upstream = await promptText("Branche distante suivie", {
+          const upstream = await promptText(tr("Branche distante suivie"), {
             initial: b.upstream ?? `origin/${b.name}`,
             placeholder: "origin/branche",
           });
@@ -194,19 +195,19 @@ export function useBranchMenus() {
         },
       },
       ...(b.upstream
-        ? [{ label: "Ne plus suivre de branche distante", action: () => runGit(() => setUpstream(path, b.name, null)) }]
+        ? [{ label: tr("Ne plus suivre de branche distante"), action: () => runGit(() => setUpstream(path, b.name, null)) }]
         : []),
-      { label: "Copier le nom", action: () => navigator.clipboard.writeText(b.name) },
+      { label: tr("Copier le nom"), action: () => navigator.clipboard.writeText(b.name) },
       "separator",
       ...graphEntries(b),
       "separator",
       {
-        label: "Supprimer",
+        label: tr("Supprimer"),
         danger: true,
         disabled: b.is_head || !!elsewhere(b),
-        hint: elsewhere(b) && "Extraite dans un autre worktree",
+        hint: elsewhere(b) && tr("Extraite dans un autre worktree"),
         action: async () => {
-          if (await confirmAction(`Supprimer la branche « ${b.name} » ?`, "Les commits non mergés ailleurs ne seront plus référencés.", true))
+          if (await confirmAction(tr("Supprimer la branche « {name} » ?", { name: b.name }), tr("Les commits non mergés ailleurs ne seront plus référencés."), true))
             await runGit(() => deleteBranch(path, b.name));
         },
       },
@@ -219,17 +220,17 @@ export function useBranchMenus() {
       ...branchActions(b),
       ...pullRequestEntries(b),
       "separator",
-      { label: `Créer une branche depuis ${b.name}…`, action: () => newBranchFrom(b.name) },
-      { label: "Copier le nom", action: () => navigator.clipboard.writeText(b.name) },
+      { label: tr("Créer une branche depuis {name}…", { name: b.name }), action: () => newBranchFrom(b.name) },
+      { label: tr("Copier le nom"), action: () => navigator.clipboard.writeText(b.name) },
       "separator",
       ...graphEntries(b),
       "separator",
       {
-        label: "Supprimer la branche distante",
+        label: tr("Supprimer la branche distante"),
         danger: true,
         action: async () => {
-          if (await confirmAction(`Supprimer « ${b.name} » sur le serveur ?`, undefined, true))
-            await runGit(() => deleteRemoteBranch(path, b.name), { busy: "Suppression…", success: `${b.name} supprimée` });
+          if (await confirmAction(tr("Supprimer « {name} » sur le serveur ?", { name: b.name }), undefined, true))
+            await runGit(() => deleteRemoteBranch(path, b.name), { busy: tr("Suppression…"), success: tr("{name} supprimée", { name: b.name }) });
         },
       },
     ];
@@ -243,14 +244,14 @@ export function useBranchMenus() {
     const { toggleSolo, toggleHidden } = useGraphFilterStore.getState();
     return [
       {
-        label: solo ? "Quitter le solo" : "Solo : n'afficher que cette branche",
-        hint: solo ? undefined : "Cumulable avec d'autres branches en solo",
+        label: solo ? tr("Quitter le solo") : tr("Solo : n'afficher que cette branche"),
+        hint: solo ? undefined : tr("Cumulable avec d'autres branches en solo"),
         action: () => toggleSolo(path, key),
       },
       {
-        label: hidden ? "Réafficher dans le graphe" : "Masquer dans le graphe",
+        label: hidden ? tr("Réafficher dans le graphe") : tr("Masquer dans le graphe"),
         disabled: b.is_head && !hidden,
-        hint: b.is_head && !hidden ? "Impossible pour la branche courante" : undefined,
+        hint: b.is_head && !hidden ? tr("Impossible pour la branche courante") : undefined,
         action: () => toggleHidden(path, key),
       },
     ];

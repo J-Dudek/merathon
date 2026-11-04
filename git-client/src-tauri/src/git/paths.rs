@@ -5,7 +5,7 @@ use std::path::{Component, Path, PathBuf};
 use super::error::GitError;
 
 fn invalid(rel: &str) -> GitError {
-    GitError::Other(format!("Chemin refusé (hors du dépôt) : {rel}"))
+    GitError::Other(tr!("Chemin refusé (hors du dépôt) : {rel}", "Path refused (outside the repository): {rel}"))
 }
 
 /// Chemin relatif à la racine du dépôt, sans `..`, ni chemin absolu, ni accès à `.git`.

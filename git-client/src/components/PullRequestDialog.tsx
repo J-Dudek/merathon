@@ -13,6 +13,7 @@ import { Button, Modal, inputClass } from "./Modal";
 import { CLOSING_KEYWORD, addClosingRef, closesIssue, issueNumberFromBranch } from "../lib/issueRefs";
 import { IssueRefTextarea } from "./IssueRefTextarea";
 import { TagPicker, UserPicker } from "./UserPicker";
+import { tr, LIST_SEPARATOR } from "../i18n";
 
 /** Pull request à préparer : branche source, projet visé et, pour une branche locale, de quoi la pousser avant. */
 export interface PullRequestTarget {
@@ -34,7 +35,7 @@ const labelClass = "text-[10px] font-bold uppercase tracking-widest text-[var(--
 export function PullRequestDialog({ target, onClose }: { target: PullRequestTarget; onClose: () => void }) {
   const { account, projectPath, remoteName, sourceBranch } = target;
   const isGitHub = account.provider === "github";
-  const noun = isGitHub ? "pull request" : "merge request";
+  const noun = isGitHub ? tr("pull request") : tr("merge request");
   const forgeName = isGitHub ? "GitHub" : "GitLab";
   const repoPath = useRepoStore((s) => s.repoPath);
   const branches = useRepoStore((s) => s.branches);
@@ -132,8 +133,8 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
   async function chooseTemplate(name: string) {
     const current = templates.find((t) => t.name === templateName)?.content ?? "";
     if (description.trim() && description !== current && !(await confirmAction(
-      "Remplacer la description ?",
-      "La description saisie sera remplacée par le modèle choisi.",
+      tr("Remplacer la description ?"),
+      tr("La description saisie sera remplacée par le modèle choisi."),
       true,
     ))) return;
     setTemplateName(name);
@@ -164,7 +165,7 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
     setCreating(true);
     try {
       if (pushFirst && target.localBranch && repoPath) {
-        useUiStore.getState().setBusy("Push…");
+        useUiStore.getState().setBusy(tr("Push…"));
         try {
           await push(repoPath, { branch: target.localBranch, remote: remoteName });
         } finally {
@@ -186,9 +187,9 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
         removeSourceBranch: removeSource,
       });
       const ref = isGitHub ? `#${pr.number}` : `!${pr.number}`;
-      notify("success", `${isGitHub ? "Pull request" : "Merge request"} ${ref} créée`);
+      notify("success", tr("{value} {ref} créée", { value: isGitHub ? "Pull request" : "Merge request", ref }));
       useCelebrationStore.getState().track("pr");
-      if (warnings.length) notify("error", `${ref} créée, mais échec pour ${warnings.join(" ; ")}`);
+      if (warnings.length) notify("error", tr("{ref} créée, mais échec pour {list}", { ref, list: warnings.join(LIST_SEPARATOR) }));
       if (openAfter && pr.url) openUrl(pr.url);
       onClose();
     } catch (e) {
@@ -199,7 +200,7 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
   }
 
   return (
-    <Modal title={`Nouvelle ${noun} ${forgeName}`} onClose={() => !creating && onClose()} width="w-[620px]" resizeKey="pull-request-create">
+    <Modal title={tr("Nouvelle {noun} {forgeName}", { noun, forgeName })} onClose={() => !creating && onClose()} width="w-[620px]" resizeKey="pull-request-create">
       <div className="p-4 flex flex-col gap-3 min-h-full">
         <div className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
           <span className="px-1.5 py-0.5 rounded bg-overlay/10 text-[var(--color-text)] font-semibold">{forgeName}</span>
@@ -209,14 +210,14 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
 
         <div className="flex items-end gap-2">
           <label className="flex flex-col gap-1 flex-1 min-w-0">
-            <span className={labelClass}>Branche source</span>
+            <span className={labelClass}>{tr("Branche source")}</span>
             <input className={`${inputClass} font-mono`} readOnly value={sourceBranch} />
           </label>
           <ArrowRight size={14} className="mb-2 shrink-0 text-[var(--color-muted)]" />
           <label className="flex flex-col gap-1 flex-1 min-w-0">
-            <span className={labelClass}>Branche cible</span>
+            <span className={labelClass}>{tr("Branche cible")}</span>
             <select className={`${inputClass} font-mono`} value={targetBranch} onChange={(e) => setTargetBranch(e.target.value)}>
-              {!targetBranch && <option value="">Chargement…</option>}
+              {!targetBranch && <option value="">{tr("Chargement…")}</option>}
               {targetBranches.map((b) => (
                 <option key={b} value={b}>{b}</option>
               ))}
@@ -225,23 +226,23 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
         </div>
 
         <label className="flex flex-col gap-1">
-          <span className={labelClass}>Titre</span>
+          <span className={labelClass}>{tr("Titre")}</span>
           <input autoFocus className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
 
         <div className="flex-1 flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <span className={labelClass}>Description (Markdown)</span>
+            <span className={labelClass}>{tr("Description (Markdown)")}</span>
             {templates.length > 0 && (
               <div className="ml-auto w-56 shrink-0">
                 <select
                   className={`${inputClass} text-[11px]`}
                   value={templateName}
                   onChange={(e) => chooseTemplate(e.target.value)}
-                  aria-label="Modèle de description"
-                  title="Modèles de description définis dans le projet"
+                  aria-label={tr("Modèle de description")}
+                  title={tr("Modèles de description définis dans le projet")}
                 >
-                  <option value="">Sans modèle</option>
+                  <option value="">{tr("Sans modèle")}</option>
                   {templates.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
               </div>
@@ -250,19 +251,19 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
           {branchIssue && !branchIssueDismissed && !closesIssue(description, branchIssue.number) && (
             <div className="flex items-center gap-2 px-2 py-1 rounded bg-overlay/5 text-[11px] text-[var(--color-muted)]">
               <span className="min-w-0 truncate">
-                La branche évoque l'issue <span className="font-mono">#{branchIssue.number}</span>{" "}
+                {tr("La branche évoque l'issue")}{" "}<span className="font-mono">#{branchIssue.number}</span>{" "}
                 <span className="text-[var(--color-text)]">{branchIssue.title}</span>
               </span>
               <button
                 className="ml-auto shrink-0 text-[var(--color-accent-text)] hover:underline"
-                title={`Ajoute « ${CLOSING_KEYWORD} #${branchIssue.number} » : l'issue sera fermée au merge`}
+                title={tr("Ajoute « {CLOSING_KEYWORD} #{number} » : l'issue sera fermée au merge", { CLOSING_KEYWORD, number: branchIssue.number })}
                 onClick={() => setDescription((d) => addClosingRef(d, branchIssue.number))}
               >
-                Fermer au merge
+                {tr("Fermer au merge")}
               </button>
               <button
                 className="shrink-0 hover:text-[var(--color-text)]"
-                aria-label="Ignorer la suggestion d'issue"
+                aria-label={tr("Ignorer la suggestion d'issue")}
                 onClick={() => setBranchIssueDismissed(true)}
               >
                 <X size={11} />
@@ -270,10 +271,10 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
             </div>
           )}
           <IssueRefTextarea
-            label="Description"
+            label={tr("Description")}
             wrapperClassName="flex-1 flex flex-col"
             className={`${inputClass} ${templateName ? "h-56" : "h-28"} flex-auto resize-y font-mono`}
-            placeholder="Contexte, changements, comment tester… « # » pour citer une issue, « : » pour un emoji"
+            placeholder={tr("Contexte, changements, comment tester… « # » pour citer une issue, « : » pour un emoji")}
             value={description}
             onChange={setDescription}
             issues={issues}
@@ -283,21 +284,21 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
 
         {loadError && (
           <p className="text-[11px] text-amber-300 break-words">
-            Membres, labels et jalons indisponibles : {loadError}
+            {tr("Membres, labels et jalons indisponibles : {loadError}", { loadError })}
           </p>
         )}
-        {!options && !loadError && <p className="text-[11px] text-[var(--color-muted)]">Chargement des options du projet…</p>}
+        {!options && !loadError && <p className="text-[11px] text-[var(--color-muted)]">{tr("Chargement des options du projet…")}</p>}
 
         {options && (
           <div className="grid grid-cols-2 gap-3">
             <UserPicker
-              label={isGitHub ? "Relecteurs" : "Relecteurs (reviewers)"}
+              label={isGitHub ? tr("Relecteurs") : "Relecteurs (reviewers)"}
               choices={reviewerChoices}
               value={reviewers}
               onChange={setReviewers}
             />
             <UserPicker
-              label="Assignés"
+              label={tr("Assignés")}
               choices={options.users}
               value={assignees}
               onChange={setAssignees}
@@ -310,13 +311,13 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
               onChange={setLabels}
             />
             <label className="flex flex-col gap-1 min-w-0">
-              <span className={labelClass}>Jalon</span>
+              <span className={labelClass}>{tr("Jalon")}</span>
               <select
                 className={inputClass}
                 value={milestone?.id ?? ""}
                 onChange={(e) => setMilestone(options.milestones.find((m) => String(m.id) === e.target.value) ?? null)}
               >
-                <option value="">Aucun</option>
+                <option value="">{tr("Aucun")}</option>
                 {options.milestones.map((m) => (
                   <option key={m.id} value={m.id}>{m.title}</option>
                 ))}
@@ -327,27 +328,27 @@ export function PullRequestDialog({ target, onClose }: { target: PullRequestTarg
 
         <div className="flex flex-col gap-1.5 pt-1">
           <Check checked={draft} onChange={setDraft}>
-            {isGitHub ? "Créer en brouillon (draft)" : "Marquer comme brouillon (Draft:)"}
+            {isGitHub ? tr("Créer en brouillon (draft)") : tr("Marquer comme brouillon (Draft:)")}
           </Check>
           {!isGitHub && (
             <>
-              <Check checked={removeSource} onChange={setRemoveSource}>Supprimer la branche source après le merge</Check>
-              <Check checked={squash} onChange={setSquash}>Squasher les commits au merge</Check>
+              <Check checked={removeSource} onChange={setRemoveSource}>{tr("Supprimer la branche source après le merge")}</Check>
+              <Check checked={squash} onChange={setSquash}>{tr("Squasher les commits au merge")}</Check>
             </>
           )}
           {target.localBranch && (
             <Check checked={pushFirst} onChange={setPushFirst}>
-              Pousser {target.localBranch} sur {remoteName} avant
-              {target.needsPush && <span className="text-amber-300"> (commits non publiés)</span>}
+              {tr("Pousser {localBranch} sur {remoteName} avant", { localBranch: target.localBranch, remoteName })}
+              {target.needsPush && <span className="text-amber-300">{" "}{tr("(commits non publiés)")}</span>}
             </Check>
           )}
-          <Check checked={openAfter} onChange={setOpenAfter}>Ouvrir dans le navigateur après la création</Check>
+          <Check checked={openAfter} onChange={setOpenAfter}>{tr("Ouvrir dans le navigateur après la création")}</Check>
         </div>
 
         <div className="flex justify-end gap-2 pt-1">
-          <Button onClick={onClose} disabled={creating}>Annuler</Button>
+          <Button onClick={onClose} disabled={creating}>{tr("Annuler")}</Button>
           <Button variant="primary" onClick={handleCreate} disabled={!canCreate}>
-            {creating ? "Création…" : `Créer la ${noun}`}
+            {creating ? tr("Création…") : tr("Créer la {noun}", { noun })}
           </Button>
         </div>
       </div>

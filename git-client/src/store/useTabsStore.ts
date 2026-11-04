@@ -4,6 +4,7 @@ import { useUiStore } from "./useUiStore";
 import { trustRepository, UNTRUSTED_REPO_ERROR } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
 import { trimEndChars } from "../lib/strings";
+import { tr } from "../i18n";
 
 /**
  * Onglets de dépôts d'une fenêtre.
@@ -57,7 +58,7 @@ async function loadRepo(path: string): Promise<boolean> {
     }
     return true;
   } catch (e) {
-    useUiStore.getState().notify("error", `Impossible d'ouvrir ${path} : ${errorMessage(e)}`);
+    useUiStore.getState().notify("error", tr("Impossible d'ouvrir {path} : {error}", { path, error: errorMessage(e) }));
     return false;
   }
 }
@@ -68,12 +69,12 @@ async function loadRepo(path: string): Promise<boolean> {
  */
 async function confirmTrust(path: string): Promise<boolean> {
   const result = await useUiStore.getState().ask({
-    title: "Faire confiance à ce dépôt ?",
+    title: tr("Faire confiance à ce dépôt ?"),
     message:
-      `${path}\nappartient à un autre utilisateur (c'est le cas des dépôts WSL ouverts depuis Windows). ` +
-      "Git refuse de l'ouvrir tant qu'il n'est pas déclaré sûr.\n\n" +
-      "L'ajouter à safe.directory dans votre configuration Git globale ?",
-    confirmLabel: "Faire confiance",
+      tr("{path}\nappartient à un autre utilisateur (c'est le cas des dépôts WSL ouverts depuis Windows). ", { path }) +
+      tr("Git refuse de l'ouvrir tant qu'il n'est pas déclaré sûr.\n\n") +
+      tr("L'ajouter à safe.directory dans votre configuration Git globale ?"),
+    confirmLabel: tr("Faire confiance"),
   });
   return result !== null;
 }

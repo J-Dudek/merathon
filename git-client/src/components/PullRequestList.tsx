@@ -12,6 +12,7 @@ import { ContextMenu, useContextMenu } from "./ContextMenu";
 import { PullRequestReviewDialog } from "./PullRequestReviewDialog";
 import { PR_PAGE_SIZE, type ForgeAccount, type ForgePR, type PullRequestState } from "../types/forge";
 import type { RemoteInfo } from "../types/git";
+import { tr, COLON } from "../i18n";
 
 /** Compte et projet de la forge qui hébergent un remote du dépôt courant. */
 export interface LinkedForge {
@@ -43,9 +44,9 @@ export async function checkoutPullRequest(remoteName: string, pr: ForgePR) {
   if (!repoPath) return;
   const remoteBranch = `${remoteName}/${pr.sourceBranch}`;
   if (!branches.some((b) => b.is_remote && b.name === remoteBranch)) {
-    await runGit(() => fetchRemote(repoPath, remoteName), { busy: "Fetch…", refresh: false });
+    await runGit(() => fetchRemote(repoPath, remoteName), { busy: tr("Fetch…"), refresh: false });
   }
-  await runGit(() => checkoutRemoteBranch(repoPath, remoteBranch), { success: `Checkout de ${pr.sourceBranch}` });
+  await runGit(() => checkoutRemoteBranch(repoPath, remoteBranch), { success: tr("Checkout de {sourceBranch}", { sourceBranch: pr.sourceBranch }) });
 }
 
 export type PrScope = "all" | "mine" | "review" | "assigned";
@@ -240,26 +241,26 @@ export function PullRequestList({ forge, list, indent = 12 }: { forge: LinkedFor
           className={filterClass}
           value={list.state}
           onChange={(e) => list.setState(e.target.value as PullRequestState)}
-          aria-label={`État des ${prLabel}s`}
+          aria-label={tr("État des {prLabel}s", { prLabel })}
         >
-          <option value="open">Ouvertes</option>
-          <option value="merged">Mergées</option>
-          <option value="closed">Fermées</option>
-          <option value="all">Toutes</option>
+          <option value="open">{tr("Ouvertes")}</option>
+          <option value="merged">{tr("Mergées")}</option>
+          <option value="closed">{tr("Fermées")}</option>
+          <option value="all">{tr("Toutes")}</option>
         </select>
         <select
           className={filterClass}
           value={list.scope}
           onChange={(e) => list.setScope(e.target.value as PrScope)}
-          aria-label={`Filtrer les ${prLabel}s`}
+          aria-label={tr("Filtrer les {prLabel}s", { prLabel })}
         >
-          <option value="all">Tout le monde</option>
-          <option value="mine">Les miennes</option>
-          <option value="review">À relire par moi</option>
-          <option value="assigned">Assignées à moi</option>
+          <option value="all">{tr("Tout le monde")}</option>
+          <option value="mine">{tr("Les miennes")}</option>
+          <option value="review">{tr("À relire par moi")}</option>
+          <option value="assigned">{tr("Assignées à moi")}</option>
         </select>
       </div>
-      {list.loading && <p className="py-1 text-xs text-[var(--color-muted)]" style={{ paddingLeft: indent }}>Chargement…</p>}
+      {list.loading && <p className="py-1 text-xs text-[var(--color-muted)]" style={{ paddingLeft: indent }}>{tr("Chargement…")}</p>}
       {list.error && <p className="pr-3 py-1 text-xs text-red-400 break-words" style={{ paddingLeft: indent }}>{list.error}</p>}
       {!list.loading && !list.error && (
         <>
@@ -275,19 +276,19 @@ export function PullRequestList({ forge, list, indent = 12 }: { forge: LinkedFor
                 indent={indent}
                 onClick={() => setReviewing(pr.number)}
                 onContextMenu={(e) => open(e, [
-                  { label: "Voir le détail…", action: () => setReviewing(pr.number) },
+                  { label: tr("Voir le détail…"), action: () => setReviewing(pr.number) },
                   { label: `Checkout ${pr.sourceBranch}`, action: () => checkoutPr(pr) },
-                  { label: "Ouvrir dans le navigateur", action: () => openUrl(pr.url) },
+                  { label: tr("Ouvrir dans le navigateur"), action: () => openUrl(pr.url) },
                   freshness.kind === "read"
-                    ? { label: "Marquer comme non lue", action: () => markUnread(keyOf(pr)) }
-                    : { label: "Marquer comme lue", action: () => markPullRequestRead(account, projectPath, pr) },
-                  { label: "Tout marquer comme lu", action: () => list.prs.forEach((p) => markPullRequestRead(account, projectPath, p)) },
+                    ? { label: tr("Marquer comme non lue"), action: () => markUnread(keyOf(pr)) }
+                    : { label: tr("Marquer comme lue"), action: () => markPullRequestRead(account, projectPath, pr) },
+                  { label: tr("Tout marquer comme lu"), action: () => list.prs.forEach((p) => markPullRequestRead(account, projectPath, p)) },
                 ])}
               />
             );
           })}
           {list.prs.length === 0 && (
-            <p className="py-1 text-xs text-[var(--color-muted)] italic" style={{ paddingLeft: indent }}>Aucune {prLabel} pour ce filtre</p>
+            <p className="py-1 text-xs text-[var(--color-muted)] italic" style={{ paddingLeft: indent }}>{tr("Aucune {prLabel} pour ce filtre", { prLabel })}</p>
           )}
         </>
       )}
@@ -309,9 +310,9 @@ export function PullRequestList({ forge, list, indent = 12 }: { forge: LinkedFor
 
 /** État d'une PR : une icône de forme différente par état, en plus de la couleur (RGAA 3.1). */
 const PR_STATE_ICONS: Record<ForgePR["state"], { icon: LucideIcon; label: string }> = {
-  open: { icon: GitPullRequestArrow, label: "ouverte" },
-  merged: { icon: GitMerge, label: "mergée" },
-  closed: { icon: GitPullRequestClosed, label: "fermée" },
+  open: { icon: GitPullRequestArrow, label: tr("ouverte") },
+  merged: { icon: GitMerge, label: tr("mergée") },
+  closed: { icon: GitPullRequestClosed, label: tr("fermée") },
 };
 
 const PR_STATE_COLORS: Record<ForgePR["state"], string> = {
@@ -325,8 +326,8 @@ export function FreshnessTags({ freshness }: { freshness: PrFreshness }) {
   if (freshness.kind === "unread") {
     return (
       <>
-        <span className="w-1.5 h-1.5 mt-1 rounded-full bg-sky-400 shrink-0" title="Non lue" aria-hidden />
-        <span className="sr-only">, non lue</span>
+        <span className="w-1.5 h-1.5 mt-1 rounded-full bg-sky-400 shrink-0" title={tr("Non lue")} aria-hidden />
+        <span className="sr-only">{tr(", non lue")}</span>
       </>
     );
   }
@@ -335,18 +336,18 @@ export function FreshnessTags({ freshness }: { freshness: PrFreshness }) {
   return (
     <>
       {freshness.commits && (
-        <span className={tag} title="Nouveaux commits depuis ta dernière consultation">
-          <GitCommitHorizontal size={10} /> <span className="sr-only">, nouveaux</span> commits
+        <span className={tag} title={tr("Nouveaux commits depuis ta dernière consultation")}>
+          <GitCommitHorizontal size={10} /> <span className="sr-only">{tr(", nouveaux")}</span> commits
         </span>
       )}
       {freshness.comments && (
-        <span className={tag} title="Nouveaux commentaires depuis ta dernière consultation">
-          <MessageSquare size={10} /> <span className="sr-only">, nouveaux</span> commentaires
+        <span className={tag} title={tr("Nouveaux commentaires depuis ta dernière consultation")}>
+          <MessageSquare size={10} /> <span className="sr-only">{tr(", nouveaux")}</span>{" "}{tr("commentaires")}
         </span>
       )}
       {!freshness.commits && !freshness.comments && (
-        <span className={tag} title="Nouvelle activité (commentaire, relecture, label…) depuis ta dernière consultation">
-          <span className="sr-only">, nouvelle </span>activité
+        <span className={tag} title={tr("Nouvelle activité (commentaire, relecture, label…) depuis ta dernière consultation")}>
+          <span className="sr-only">{tr(", nouvelle")}{" "}</span>{tr("activité")}
         </span>
       )}
     </>
@@ -387,11 +388,11 @@ export function PRRow({ pr, freshness, approved, typeLabel, indent, onClick, onC
         onClick();
       }}
       onContextMenu={onContextMenu}
-      title={hint ?? "Clic : voir le détail · Clic droit : checkout, navigateur"}
+      title={hint ?? tr("Clic : voir le détail · Clic droit : checkout, navigateur")}
     >
       <div className="flex items-start gap-2">
         <state.icon size={12} strokeWidth={2} className={`${PR_STATE_COLORS[pr.state]} shrink-0 mt-0.5`} aria-hidden />
-        <span className="sr-only">{typeLabel} {state.label} : </span>
+        <span className="sr-only">{typeLabel} {state.label}{COLON}</span>
         <div className="flex-1 min-w-0">
           <p
             className={`text-xs truncate ${

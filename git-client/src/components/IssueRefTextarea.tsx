@@ -3,6 +3,7 @@ import type { ForgeIssue } from "../types/forge";
 import { CLOSING_KEYWORD, insertIssueRef, issueQueryAt, matchIssues, uniqueIssues, type IssueQuery } from "../lib/issueRefs";
 import { caretPosition } from "../lib/caret";
 import { useEmojiAssist } from "./EmojiAssist";
+import { tr } from "../i18n";
 
 const MAX_SUGGESTIONS = 8;
 /** Délai avant d'interroger la forge, pour ne pas lancer une requête à chaque touche. */
@@ -146,7 +147,7 @@ export function IssueRefTextarea({ value, onChange, issues, search, label, class
         className={open ? "absolute z-10 bg-[var(--color-bg-elevated)] border border-overlay/10 rounded shadow-xl" : "hidden"}
         style={{ top: position.top, left: position.left, width: POPUP_WIDTH, maxWidth: "100%" }}
       >
-        <ul id={listId} role="listbox" aria-label="Issues du projet" className="max-h-48 overflow-y-auto">
+        <ul id={listId} role="listbox" aria-label={tr("Issues du projet")} className="max-h-48 overflow-y-auto">
           {open && suggestions.map((issue, i) => (
             <li
               key={issue.number}
@@ -161,15 +162,15 @@ export function IssueRefTextarea({ value, onChange, issues, search, label, class
             >
               <span className="font-mono text-[var(--color-muted)] shrink-0">#{issue.number}</span>
               <span className="truncate">{issue.title}</span>
-              {issue.state === "closed" && <span className="ml-auto shrink-0 text-[10px] text-[var(--color-muted)]">fermée</span>}
+              {issue.state === "closed" && <span className="ml-auto shrink-0 text-[10px] text-[var(--color-muted)]">{tr("fermée")}</span>}
             </li>
           ))}
         </ul>
         {open && (
           <p className="px-2 py-1 border-t border-overlay/10 text-[10px] text-[var(--color-muted)]" aria-live="polite">
             {suggestions.length
-              ? `Entrée : #${suggestions[current].number} · Maj+Entrée : ${CLOSING_KEYWORD} #${suggestions[current].number} (fermée au merge)`
-              : "Recherche sur la forge…"}
+              ? tr("Entrée : #{number} · Maj+Entrée : {CLOSING_KEYWORD} #{number} (fermée au merge)", { number: suggestions[current].number, CLOSING_KEYWORD })
+              : tr("Recherche sur la forge…")}
           </p>
         )}
       </div>

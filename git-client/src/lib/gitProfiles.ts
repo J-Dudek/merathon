@@ -1,5 +1,6 @@
 import { trimEndChars } from "./strings";
 import type { GitProfile, IdentityStatus } from "../types/git";
+import { tr } from "../i18n";
 
 const normalize = (path: string) => trimEndChars(path.replace(/\\/g, "/"), "/");
 
@@ -30,13 +31,13 @@ export interface IdentityIssue {
 /** Commit qui ne serait pas signé avec l'e-mail du profil du dépôt ; null si tout est cohérent. */
 export function identityIssue(status: IdentityStatus | null): IdentityIssue | null {
   if (!status?.mismatch || !status.profile) return null;
-  const expected = `le profil « ${status.profile.label} » prévoit ${status.profile.user_email}`;
-  const actual = status.email ?? "aucun e-mail";
+  const expected = tr("le profil « {label} » prévoit {user_email}", { label: status.profile.label, user_email: status.profile.user_email });
+  const actual = status.email ?? tr("aucun e-mail");
   if (status.origin === "repo") {
-    return { message: `Ce dépôt signe ses commits avec ${actual} (réglage du dépôt), alors que ${expected}.`, canUseProfile: true };
+    return { message: tr("Ce dépôt signe ses commits avec {actual} (réglage du dépôt), alors que {expected}.", { actual, expected }), canUseProfile: true };
   }
   return {
-    message: `Les commits seraient signés avec ${actual}, alors que ${expected}. Dans ~/.gitconfig, place la section [user] avant les règles includeIf.`,
+    message: tr("Les commits seraient signés avec {actual}, alors que {expected}. Dans ~/.gitconfig, place la section [user] avant les règles includeIf.", { actual, expected }),
     canUseProfile: false,
   };
 }

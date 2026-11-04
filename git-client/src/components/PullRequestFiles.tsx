@@ -18,19 +18,19 @@ import { fieldLabel } from "../lib/fieldLabel";
 import { LineCounts } from "./CommitDetails";
 import { MarkdownBody } from "./MarkdownBody";
 import { EmojiTextarea } from "./EmojiAssist";
+import { tr, trn, locale, LIST_SEPARATOR } from "../i18n";
 
 const STATUS_LETTERS: Record<CommitFile["status"], { letter: string; label: string; color: string }> = {
-  added: { letter: "A", label: "ajouté", color: "text-green-400" },
-  modified: { letter: "M", label: "modifié", color: "text-yellow-400" },
-  deleted: { letter: "D", label: "supprimé", color: "text-red-400" },
-  renamed: { letter: "R", label: "renommé", color: "text-sky-300" },
-  copied: { letter: "C", label: "copié", color: "text-sky-300" },
-  typechange: { letter: "T", label: "type changé", color: "text-[var(--color-muted)]" },
+  added: { letter: "A", label: tr("ajouté"), color: "text-green-400" },
+  modified: { letter: "M", label: tr("modifié"), color: "text-yellow-400" },
+  deleted: { letter: "D", label: tr("supprimé"), color: "text-red-400" },
+  renamed: { letter: "R", label: tr("renommé"), color: "text-sky-300" },
+  copied: { letter: "C", label: tr("copié"), color: "text-sky-300" },
+  typechange: { letter: "T", label: tr("type changé"), color: "text-[var(--color-muted)]" },
 };
 
-const dateFormat = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
+const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "short" });
 const formatDate = (iso: string) => (iso ? dateFormat.format(new Date(iso)) : "");
-const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
 let draftSeq = 0;
 
@@ -102,7 +102,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
     setLoading(true);
     setError(null);
     const fetchFirst = async () => {
-      useUiStore.getState().setBusy(`Fetch ${remoteName}…`);
+      useUiStore.getState().setBusy(tr("Fetch {remoteName}…", { remoteName }));
       try {
         await fetchRemote(repoPath, remoteName);
       } finally {
@@ -124,11 +124,11 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
     } catch (e) {
       setComparison(null);
       // PR / MR fermée : sa branche a le plus souvent été supprimée, ses commits ne sont plus récupérables par un fetch.
-      const after = pr.state === "merged" ? "le merge" : "la fermeture";
+      const after = pr.state === "merged" ? tr("le merge") : tr("la fermeture");
       const cause = pr.state === "open"
-        ? "Une PR venant d'un fork n'est pas récupérée par ce fetch : ouvre-la dans le navigateur."
-        : `La branche ${pr.sourceBranch} a sans doute été supprimée après ${after} : consulte les fichiers dans le navigateur.`;
-      setError(`Les commits de la branche ${pr.sourceBranch} sont introuvables après un fetch de ${remoteName}. ${cause} (${errorMessage(e)})`);
+        ? tr("Une PR venant d'un fork n'est pas récupérée par ce fetch : ouvre-la dans le navigateur.")
+        : tr("La branche {sourceBranch} a sans doute été supprimée après {after} : consulte les fichiers dans le navigateur.", { sourceBranch: pr.sourceBranch, after });
+      setError(tr("Les commits de la branche {sourceBranch} sont introuvables après un fetch de {remoteName}. {cause} ({error})", { sourceBranch: pr.sourceBranch, remoteName, cause, error: errorMessage(e) }));
     } finally {
       setLoading(false);
     }
@@ -249,7 +249,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
   async function publishNow() {
     if (!composing?.text.trim()) return;
     const { position, text } = composing;
-    if (await act(() => client.addLineComment(projectPath, pr.number, ctx, position, text.trim()), "Commentaire publié")) {
+    if (await act(() => client.addLineComment(projectPath, pr.number, ctx, position, text.trim()), tr("Commentaire publié"))) {
       setComposing(null);
     }
   }
@@ -277,8 +277,8 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
                 thread={t}
                 prUrl={pr.url}
                 busy={busy}
-                onReply={(body) => act(() => client.replyToThread(projectPath, pr.number, t, body), "Réponse publiée")}
-                onResolve={(resolved) => act(() => client.resolveThread(projectPath, pr.number, t, resolved), resolved ? "Fil résolu" : "Fil rouvert")}
+                onReply={(body) => act(() => client.replyToThread(projectPath, pr.number, t, body), tr("Réponse publiée"))}
+                onResolve={(resolved) => act(() => client.resolveThread(projectPath, pr.number, t, resolved), resolved ? tr("Fil résolu") : tr("Fil rouvert"))}
               />
             ))}
             {lineDrafts.map((d) => (
@@ -300,7 +300,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
     }
     : undefined;
 
-  if (!repoPath) return <p className="p-4 text-xs text-[var(--color-muted)] italic">Aucun dépôt ouvert</p>;
+  if (!repoPath) return <p className="p-4 text-xs text-[var(--color-muted)] italic">{tr("Aucun dépôt ouvert")}</p>;
 
   const totals = files.reduce((t, f) => ({ add: t.add + f.additions, del: t.del + f.deletions }), { add: 0, del: 0 });
   const viewedCount = files.filter((f) => viewed.has(f.path)).length;
@@ -308,24 +308,23 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
   return (
     <div className="flex flex-col h-full min-h-[240px]">
       <div className="flex items-center gap-2 px-4 py-2 border-b border-overlay/10 text-[11px] text-[var(--color-muted)]">
-        {loading && <span>Calcul du diff…</span>}
+        {loading && <span>{tr("Calcul du diff…")}</span>}
         {!loading && comparison && (
           <span className="truncate">
-            {plural(comparison.commits, "commit")} · {plural(files.length, "fichier")} ·{" "}
-            <LineCounts add={totals.add} del={totals.del} all /> · vus{" "}
-            {viewedCount}/{files.length} · base <span className="font-mono">{comparison.merge_base.slice(0, 7)}</span> ({base})
+            {trn(comparison.commits, "{n} commit", "{n} commits")} · {trn(files.length, "{n} fichier", "{n} fichiers")} ·{" "}
+            <LineCounts add={totals.add} del={totals.del} all />{" "}{tr("· vus {viewedCount}/{length} · base", { viewedCount, length: files.length })}{" "}<span className="font-mono">{comparison.merge_base.slice(0, 7)}</span> ({base})
           </span>
         )}
-        {stale && <span className="text-amber-300 shrink-0">tête locale différente de la forge : fetch pour commenter</span>}
+        {stale && <span className="text-amber-300 shrink-0">{tr("tête locale différente de la forge : fetch pour commenter")}</span>}
         <div className="ml-auto flex items-center gap-2 shrink-0">
           {drafts.length > 0 && (
             <Button variant="primary" onClick={() => setSubmitOpen((v) => !v)}>
-              Terminer la revue ({drafts.length})
+              {tr("Terminer la revue ({length})", { length: drafts.length })}
             </Button>
           )}
           {drafts.length === 0 && canComment && (
             <button className="hover:text-[var(--color-text)]" onClick={() => setSubmitOpen((v) => !v)}>
-              Publier une revue…
+              {tr("Publier une revue…")}
             </button>
           )}
           <button
@@ -335,7 +334,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
               compare(true);
               loadThreads();
             }}
-            title={`Fetch ${remoteName} puis recalculer`}
+            title={tr("Fetch {remoteName} puis recalculer", { remoteName })}
           >
             <RotateCw size={11} className="inline mr-1 -mt-0.5" />Fetch
           </button>
@@ -353,9 +352,9 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
               const result = await client.submitReview(projectPath, pr.number, ctx, { verdict, body, comments: drafts });
               const published = new Set(result.publishedIds);
               onDraftsChange(drafts.filter((d) => !published.has(d.id)));
-              if (result.errors.length) notify("error", `Revue publiée en partie : ${result.errors.join(" ; ")}`);
+              if (result.errors.length) notify("error", tr("Revue publiée en partie : {list}", { list: result.errors.join(LIST_SEPARATOR) }));
               else {
-                notify("success", "Revue publiée");
+                notify("success", tr("Revue publiée"));
                 setSubmitOpen(false);
               }
               await loadThreads();
@@ -370,7 +369,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
         />
       )}
       {error && <p className="px-4 py-2 text-xs text-red-400 break-words">{error}</p>}
-      {threadsError && <p className="px-4 py-1 text-xs text-amber-300 break-words">Commentaires de ligne indisponibles : {threadsError}</p>}
+      {threadsError && <p className="px-4 py-1 text-xs text-amber-300 break-words">{tr("Commentaires de ligne indisponibles : {threadsError}", { threadsError })}</p>}
       {comparison && (
         <div className="flex flex-1 min-h-0">
           <FileList
@@ -389,14 +388,14 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
                 <span className="font-mono text-[var(--color-muted)] truncate">{selectedFile.path}</span>
                 <label className="ml-auto flex items-center gap-1 shrink-0 text-[var(--color-text)] cursor-pointer">
                   <input type="checkbox" checked={viewed.has(selectedFile.path)} onChange={() => toggleViewed(selectedFile.path)} />
-                  Vu
+                  {tr("Vu")}
                 </label>
               </div>
             )}
             {index && index.outdated.length > 0 && (
               <div className="px-3 py-2 border-b border-overlay/5 flex flex-col gap-2 max-h-48 overflow-y-auto">
                 <span className="text-[10px] uppercase tracking-widest text-[var(--color-muted)]">
-                  Commentaires sur une version précédente
+                  {tr("Commentaires sur une version précédente")}
                 </span>
                 {index.outdated.map((t) => (
                   <Thread
@@ -404,8 +403,8 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
                     thread={t}
                     prUrl={pr.url}
                     busy={busy}
-                    onReply={(body) => act(() => client.replyToThread(projectPath, pr.number, t, body), "Réponse publiée")}
-                    onResolve={(resolved) => act(() => client.resolveThread(projectPath, pr.number, t, resolved), resolved ? "Fil résolu" : "Fil rouvert")}
+                    onReply={(body) => act(() => client.replyToThread(projectPath, pr.number, t, body), tr("Réponse publiée"))}
+                    onResolve={(resolved) => act(() => client.resolveThread(projectPath, pr.number, t, resolved), resolved ? tr("Fil résolu") : tr("Fil rouvert"))}
                   />
                 ))}
               </div>
@@ -470,8 +469,8 @@ const FileList = memo(function FileList({ files, treeMode, onToggleTreeMode, sel
             <input
               type="search"
               className={`${inputClass} pl-6! py-1!`}
-              placeholder="Rechercher un fichier…"
-              {...fieldLabel("Rechercher un fichier")}
+              placeholder={tr("Rechercher un fichier…")}
+              {...fieldLabel(tr("Rechercher un fichier"))}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -486,16 +485,16 @@ const FileList = memo(function FileList({ files, treeMode, onToggleTreeMode, sel
           <button
             className="w-6 h-6 shrink-0 inline-flex items-center justify-center rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
             onClick={onToggleTreeMode}
-            aria-label={treeMode ? "Afficher en liste" : "Afficher en arborescence"}
-            title={treeMode ? "Afficher en liste" : "Afficher en arborescence"}
+            aria-label={treeMode ? tr("Afficher en liste") : tr("Afficher en arborescence")}
+            title={treeMode ? tr("Afficher en liste") : tr("Afficher en arborescence")}
           >
             {treeMode ? <List size={12} /> : <ListTree size={12} />}
           </button>
         </div>
         <ul className="flex-1 overflow-y-auto py-1">
-          {files.length === 0 && <li className="px-3 py-1 text-xs text-[var(--color-muted)] italic">Aucun fichier modifié</li>}
+          {files.length === 0 && <li className="px-3 py-1 text-xs text-[var(--color-muted)] italic">{tr("Aucun fichier modifié")}</li>}
           {files.length > 0 && shownFiles.length === 0 && (
-            <li className="px-3 py-1 text-xs text-[var(--color-muted)] italic">Aucun fichier ne correspond</li>
+            <li className="px-3 py-1 text-xs text-[var(--color-muted)] italic">{tr("Aucun fichier ne correspond")}</li>
           )}
           {treeMode
             ? <FileTree nodes={fileTree(shownFiles, (f) => f.path)} depth={0} isOpen={isOpen} onToggle={toggleFolder} viewed={viewed} row={row} />
@@ -531,11 +530,11 @@ function FileTree({ nodes, depth, isOpen, onToggle, viewed, row }: {
         >
           <Chevron size={11} className="w-3 shrink-0 text-[var(--color-muted)]" />
           <span className="flex-1 truncate text-[11px] font-mono text-[var(--color-muted)]">
-            <span className="sr-only">Dossier </span>
+            <span className="sr-only">{tr("Dossier")}{" "}</span>
             {node.name}
           </span>
           <span className="shrink-0 text-[10px] text-[var(--color-muted)]">
-            {seen}/{node.files.length}<span className="sr-only"> vus</span>
+            {seen}/{node.files.length}<span className="sr-only">{" "}{tr("vus")}</span>
           </span>
         </button>
         {open && (
@@ -572,7 +571,7 @@ const FileRow = memo(function FileRow({ file, depth, selected, viewed, comments,
           type="checkbox"
           checked={viewed}
           onChange={() => onToggleViewed(file.path)}
-          aria-label={`Marquer ${file.path} comme vu`}
+          aria-label={tr("Marquer {path} comme vu", { path: file.path })}
         />
         {/* Fichier vu : nom en gris (sans transparence, qui ferait chuter le contraste) et case cochée. */}
         <button
@@ -590,7 +589,7 @@ const FileRow = memo(function FileRow({ file, depth, selected, viewed, comments,
           {comments > 0 && (
             <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-[var(--color-muted)]">
               <MessageSquare size={10} /> <span aria-hidden>{comments}</span>
-              <span className="sr-only">{plural(comments, "commentaire")}, </span>
+              <span className="sr-only">{trn(comments, "{n} commentaire", "{n} commentaires")}, </span>
             </span>
           )}
           <span className="shrink-0 font-mono text-[10px]">
@@ -631,7 +630,7 @@ function Thread({ thread, prUrl, busy, onReply, onResolve }: {
         className="self-start text-[11px] text-[var(--color-muted)] hover:text-[var(--color-text)]"
         onClick={() => setOpen(true)}
       >
-        <Check size={11} className="inline mr-1 -mt-0.5" />Fil résolu · {plural(thread.comments.length, "commentaire")} — afficher
+        <Check size={11} className="inline mr-1 -mt-0.5" />{tr("Fil résolu · {count} — afficher", { count: trn(thread.comments.length, "{n} commentaire", "{n} commentaires") })}
       </button>
     );
   }
@@ -646,11 +645,11 @@ function Thread({ thread, prUrl, busy, onReply, onResolve }: {
             className={`${inputClass} h-16 resize-y font-mono`}
             value={reply}
             onChange={setReply}
-            placeholder="Réponse (Markdown)"
-            {...fieldLabel("Réponse au commentaire (Markdown)")}
+            placeholder={tr("Réponse (Markdown)")}
+            {...fieldLabel(tr("Réponse au commentaire (Markdown)"))}
           />
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setReply(null)} disabled={busy}>Annuler</Button>
+            <Button onClick={() => setReply(null)} disabled={busy}>{tr("Annuler")}</Button>
             <Button
               variant="primary"
               disabled={busy || !reply.trim()}
@@ -658,24 +657,24 @@ function Thread({ thread, prUrl, busy, onReply, onResolve }: {
                 if (await onReply(reply.trim())) setReply(null);
               }}
             >
-              Répondre
+              {tr("Répondre")}
             </Button>
           </div>
         </div>
       ) : (
         <div className="flex items-center gap-3 text-[11px]">
-          <button className="text-[var(--color-accent-text)] hover:underline" onClick={() => setReply("")}>Répondre</button>
+          <button className="text-[var(--color-accent-text)] hover:underline" onClick={() => setReply("")}>{tr("Répondre")}</button>
           {thread.resolved !== null && (
             <button
               className="text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-40"
               disabled={busy}
               onClick={() => onResolve(!thread.resolved)}
             >
-              {thread.resolved ? "Rouvrir le fil" : "Résoudre"}
+              {thread.resolved ? tr("Rouvrir le fil") : tr("Résoudre")}
             </button>
           )}
           {thread.resolved && (
-            <button className="text-[var(--color-muted)] hover:text-[var(--color-text)]" onClick={() => setOpen(false)}>Replier</button>
+            <button className="text-[var(--color-muted)] hover:text-[var(--color-text)]" onClick={() => setOpen(false)}>{tr("Replier")}</button>
           )}
         </div>
       )}
@@ -687,9 +686,9 @@ function DraftCard({ draft, prUrl, onEdit, onDelete }: { draft: DraftComment; pr
   return (
     <div className="rounded border border-dashed border-[var(--color-accent)]/50 bg-[var(--color-bg-elevated)] p-2 flex flex-col gap-1">
       <div className="flex items-center gap-2 text-[10px]">
-        <span className="px-1 rounded bg-[var(--color-accent)]/30 text-[var(--color-text)]">en attente</span>
-        <button className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)]" onClick={onEdit}>Modifier</button>
-        <button className="text-red-300 hover:text-red-200" onClick={onDelete}>Supprimer</button>
+        <span className="px-1 rounded bg-[var(--color-accent)]/30 text-[var(--color-text)]">{tr("en attente")}</span>
+        <button className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)]" onClick={onEdit}>{tr("Modifier")}</button>
+        <button className="text-red-300 hover:text-red-200" onClick={onDelete}>{tr("Supprimer")}</button>
       </div>
       <MarkdownBody text={draft.body} prUrl={prUrl} />
     </div>
@@ -709,8 +708,8 @@ function Composer({ text, busy, onChange, onCancel, onDraft, onPublish }: {
       <EmojiTextarea
         autoFocus
         className={`${inputClass} h-20 resize-y font-mono`}
-        placeholder="Commentaire (Markdown) · Ctrl+Entrée : ajouter à la revue"
-        {...fieldLabel("Commentaire sur la ligne (Markdown)")}
+        placeholder={tr("Commentaire (Markdown) · Ctrl+Entrée : ajouter à la revue")}
+        {...fieldLabel(tr("Commentaire sur la ligne (Markdown)"))}
         value={text}
         onChange={onChange}
         onKeyDown={(e) => {
@@ -722,11 +721,11 @@ function Composer({ text, busy, onChange, onCancel, onDraft, onPublish }: {
         }}
       />
       <div className="flex justify-end gap-2">
-        <Button onClick={onCancel} disabled={busy}>Annuler</Button>
-        <Button onClick={onPublish} disabled={busy || !text.trim()} title="Publier ce seul commentaire">
-          Commenter maintenant
+        <Button onClick={onCancel} disabled={busy}>{tr("Annuler")}</Button>
+        <Button onClick={onPublish} disabled={busy || !text.trim()} title={tr("Publier ce seul commentaire")}>
+          {tr("Commenter maintenant")}
         </Button>
-        <Button variant="primary" onClick={onDraft} disabled={busy || !text.trim()}>Ajouter à la revue</Button>
+        <Button variant="primary" onClick={onDraft} disabled={busy || !text.trim()}>{tr("Ajouter à la revue")}</Button>
       </div>
     </div>
   );
@@ -745,9 +744,9 @@ function SubmitReview({ account, details, drafts, busy, onCancel, onSubmit }: {
   // GitHub refuse un avis sur sa propre PR ; GitLab n'a pas de demande de changements.
   const ownPr = isGitHub && details.pr.author === account.username;
   const verdicts: { value: ReviewVerdict; label: string }[] = [
-    { value: "comment", label: "Commenter" },
-    ...(!ownPr && !details.approvedByMe ? [{ value: "approve" as const, label: "Approuver" }] : []),
-    ...(isGitHub && !ownPr ? [{ value: "request_changes" as const, label: "Demander des changements" }] : []),
+    { value: "comment", label: tr("Commenter") },
+    ...(!ownPr && !details.approvedByMe ? [{ value: "approve" as const, label: tr("Approuver") }] : []),
+    ...(isGitHub && !ownPr ? [{ value: "request_changes" as const, label: tr("Demander des changements") }] : []),
   ];
   const [verdict, setVerdict] = useState<ReviewVerdict>("comment");
   const [body, setBody] = useState("");
@@ -759,8 +758,8 @@ function SubmitReview({ account, details, drafts, busy, onCancel, onSubmit }: {
       <EmojiTextarea
         autoFocus
         className={`${inputClass} h-16 resize-y font-mono`}
-        placeholder="Commentaire général de la revue (Markdown, facultatif)"
-        {...fieldLabel("Commentaire général de la revue (Markdown, facultatif)")}
+        placeholder={tr("Commentaire général de la revue (Markdown, facultatif)")}
+        {...fieldLabel(tr("Commentaire général de la revue (Markdown, facultatif)"))}
         value={body}
         onChange={setBody}
       />
@@ -771,20 +770,20 @@ function SubmitReview({ account, details, drafts, busy, onCancel, onSubmit }: {
             {v.label}
           </label>
         ))}
-        <span className="ml-auto text-[11px] text-[var(--color-muted)]">{plural(drafts.length, "commentaire")} en attente</span>
-        <Button onClick={onCancel} disabled={busy}>Fermer</Button>
+        <span className="ml-auto text-[11px] text-[var(--color-muted)]">{tr("{count} en attente", { count: trn(drafts.length, "{n} commentaire", "{n} commentaires") })}</span>
+        <Button onClick={onCancel} disabled={busy}>{tr("Fermer")}</Button>
         <Button
           variant="primary"
           disabled={busy || missingBody || empty}
-          title={missingBody ? "Explique les changements attendus" : undefined}
+          title={missingBody ? tr("Explique les changements attendus") : undefined}
           onClick={() => onSubmit(verdict, body.trim())}
         >
-          {busy ? "Publication…" : "Publier la revue"}
+          {busy ? tr("Publication…") : tr("Publier la revue")}
         </Button>
       </div>
       {!isGitHub && drafts.length > 0 && (
         <p className="text-[10px] text-[var(--color-muted)]">
-          GitLab publie les commentaires un par un : en cas d'échec, ceux qui n'ont pas pu être publiés restent en attente.
+          {tr("GitLab publie les commentaires un par un : en cas d'échec, ceux qui n'ont pas pu être publiés restent en attente.")}
         </p>
       )}
     </div>

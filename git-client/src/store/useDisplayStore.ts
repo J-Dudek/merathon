@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { LANGUAGES, type Language } from "../i18n";
 
 /** Réglages d'affichage, communs à toutes les fenêtres. */
 export interface DisplaySettings {
@@ -12,6 +13,10 @@ export interface DisplaySettings {
   syncInterval: number;
   /** Thème de couleurs ; « system » suit le réglage clair / sombre du système. */
   theme: ThemePreference;
+  /** Langue de l'interface. */
+  language: Language;
+  /** La langue a été choisie : sinon elle est demandée au démarrage (première installation, ou mise à jour depuis une version sans ce choix). */
+  languageChosen: boolean;
   /** Notifications de l'activité des PR / MR à traiter ou ouvertes par moi (relevée à chaque synchronisation). */
   notifications: NotificationSettings;
 }
@@ -43,7 +48,7 @@ export const SYNC_INTERVALS = [0, 1, 2, 5, 10, 15, 30, 60];
 export const defaultNotifications: NotificationSettings = { enabled: true, opened: true, commits: true, comments: true, ci: true, review: true, badge: true };
 
 export const defaultDisplay: DisplaySettings = {
-  zoom: 1, terminalFontSize: 12, density: "normal", syncInterval: 5, theme: "system", notifications: defaultNotifications,
+  zoom: 1, terminalFontSize: 12, density: "normal", syncInterval: 5, theme: "system", language: "fr", languageChosen: false, notifications: defaultNotifications,
 };
 
 const KEY = "merathon.display";
@@ -65,6 +70,8 @@ export function sanitize(raw: unknown): DisplaySettings {
     density: r.density && r.density in ROW_HEIGHTS ? r.density : defaultDisplay.density,
     syncInterval: SYNC_INTERVALS.includes(r.syncInterval as number) ? r.syncInterval! : defaultDisplay.syncInterval,
     theme: THEMES.includes(r.theme as ThemePreference) ? r.theme! : defaultDisplay.theme,
+    language: LANGUAGES.includes(r.language as Language) ? r.language! : defaultDisplay.language,
+    languageChosen: r.languageChosen === true,
     notifications: sanitizeNotifications(r.notifications),
   };
 }
@@ -91,26 +98,34 @@ interface DisplayStore extends DisplaySettings {
 
 export const useDisplayStore = create<DisplayStore>((set, get) => {
   function save(next: DisplaySettings) {
-    set(next);
     try {
       localStorage.setItem(KEY, JSON.stringify(next));
     } catch {
       // stockage indisponible : réglages gardés pour la session
     }
+    set(next);
   }
   const current = (): DisplaySettings => {
-    const { zoom, terminalFontSize, density, syncInterval, theme, notifications } = get();
-    return { zoom, terminalFontSize, density, syncInterval, theme, notifications };
+    const { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications } = get();
+    return { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications };
   };
   return {
     ...load(),
     update: (patch) => save(sanitize({ ...current(), ...patch })),
-    reset: () => save(defaultDisplay),
+    // La langue n'est pas un réglage d'affichage à remettre à zéro : elle reste celle choisie.
+    reset: () => {
+      const { language, languageChosen } = get();
+      save({ ...defaultDisplay, language, languageChosen });
+    },
   };
 });
 
 // Une autre fenêtre a changé les réglages : on les reprend.
 if (typeof window !== "undefined") {
+  // Les textes sont traduits au chargement (voir i18n) : changer de langue, ici ou dans une autre fenêtre, recharge la fenêtre.
+  useDisplayStore.subscribe((state, previous) => {
+    if (state.language !== previous.language) window.location.reload();
+  });
   window.addEventListener("storage", (e) => {
     if (e.key === KEY) useDisplayStore.setState(load());
   });

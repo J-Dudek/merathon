@@ -447,12 +447,12 @@ pub async fn clone_repository(app: AppHandle, url: String, path: String) -> Resu
         git::clone_repo(&url, &path, creds)?;
         let mut warnings = Vec::new();
         if let Err(e) = with_repo(&path, |r| git::update_submodules(r, &[], creds)) {
-            warnings.push(format!("les sous-modules n'ont pas pu être récupérés : {e}"));
+            warnings.push(tr!("les sous-modules n'ont pas pu être récupérés : {e}", "submodules could not be fetched: {e}"));
         }
         if let Err(e) = with_repo(&path, |r| git::lfs::lfs_pull(r, creds(&url).as_ref())) {
-            warnings.push(format!("les fichiers LFS n'ont pas pu être récupérés : {e}"));
+            warnings.push(tr!("les fichiers LFS n'ont pas pu être récupérés : {e}", "LFS files could not be fetched: {e}"));
         }
-        Ok((!warnings.is_empty()).then(|| format!("Dépôt cloné, mais {}", warnings.join(" ; "))))
+        Ok((!warnings.is_empty()).then(|| tr!("Dépôt cloné, mais {}", "Repository cloned, but {}", warnings.join(" ; "))))
     })
     .await
 }
@@ -595,7 +595,7 @@ pub async fn push(
                     .ok()
                     .filter(|_| !r.head_detached().unwrap_or(false))
                     .and_then(|h| h.shorthand().ok().map(str::to_string))
-                    .ok_or_else(|| GitError::Other("Aucune branche courante à pousser".into()))?,
+                    .ok_or_else(|| GitError::Other(tr!("Aucune branche courante à pousser", "No current branch to push")))?,
             };
             let remote = match remote {
                 Some(name) => name,
@@ -623,7 +623,7 @@ fn default_push_remote(repo: &Repository, branch: &str) -> Result<String, GitErr
     names
         .first()
         .map(|n| n.to_string())
-        .ok_or_else(|| GitError::Other("Aucun remote configuré : ajoute-en un avant de pousser".into()))
+        .ok_or_else(|| GitError::Other(tr!("Aucun remote configuré : ajoute-en un avant de pousser", "No remote configured: add one before pushing")))
 }
 
 #[tauri::command]
@@ -681,7 +681,7 @@ pub fn list_accounts(app: AppHandle) -> Result<Vec<Account>, String> {
 fn username_for_token(provider: Provider, base_url: &str, token: &str) -> Result<String, String> {
     crate::accounts::validate_base_url(base_url)?;
     oauth::fetch_username(provider, &oauth::endpoints(provider, base_url), token.trim())
-        .map_err(|_| "Token refusé par l'instance : vérifie sa validité et ses droits (scopes)".to_string())
+        .map_err(|_| tr!("Token refusé par l'instance : vérifie sa validité et ses droits (scopes)", "Token refused by the instance: check its validity and permissions (scopes)"))
 }
 
 async fn blocking_str<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
@@ -734,7 +734,7 @@ pub fn rename_account(app: AppHandle, id: String, label: String) -> Result<Saved
     let mut account = store.get(&id)?;
     let label = label.trim();
     if label.is_empty() {
-        return Err("Le nom ne peut pas être vide".into());
+        return Err(tr!("Le nom ne peut pas être vide", "The name cannot be empty"));
     }
     account.label = label.to_string();
     store.save(account, None)

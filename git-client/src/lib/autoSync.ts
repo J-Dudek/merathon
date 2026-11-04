@@ -10,6 +10,7 @@ import { syncMyPullRequests } from "./prNotifications";
 import { trimEndChars } from "./strings";
 import type { ForgePR } from "../types/forge";
 import type { BranchInfo } from "../types/git";
+import { tr, trn, COLON } from "../i18n";
 
 export interface RepoChanges {
   newBranches: string[];
@@ -70,27 +71,26 @@ export function pullRequestChanges(before: ForgePR[] | null, after: ForgePR[], s
 }
 
 function updateLabel({ commits, comments }: UpdatedPr): string {
-  if (commits && comments) return "nouveaux commits et commentaires";
-  if (commits) return "nouveaux commits";
-  return comments ? "nouveaux commentaires" : "nouvelle activité";
+  if (commits && comments) return tr("nouveaux commits et commentaires");
+  if (commits) return tr("nouveaux commits");
+  return comments ? tr("nouveaux commentaires") : tr("nouvelle activité");
 }
 
 function names(list: string[]): string {
   return list.length > 3 ? `${list.slice(0, 3).join(", ")}…` : list.join(", ");
 }
 
-const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
 /** Résumé des changements d'un dépôt pour une notification, null s'il n'y en a aucun. */
 export function describeChanges(repoName: string, c: RepoChanges, prLabel = "PR"): string | null {
   const parts: string[] = [];
-  if (c.newBranches.length) parts.push(`${plural(c.newBranches.length, "nouvelle branche")} (${names(c.newBranches)})`);
-  if (c.updatedBranches.length) parts.push(`${plural(c.updatedBranches.length, "branche")} mise${c.updatedBranches.length > 1 ? "s" : ""} à jour (${names(c.updatedBranches)})`);
-  if (c.deletedBranches.length) parts.push(`${plural(c.deletedBranches.length, "branche")} supprimée${c.deletedBranches.length > 1 ? "s" : ""}`);
-  for (const pr of c.openedPrs) parts.push(`${prLabel} #${pr.number} ouverte « ${pr.title} »`);
-  for (const pr of c.closedPrs) parts.push(`${prLabel} #${pr.number} fermée ou mergée`);
-  for (const u of c.updatedPrs) parts.push(`${prLabel} #${u.pr.number} : ${updateLabel(u)}`);
-  return parts.length ? `${repoName} : ${parts.join(" · ")}` : null;
+  if (c.newBranches.length) parts.push(trn(c.newBranches.length, "{n} nouvelle branche ({names})", "{n} nouvelles branches ({names})", { names: names(c.newBranches) }));
+  if (c.updatedBranches.length) parts.push(trn(c.updatedBranches.length, "{n} branche mise à jour ({names})", "{n} branches mises à jour ({names})", { names: names(c.updatedBranches) }));
+  if (c.deletedBranches.length) parts.push(trn(c.deletedBranches.length, "{n} branche supprimée", "{n} branches supprimées"));
+  for (const pr of c.openedPrs) parts.push(tr("{prLabel} #{number} ouverte « {title} »", { prLabel, number: pr.number, title: pr.title }));
+  for (const pr of c.closedPrs) parts.push(tr("{prLabel} #{number} fermée ou mergée", { prLabel, number: pr.number }));
+  for (const u of c.updatedPrs) parts.push(`${prLabel} #${u.pr.number}${COLON}${updateLabel(u)}`);
+  return parts.length ? `${repoName}${COLON}${parts.join(" · ")}` : null;
 }
 
 function repoName(path: string): string {

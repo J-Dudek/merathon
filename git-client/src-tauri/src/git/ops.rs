@@ -29,7 +29,7 @@ pub fn checkout_branch(repo: &Repository, name: &str) -> Result<(), GitError> {
     let ref_name = branch
         .get()
         .name()
-        .map_err(|_| GitError::NotFound("ref invalide".into()))?
+        .map_err(|_| GitError::NotFound(tr!("ref invalide", "invalid ref")))?
         .to_string();
     checkout_ref(repo, &ref_name)
 }
@@ -41,7 +41,7 @@ pub fn checkout_remote_branch(repo: &Repository, remote_branch: &str) -> Result<
     let local_name = remote_branch
         .split_once('/')
         .map(|(_, rest)| rest.to_string())
-        .ok_or_else(|| GitError::Other(format!("nom de branche distante invalide : {remote_branch}")))?;
+        .ok_or_else(|| GitError::Other(tr!("nom de branche distante invalide : {remote_branch}", "invalid remote branch name: {remote_branch}")))?;
 
     if repo.find_branch(&local_name, BranchType::Local).is_err() {
         ensure_branch_name_free(repo, &local_name, None)?;
@@ -72,8 +72,7 @@ pub(crate) fn ensure_branch_name_free(repo: &Repository, name: &str, ignored: Op
         let nested = name.strip_prefix(other).is_some_and(|rest| rest.starts_with('/'));
         let parent = other.strip_prefix(name).is_some_and(|rest| rest.starts_with('/'));
         if nested || parent {
-            return Err(GitError::Conflict(format!(
-                "Nom de branche impossible : {name} entre en conflit avec la branche {other}, car git ne permet pas d'avoir à la fois « a » et « a/b ». Choisis un autre nom, par exemple {}",
+            return Err(GitError::Conflict(tr!("Nom de branche impossible : {name} entre en conflit avec la branche {other}, car git ne permet pas d'avoir à la fois « a » et « a/b ». Choisis un autre nom, par exemple {}", "Branch name not possible: {name} conflicts with branch {other}, because git does not allow both \"a\" and \"a/b\". Choose another name, for example {}",
                 name.replace('/', "-"),
             )));
         }
@@ -119,7 +118,7 @@ pub fn rebase_onto(repo: &Repository, onto_name: &str) -> Result<RebaseResult, G
 pub fn continue_rebase(repo: &Repository) -> Result<RebaseResult, GitError> {
     let mut rebase = repo.open_rebase(None)?;
     if !conflicted_paths(repo)?.is_empty() {
-        return Err(GitError::Conflict("Résous tous les conflits avant de continuer le rebase".into()));
+        return Err(GitError::Conflict(tr!("Résous tous les conflits avant de continuer le rebase", "Resolve all conflicts before continuing the rebase")));
     }
     if rebase.operation_current().is_some() {
         commit_rebase_step(repo, &mut rebase)?;
@@ -162,7 +161,7 @@ pub fn reset_to(repo: &Repository, hash: &str, mode: &str) -> Result<(), GitErro
         "soft" => ResetType::Soft,
         "mixed" => ResetType::Mixed,
         "hard" => ResetType::Hard,
-        other => return Err(GitError::Other(format!("mode de reset inconnu : {other}"))),
+        other => return Err(GitError::Other(tr!("mode de reset inconnu : {other}", "unknown reset mode: {other}"))),
     };
     let target = repo.revparse_single(hash)?.peel_to_commit()?;
     repo.reset(target.as_object(), kind, None)?;
@@ -172,7 +171,7 @@ pub fn reset_to(repo: &Repository, hash: &str, mode: &str) -> Result<(), GitErro
 pub fn cherry_pick(repo: &Repository, hash: &str) -> Result<MergeResult, GitError> {
     let commit = repo.revparse_single(hash)?.peel_to_commit()?;
     if commit.parent_count() > 1 {
-        return Err(GitError::Other("Le cherry-pick d'un commit de merge n'est pas supporté".into()));
+        return Err(GitError::Other(tr!("Le cherry-pick d'un commit de merge n'est pas supporté", "Cherry-picking a merge commit is not supported")));
     }
     repo.cherrypick(&commit, None)?;
 
@@ -200,7 +199,7 @@ pub fn cherry_pick(repo: &Repository, hash: &str) -> Result<MergeResult, GitErro
 pub fn revert_commit(repo: &Repository, hash: &str) -> Result<MergeResult, GitError> {
     let commit = repo.revparse_single(hash)?.peel_to_commit()?;
     if commit.parent_count() > 1 {
-        return Err(GitError::Other("Le revert d'un commit de merge n'est pas supporté".into()));
+        return Err(GitError::Other(tr!("Le revert d'un commit de merge n'est pas supporté", "Reverting a merge commit is not supported")));
     }
     repo.revert(&commit, None)?;
 

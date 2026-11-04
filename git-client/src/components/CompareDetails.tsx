@@ -5,6 +5,7 @@ import { diffCommits } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
 import { CommitFileRow, LineCounts } from "./CommitDetails";
 import type { CommitFile, CommitInfo } from "../types/git";
+import { tr, trn, COLON } from "../i18n";
 
 /** Différences entre deux commits du graphe (`git diff base head`), à la place du détail d'un commit. */
 export function CompareDetails({ comparison }: { comparison: Comparison }) {
@@ -41,32 +42,32 @@ export function CompareDetails({ comparison }: { comparison: Comparison }) {
   return (
     <div className="flex flex-col h-full bg-[var(--color-bg-secondary)] text-sm">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-overlay/10 shrink-0">
-        <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Comparaison</h2>
-        <button className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs" title="Fermer la comparaison" aria-label="Fermer la comparaison" onClick={close}>
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">{tr("Comparaison")}</h2>
+        <button className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs" title={tr("Fermer la comparaison")} aria-label={tr("Fermer la comparaison")} onClick={close}>
           <X size={13} />
         </button>
       </div>
 
       <div className="p-3 border-b border-overlay/10 flex flex-col gap-1.5 text-[11px]">
-        <CommitLine label="De" commit={base} />
-        <CommitLine label="À" commit={head} />
+        <CommitLine label={tr("De")} commit={base} />
+        <CommitLine label={tr("À")} commit={head} />
       </div>
 
       {error && <p className="p-3 text-xs text-red-400 break-words">{error}</p>}
-      {!files && !error && <p className="p-3 text-xs text-[var(--color-muted)]">Chargement…</p>}
+      {!files && !error && <p className="p-3 text-xs text-[var(--color-muted)]">{tr("Chargement…")}</p>}
 
       {files && (
         <div className="flex-1 overflow-y-auto">
           <h3 className="px-3 pt-2 pb-1 flex items-center text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">
-            {files.length} fichier{files.length > 1 ? "s" : ""}
+            {trn(files.length, "{n} fichier", "{n} fichiers")}
             {totals && (
               <span className="ml-auto font-mono normal-case tracking-normal font-normal">
-                <span className="sr-only"> : </span>
+                <span className="sr-only">{COLON}</span>
                 <LineCounts add={totals.add} del={totals.del} all />
               </span>
             )}
           </h3>
-          {files.length === 0 && <p className="px-3 py-1 text-xs text-[var(--color-muted)] italic">Contenu identique</p>}
+          {files.length === 0 && <p className="px-3 py-1 text-xs text-[var(--color-muted)] italic">{tr("Contenu identique")}</p>}
           {files.map((f) => (
             <CommitFileRow
               key={f.path}
@@ -87,8 +88,8 @@ function CommitLine({ label, commit }: { label: string; commit: CommitInfo }) {
       <span className="w-5 shrink-0 text-[var(--color-muted)]">{label}</span>
       <button
         className="font-mono text-[var(--color-accent-text)] hover:underline shrink-0"
-        title="Copier le hash complet"
-        aria-label={`${commit.short_hash}, copier le hash complet`}
+        title={tr("Copier le hash complet")}
+        aria-label={tr("{short_hash}, copier le hash complet", { short_hash: commit.short_hash })}
         onClick={() => navigator.clipboard.writeText(commit.hash)}
       >
         {commit.short_hash}

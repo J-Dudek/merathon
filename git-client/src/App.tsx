@@ -15,6 +15,7 @@ import { ConflictViewer } from "./components/ConflictViewer";
 import { CloneDialog } from "./components/CloneDialog";
 import { Welcome } from "./components/Welcome";
 import { Dialog } from "./components/Dialog";
+import { LanguageChooser } from "./components/LanguageChooser";
 import { Toasts } from "./components/Toasts";
 import { Celebration, DevCelebrationButton } from "./components/Celebration";
 import { openContextMenuFromKeyboard } from "./lib/keyboardContextMenu";
@@ -35,6 +36,7 @@ import { startAutoSync } from "./lib/autoSync";
 import { useIconBadge } from "./lib/iconBadge";
 import { openDevtools } from "./ipc/commands";
 import { resizeKeyDelta } from "./lib/resizeKeys";
+import { tr } from "./i18n";
 
 type LeftTab = "repo" | "accounts";
 
@@ -61,7 +63,7 @@ export default function App() {
   const sideWidths = useUiStore((s) => s.sideWidths);
 
   useEffect(() => {
-    loadAccounts().catch((e) => notify("error", `Comptes : ${errorMessage(e)}`));
+    loadAccounts().catch((e) => notify("error", tr("Comptes : {error}", { error: errorMessage(e) })));
   }, [loadAccounts, notify]);
 
   // Pas de menu contextuel natif du webview (Recharger, Inspecter…) hors des champs de saisie.
@@ -92,7 +94,7 @@ export default function App() {
 
   // Taille de l'interface : zoom du webview (net, y compris le graphe dessiné en canvas).
   useEffect(() => {
-    getCurrentWebview().setZoom(zoom).catch((e) => notify("error", `Zoom : ${errorMessage(e)}`));
+    getCurrentWebview().setZoom(zoom).catch((e) => notify("error", tr("Zoom : {error}", { error: errorMessage(e) })));
   }, [zoom, notify]);
 
   // Titre de la page (RGAA 8.6) : le dépôt de l'onglet actif, restitué par les technologies d'assistance.
@@ -139,12 +141,12 @@ export default function App() {
 
   function leftPane() {
     if (leftTab === "accounts") return <AccountsPanel />;
-    return repoPath ? <Sidebar /> : <p className="p-3 text-xs text-[var(--color-muted)] italic">Aucun dépôt ouvert</p>;
+    return repoPath ? <Sidebar /> : <p className="p-3 text-xs text-[var(--color-muted)] italic">{tr("Aucun dépôt ouvert")}</p>;
   }
 
   function rightPaneLabel() {
-    if (comparison) return "Comparaison";
-    return selectedCommit ? "Détail du commit" : "Modifications en cours";
+    if (comparison) return tr("Comparaison");
+    return selectedCommit ? tr("Détail du commit") : tr("Modifications en cours");
   }
 
   function rightPane() {
@@ -181,7 +183,7 @@ export default function App() {
         }}
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[10002] focus:px-3 focus:py-2 focus:rounded focus:bg-[var(--color-bg-elevated)] focus:text-[var(--color-text)] focus:text-xs focus:outline-2 focus:outline-[var(--color-accent)]"
       >
-        Aller au contenu principal
+        {tr("Aller au contenu principal")}
       </a>
       <Toolbar onClone={() => setShowClone(true)} />
       <TabBar />
@@ -190,14 +192,14 @@ export default function App() {
       {/* Fenêtre étroite ou zoom fort (RGAA 10.4, 10.11) : les panneaux s'empilent et la page défile verticalement. */}
       <div key={activeTab} className="flex flex-1 overflow-hidden max-[760px]:flex-col max-[760px]:flex-none max-[760px]:overflow-visible">
         <aside
-          aria-label={leftTab === "accounts" ? "Comptes" : "Dépôt : branches, tags et stashes"}
+          aria-label={leftTab === "accounts" ? tr("Comptes") : tr("Dépôt : branches, tags et stashes")}
           className="relative shrink-0 flex flex-col overflow-hidden border-r border-overlay/10 bg-[var(--color-bg-secondary)] max-[760px]:w-full! max-[760px]:h-80 max-[760px]:border-r-0 max-[760px]:border-b"
           style={{ width: sideWidths.left }}
         >
           <SideResizer side="left" />
-          <div role="group" aria-label="Contenu du panneau de gauche" className="flex shrink-0 border-b border-overlay/10">
-            <LeftTabBtn active={leftTab === "repo"} onClick={() => setLeftTab("repo")}>Dépôt</LeftTabBtn>
-            <LeftTabBtn active={leftTab === "accounts"} onClick={() => setLeftTab("accounts")}>Comptes</LeftTabBtn>
+          <div role="group" aria-label={tr("Contenu du panneau de gauche")} className="flex shrink-0 border-b border-overlay/10">
+            <LeftTabBtn active={leftTab === "repo"} onClick={() => setLeftTab("repo")}>{tr("Dépôt")}</LeftTabBtn>
+            <LeftTabBtn active={leftTab === "accounts"} onClick={() => setLeftTab("accounts")}>{tr("Comptes")}</LeftTabBtn>
           </div>
           <div className="flex-1 overflow-hidden">{leftPane()}</div>
         </aside>
@@ -224,6 +226,7 @@ export default function App() {
       {memoOpen && <GitMemoDialog onClose={() => setMemoOpen(false)} />}
       {rebaseBase && repoPath && <InteractiveRebaseDialog base={rebaseBase} onClose={() => setRebaseBase(null)} />}
       <Dialog />
+      <LanguageChooser />
       <Toasts />
       <Celebration />
       {import.meta.env.DEV && <DevCelebrationButton />}
@@ -280,7 +283,7 @@ function SideResizer({ side }: { side: Side }) {
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label={side === "left" ? "Largeur du panneau de gauche" : "Largeur du panneau de droite"}
+      aria-label={side === "left" ? tr("Largeur du panneau de gauche") : tr("Largeur du panneau de droite")}
       aria-valuenow={sideWidth}
       aria-valuemin={SIDE_LIMITS[side].min}
       aria-valuemax={SIDE_LIMITS[side].max}
@@ -289,7 +292,7 @@ function SideResizer({ side }: { side: Side }) {
       className={`absolute inset-y-0 ${side === "left" ? "right-0" : "left-0"} w-1 cursor-col-resize z-10 hover:bg-sky-400/40 active:bg-sky-400/60 focus-visible:bg-[var(--color-accent)] outline-none max-[760px]:hidden`}
       onPointerDown={startResize}
       onDoubleClick={() => setSideWidth(side, defaultSideWidths[side])}
-      title="Redimensionner (double-clic ou Entrée : largeur par défaut ; flèches au clavier)"
+      title={tr("Redimensionner (double-clic ou Entrée : largeur par défaut ; flèches au clavier)")}
     />
   );
 }

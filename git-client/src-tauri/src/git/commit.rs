@@ -8,11 +8,11 @@ use super::repository::signature;
 ///   en fin de merge / cherry-pick / revert, l'état du dépôt est nettoyé.
 pub fn create_commit(repo: &Repository, message: &str, amend: bool) -> Result<String, GitError> {
     if message.trim().is_empty() {
-        return Err(GitError::Other("Le message de commit est vide".into()));
+        return Err(GitError::Other(tr!("Le message de commit est vide", "The commit message is empty")));
     }
     let mut index = repo.index()?;
     if index.has_conflicts() {
-        return Err(GitError::Conflict("Résous tous les conflits avant de commiter".into()));
+        return Err(GitError::Conflict(tr!("Résous tous les conflits avant de commiter", "Resolve all conflicts before committing")));
     }
 
     let sig = signature(repo)?;
@@ -20,7 +20,7 @@ pub fn create_commit(repo: &Repository, message: &str, amend: bool) -> Result<St
     let head = repo.head().ok().and_then(|r| r.peel_to_commit().ok());
 
     let oid = if amend {
-        let head = head.ok_or_else(|| GitError::Other("Aucun commit à modifier".into()))?;
+        let head = head.ok_or_else(|| GitError::Other(tr!("Aucun commit à modifier", "No commit to amend")))?;
         head.amend(Some("HEAD"), None, Some(&sig), None, Some(message), Some(&tree))?
     } else {
         let mut parents: Vec<git2::Commit> = head.into_iter().collect();
@@ -50,10 +50,10 @@ pub fn create_commit(repo: &Repository, message: &str, amend: bool) -> Result<St
 /// Remplace le message du dernier commit sans toucher à son contenu : les fichiers indexés n'y sont pas ajoutés.
 pub fn reword_head(repo: &Repository, message: &str) -> Result<String, GitError> {
     if message.trim().is_empty() {
-        return Err(GitError::Other("Le message de commit est vide".into()));
+        return Err(GitError::Other(tr!("Le message de commit est vide", "The commit message is empty")));
     }
     if repo.state() != RepositoryState::Clean {
-        return Err(GitError::Other("Termine d'abord l'opération en cours (merge, rebase…)".into()));
+        return Err(GitError::Other(tr!("Termine d'abord l'opération en cours (merge, rebase…)", "First finish the current operation (merge, rebase…)")));
     }
     let head = repo.head()?.peel_to_commit()?;
     let sig = signature(repo)?;

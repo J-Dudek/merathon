@@ -6,13 +6,14 @@ import { errorMessage, runGit } from "../lib/actions";
 import { DiffViewer, type PartialStaging } from "./DiffViewer";
 import { LineCounts } from "./CommitDetails";
 import type { FileDiff } from "../types/git";
+import { tr } from "../i18n";
 
 type DiffView = Extract<CenterView, { kind: "diff" }>;
 
 function diffSourceLabel(source: DiffView["source"]): string {
   if (source.type === "commit") return `commit ${source.hash.slice(0, 7)}`;
   if (source.type === "compare") return `${source.base.slice(0, 7)} → ${source.head.slice(0, 7)}`;
-  return source.staged ? "indexé" : "non indexé";
+  return source.staged ? tr("indexé") : tr("non indexé");
 }
 
 export function CenterDiff({ view }: { view: DiffView }) {
@@ -85,9 +86,9 @@ export function CenterDiff({ view }: { view: DiffView }) {
         <button
           className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
           onClick={() => setCenter({ kind: "graph" })}
-          title="Revenir au graphe (Échap)"
+          title={tr("Revenir au graphe (Échap)")}
         >
-          <ArrowLeft size={12} className="inline mr-1 -mt-0.5" />Graphe
+          <ArrowLeft size={12} className="inline mr-1 -mt-0.5" />{tr("Graphe")}
         </button>
         <span className="text-xs font-mono text-[var(--color-text)] truncate select-text">{view.path}</span>
         <span className="text-[10px] px-1.5 rounded bg-overlay/10 text-[var(--color-muted)] shrink-0">{sourceLabel}</span>

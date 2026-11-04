@@ -16,6 +16,7 @@ import { IdentityProblem } from "./IdentityProblem";
 import { PanelSection as Section } from "./PanelSection";
 import type { DeviceCode, ForgeAccount, ForgeIssue, Provider } from "../types/forge";
 import { fieldLabel } from "../lib/fieldLabel";
+import { tr } from "../i18n";
 
 type Kind = "github" | "gitlab" | "gitlab-self";
 
@@ -28,10 +29,10 @@ export function AccountsPanel() {
       <IdentitySection />
 
       <Section
-        title="Comptes"
+        title={tr("Comptes")}
         action={!adding && (
           <button className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-text)]" onClick={() => setAdding(true)}>
-            + Ajouter
+            {tr("+ Ajouter")}
           </button>
         )}
       >
@@ -39,7 +40,7 @@ export function AccountsPanel() {
         {accounts.map((a) => <AccountRow key={a.id} account={a} />)}
         {accounts.length === 0 && !adding && (
           <p className="px-3 pb-2 text-[11px] text-[var(--color-muted)]">
-            Ajoute un compte pour que fetch, pull, push et clone s'authentifient automatiquement en HTTPS.
+            {tr("Ajoute un compte pour que fetch, pull, push et clone s'authentifient automatiquement en HTTPS.")}
           </p>
         )}
       </Section>
@@ -80,7 +81,7 @@ function IdentitySection() {
       await setIdentity(repoOnly && repoPath ? repoPath : null, name.trim(), email.trim());
       setCurrent({ name: name.trim(), email: email.trim() });
       setEditing(false);
-      notify("success", repoOnly ? "Identité enregistrée pour ce dépôt" : "Identité Git globale enregistrée");
+      notify("success", repoOnly ? tr("Identité enregistrée pour ce dépôt") : tr("Identité Git globale enregistrée"));
     } catch (e) {
       notify("error", errorMessage(e));
     }
@@ -88,10 +89,10 @@ function IdentitySection() {
 
   return (
     <Section
-      title="Identité Git"
+      title={tr("Identité Git")}
       action={!editing && (
         <button className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-text)]" onClick={() => setEditing(true)}>
-          Modifier
+          {tr("Modifier")}
         </button>
       )}
     >
@@ -102,26 +103,26 @@ function IdentitySection() {
       )}
       {!editing && repoPath && status && (status.profile || status.outside) && (
         <p className="px-3 pb-2 -mt-1 text-[11px] text-[var(--color-muted)]">
-          {status.profile ? `Profil : ${status.profile.label}` : "Ce dépôt n'est couvert par aucun profil"}
+          {status.profile ? tr("Profil : {label}", { label: status.profile.label }) : tr("Ce dépôt n'est couvert par aucun profil")}
           {" · "}
-          <button className="underline hover:text-[var(--color-text)]" onClick={() => openProfiles(true, "profiles")}>Gérer les profils</button>
+          <button className="underline hover:text-[var(--color-text)]" onClick={() => openProfiles(true, "profiles")}>{tr("Gérer les profils")}</button>
         </p>
       )}
       {!editing && <div className="px-3 pb-2 empty:hidden"><IdentityProblem /></div>}
       {editing && (
         <div className="px-3 pb-2 flex flex-col gap-1.5">
-          {!current?.name && <p className="text-[11px] text-amber-300">Requis pour commiter.</p>}
-          <input className={inputClass} placeholder="Nom" {...fieldLabel("Nom de l'identité Git")} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className={inputClass} placeholder="Email" {...fieldLabel("E-mail de l'identité Git")} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          {!current?.name && <p className="text-[11px] text-amber-300">{tr("Requis pour commiter.")}</p>}
+          <input className={inputClass} placeholder={tr("Nom")} {...fieldLabel(tr("Nom de l'identité Git"))} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className={inputClass} placeholder="Email" {...fieldLabel(tr("E-mail de l'identité Git"))} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           {repoPath && (
             <label className="flex items-center gap-2 text-[11px] text-[var(--color-muted)]">
               <input type="checkbox" checked={repoOnly} onChange={(e) => setRepoOnly(e.target.checked)} />
-              Uniquement pour ce dépôt
+              {tr("Uniquement pour ce dépôt")}
             </label>
           )}
           <div className="flex gap-2">
-            <SmallButton primary disabled={!name.trim() || !email.trim()} onClick={save}>Enregistrer</SmallButton>
-            {current?.name && <SmallButton onClick={() => setEditing(false)}>Annuler</SmallButton>}
+            <SmallButton primary disabled={!name.trim() || !email.trim()} onClick={save}>{tr("Enregistrer")}</SmallButton>
+            {current?.name && <SmallButton onClick={() => setEditing(false)}>{tr("Annuler")}</SmallButton>}
           </div>
         </div>
       )}
@@ -132,7 +133,7 @@ function IdentitySection() {
 // ---------------------------------------------------------------- Comptes
 
 const tokenHelpLabel = (kind: Kind) =>
-  `Créer un token (${kind === "github" ? "scopes repo, read:user, workflow" : "scopes api, read_user, write_repository"})`;
+  tr("Créer un token ({value})", { value: kind === "github" ? "scopes repo, read:user, workflow" : "scopes api, read_user, write_repository" });
 
 function tokenHelpUrl(kind: Kind, url: string): string {
   if (kind === "github") {
@@ -168,12 +169,12 @@ function oauthAppHelpUrl(kind: Kind, url: string): string {
 const KINDS = [
   ["github", "GitHub"],
   ["gitlab", "GitLab.com"],
-  ["gitlab-self", "GitLab privé"],
+  ["gitlab-self", tr("GitLab privé")],
 ] as const;
 
 const MODES = [
   ["oauth", "Navigateur (OAuth)"],
-  ["pat", "Token personnel"],
+  ["pat", tr("Token personnel")],
 ] as const;
 
 type OAuthDefaults = { github: string | null; gitlab: string | null };
@@ -186,11 +187,11 @@ function builtInClientId(host: string | null, defaults: OAuthDefaults | null): s
 }
 
 function submitLabel(saving: boolean, mode: "oauth" | "pat"): string {
-  if (saving) return "Connexion…";
-  return mode === "oauth" ? "Se connecter" : "Connecter";
+  if (saving) return tr("Connexion…");
+  return mode === "oauth" ? tr("Se connecter") : tr("Connecter");
 }
 
-const MISSING_URL = "Renseigne d'abord l'URL de l'instance";
+const MISSING_URL = tr("Renseigne d'abord l'URL de l'instance");
 
 function AddAccountForm({ onDone }: { onDone: () => void }) {
   const add = useAccountsStore((s) => s.add);
@@ -240,7 +241,7 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
 
   async function submitToken() {
     const account = await add({ provider, baseUrl: url!, token: token.trim(), label });
-    notify("success", `Compte ${account.username} connecté`);
+    notify("success", tr("Compte {username} connecté", { username: account.username }));
     onDone();
   }
 
@@ -254,7 +255,7 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
     try {
       const saved = await oauthComplete(provider, url!, id, code, label || null);
       addConnected(saved);
-      notify("success", `Compte ${saved.account.username} connecté`);
+      notify("success", tr("Compte {username} connecté", { username: saved.account.username }));
       onDone();
     } finally {
       setDevice(null);
@@ -302,7 +303,7 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
         ))}
       </div>
       {kind === "gitlab-self" && (
-        <input className={inputClass} placeholder="https://gitlab.mon-entreprise.fr" {...fieldLabel("Adresse de l'instance GitLab")} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+        <input className={inputClass} placeholder={tr("https://gitlab.mon-entreprise.fr")} {...fieldLabel(tr("Adresse de l'instance GitLab"))} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
       )}
 
       <div className="grid grid-cols-2 gap-1">
@@ -330,22 +331,22 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
       )}
       {mode === "oauth" && !showClientId && (
         <p className="text-[10px] text-[var(--color-muted)]">
-          Un code s'affichera : saisis-le sur la page {kind === "github" ? "GitHub" : "GitLab"} qui s'ouvrira dans ton navigateur.{" "}
+          {tr("Un code s'affichera : saisis-le sur la page")}{" "}{kind === "github" ? "GitHub" : "GitLab"}{" "}{tr("qui s'ouvrira dans ton navigateur.")}
           <button type="button" className="text-sky-400 hover:underline" onClick={() => setAdvanced(true)}>
-            Paramètres avancés
+            {tr("Paramètres avancés")}
           </button>
         </p>
       )}
 
-      <input className={inputClass} placeholder="Nom affiché (optionnel)" {...fieldLabel("Nom affiché du compte (optionnel)")} value={label} onChange={(e) => setLabel(e.target.value)} />
+      <input className={inputClass} placeholder={tr("Nom affiché (optionnel)")} {...fieldLabel(tr("Nom affiché du compte (optionnel)"))} value={label} onChange={(e) => setLabel(e.target.value)} />
       {error && <p className="text-[11px] text-red-400 break-words">{error}</p>}
       <div className="flex gap-2">
         <SmallButton primary type="submit" disabled={!valid || saving}>
           {submitLabel(saving, mode)}
         </SmallButton>
-        <SmallButton onClick={onDone}>Annuler</SmallButton>
+        <SmallButton onClick={onDone}>{tr("Annuler")}</SmallButton>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Les identifiants sont stockés dans le trousseau du système.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">{tr("Les identifiants sont stockés dans le trousseau du système.")}</p>
     </form>
   );
 }
@@ -354,10 +355,10 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
 function DeviceCodePanel({ device, onCancel }: { device: DeviceCode; onCancel: () => void }) {
   return (
     <div className="mx-2 mb-2 p-3 flex flex-col gap-2 rounded border border-overlay/10 bg-shade/20 text-center">
-      <p className="text-[11px] text-[var(--color-muted)]">Saisis ce code sur la page qui vient de s'ouvrir :</p>
+      <p className="text-[11px] text-[var(--color-muted)]">{tr("Saisis ce code sur la page qui vient de s'ouvrir :")}</p>
       <button
         className="font-mono text-lg tracking-widest text-[var(--color-text)] bg-overlay/10 rounded py-1 hover:bg-overlay/15"
-        title="Copier le code"
+        title={tr("Copier le code")}
         onClick={() => navigator.clipboard.writeText(device.user_code)}
       >
         {device.user_code}
@@ -368,8 +369,8 @@ function DeviceCodePanel({ device, onCancel }: { device: DeviceCode; onCancel: (
       >
         {device.verification_uri} <ExternalLink size={10} className="inline ml-0.5 -mt-0.5" />
       </button>
-      <p className="text-[11px] text-[var(--color-muted)]">En attente de la validation…</p>
-      <SmallButton onClick={onCancel}>Annuler</SmallButton>
+      <p className="text-[11px] text-[var(--color-muted)]">{tr("En attente de la validation…")}</p>
+      <SmallButton onClick={onCancel}>{tr("Annuler")}</SmallButton>
     </div>
   );
 }
@@ -386,8 +387,8 @@ function TokenFields({ kind, url, token, onToken }: {
         className={inputClass}
         type="password"
         autoComplete="off"
-        placeholder="Token d'accès personnel"
-        {...fieldLabel("Token d'accès personnel")}
+        placeholder={tr("Token d'accès personnel")}
+        {...fieldLabel(tr("Token d'accès personnel"))}
         value={token}
         onChange={(e) => onToken(e.target.value)}
       />
@@ -416,15 +417,15 @@ function ClientIdFields({ kind, url, clientId, onClientId, onUseDefault }: {
     <>
       <input
         className={inputClass}
-        placeholder="Identifiant client de l'application OAuth"
-        {...fieldLabel("Identifiant client de l'application OAuth")}
+        placeholder={tr("Identifiant client de l'application OAuth")}
+        {...fieldLabel(tr("Identifiant client de l'application OAuth"))}
         value={clientId}
         onChange={(e) => onClientId(e.target.value)}
       />
       <p className="text-[10px] text-[var(--color-muted)]">
         {kind === "github"
-          ? "Application OAuth GitHub avec « Enable Device Flow » coché."
-          : "Application GitLab non confidentielle, scopes api, read_user, write_repository (GitLab 17.2+)."}{" "}
+          ? tr("Application OAuth GitHub avec « Enable Device Flow » coché.")
+          : tr("Application GitLab non confidentielle, scopes api, read_user, write_repository (GitLab 17.2+).")}{" "}
         <button
           type="button"
           className="text-sky-400 hover:underline disabled:opacity-40"
@@ -432,13 +433,13 @@ function ClientIdFields({ kind, url, clientId, onClientId, onUseDefault }: {
           title={url ? oauthAppHelpUrl(kind, url) : MISSING_URL}
           onClick={() => url && openUrl(oauthAppHelpUrl(kind, url))}
         >
-          Enregistrer une application <ExternalLink size={10} className="inline ml-0.5 -mt-0.5" />
+          {tr("Enregistrer une application")}{" "}<ExternalLink size={10} className="inline ml-0.5 -mt-0.5" />
         </button>
         {onUseDefault && (
           <>
             {" · "}
             <button type="button" className="text-sky-400 hover:underline" onClick={onUseDefault}>
-              Utiliser l'application par défaut
+              {tr("Utiliser l'application par défaut")}
             </button>
           </>
         )}
@@ -459,29 +460,29 @@ function AccountRow({ account }: { account: ForgeAccount }) {
 
   async function changeToken() {
     const result = await ask({
-      title: `Nouveau token pour ${account.label}`,
-      input: { placeholder: "Token d'accès personnel", secret: true },
+      title: tr("Nouveau token pour {label}", { label: account.label }),
+      input: { placeholder: tr("Token d'accès personnel"), secret: true },
       link: { label: tokenHelpLabel(account.provider), url: tokenHelpUrl(account.provider, account.base_url) },
-      confirmLabel: "Enregistrer",
+      confirmLabel: tr("Enregistrer"),
     });
     const token = result?.value.trim();
     if (!token) return;
     try {
       await updateToken(account, token);
-      notify("success", "Token mis à jour");
+      notify("success", tr("Token mis à jour"));
     } catch (e) {
       notify("error", errorMessage(e));
     }
   }
 
   async function rename() {
-    const result = await ask({ title: "Renommer le compte", input: { initial: account.label }, confirmLabel: "Renommer" });
+    const result = await ask({ title: tr("Renommer le compte"), input: { initial: account.label }, confirmLabel: tr("Renommer") });
     const label = result?.value.trim();
     if (label) await renameAccount(account, label).catch((e) => notify("error", errorMessage(e)));
   }
 
   async function handleRemove() {
-    if (!(await confirmAction(`Supprimer le compte ${account.label} ?`, "Le token sera retiré du trousseau.", true))) return;
+    if (!(await confirmAction(tr("Supprimer le compte {label} ?", { label: account.label }), tr("Le token sera retiré du trousseau."), true))) return;
     await remove(account.id).catch((e) => notify("error", errorMessage(e)));
   }
 
@@ -489,12 +490,12 @@ function AccountRow({ account }: { account: ForgeAccount }) {
     <div
       className="flex items-center gap-2 px-3 py-1.5 hover:bg-overlay/5 group"
       onContextMenu={(e) => open(e, [
-        ...(account.auth === "pat" ? [{ label: "Changer le token…", action: changeToken }] : []),
-        { label: "Configurer SSH…", action: () => setSshSetup(true) },
-        { label: "Renommer…", action: rename },
-        { label: "Ouvrir le profil", action: () => openUrl(`${account.base_url}/${account.username}`) },
+        ...(account.auth === "pat" ? [{ label: tr("Changer le token…"), action: changeToken }] : []),
+        { label: tr("Configurer SSH…"), action: () => setSshSetup(true) },
+        { label: tr("Renommer…"), action: rename },
+        { label: tr("Ouvrir le profil"), action: () => openUrl(`${account.base_url}/${account.username}`) },
         "separator",
-        { label: "Supprimer", danger: true, action: handleRemove },
+        { label: tr("Supprimer"), danger: true, action: handleRemove },
       ])}
     >
       <ProviderIcon provider={account.provider} />
@@ -508,14 +509,14 @@ function AccountRow({ account }: { account: ForgeAccount }) {
       <button
         className="text-[var(--color-muted)] hover:text-[var(--color-text)] opacity-0 group-hover:opacity-100 focus:opacity-100 text-xs px-1"
         title="Options"
-        aria-label={`Options du compte ${account.label}`}
+        aria-label={tr("Options du compte {label}", { label: account.label })}
         aria-haspopup="menu"
         onClick={(e) => open(e, [
-          ...(account.auth === "pat" ? [{ label: "Changer le token…", action: changeToken }] : []),
-          { label: "Configurer SSH…", action: () => setSshSetup(true) },
-          { label: "Renommer…", action: rename },
+          ...(account.auth === "pat" ? [{ label: tr("Changer le token…"), action: changeToken }] : []),
+          { label: tr("Configurer SSH…"), action: () => setSshSetup(true) },
+          { label: tr("Renommer…"), action: rename },
           "separator",
-          { label: "Supprimer", danger: true, action: handleRemove },
+          { label: tr("Supprimer"), danger: true, action: handleRemove },
         ])}
       >
         <Ellipsis size={14} />
@@ -560,11 +561,11 @@ function RepoIssuesSection() {
 
   if (!forge) {
     return (
-      <Section title="Issues du dépôt">
+      <Section title={tr("Issues du dépôt")}>
         <p className="px-3 pb-2 text-[11px] text-[var(--color-muted)]">
           {remotes.length === 0
-            ? "Ce dépôt n'a aucun remote."
-            : "Aucun compte ne correspond aux remotes de ce dépôt (l'hôte du remote doit être celui du compte)."}
+            ? tr("Ce dépôt n'a aucun remote.")
+            : tr("Aucun compte ne correspond aux remotes de ce dépôt (l'hôte du remote doit être celui du compte).")}
         </p>
       </Section>
     );
@@ -572,19 +573,19 @@ function RepoIssuesSection() {
 
   return (
     <Section
-      title={`Issues · ${forge.projectPath} (${accountData?.issues.length ?? 0})`}
+      title={tr("Issues · {projectPath} ({value})", { projectPath: forge.projectPath, value: accountData?.issues.length ?? 0 })}
       action={
-        <button className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Rafraîchir" aria-label="Rafraîchir les issues" onClick={loadIssues}>
+        <button className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]" title={tr("Rafraîchir")} aria-label={tr("Rafraîchir les issues")} onClick={loadIssues}>
           <RotateCw size={12} />
         </button>
       }
     >
-      {accountData?.loading && <p className="px-3 py-1 text-xs text-[var(--color-muted)]">Chargement…</p>}
+      {accountData?.loading && <p className="px-3 py-1 text-xs text-[var(--color-muted)]">{tr("Chargement…")}</p>}
       {accountData?.error && <p className="px-3 py-1 text-xs text-red-400 break-words">{accountData.error}</p>}
       {!accountData?.loading && !accountData?.error && (
         <>
           {accountData?.issues.map((issue) => <IssueRow key={issue.number} issue={issue} />)}
-          {accountData?.issues.length === 0 && <Empty text="Aucune issue ouverte" />}
+          {accountData?.issues.length === 0 && <Empty text={tr("Aucune issue ouverte")} />}
         </>
       )}
     </Section>
@@ -606,7 +607,7 @@ function IssueRow({ issue }: { issue: ForgeIssue }) {
         {issue.state === "open"
           ? <CircleDot size={12} strokeWidth={2} className="shrink-0 mt-0.5 text-green-400" aria-hidden />
           : <CircleCheck size={12} strokeWidth={2} className="shrink-0 mt-0.5 text-red-400" aria-hidden />}
-        <span className="sr-only">Issue {issue.state === "open" ? "ouverte" : "fermée"} : </span>
+        <span className="sr-only">{issue.state === "open" ? tr("Issue ouverte :") : tr("Issue fermée :")} </span>
         <div className="min-w-0">
           <p className="text-xs text-[var(--color-text)] truncate">{issue.title}</p>
           <p className="text-[10px] text-[var(--color-muted)]">#{issue.number} · {issue.author}</p>

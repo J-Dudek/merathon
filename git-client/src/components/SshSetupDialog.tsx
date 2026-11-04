@@ -10,15 +10,16 @@ import { useAccountsStore } from "../store/useAccountsStore";
 import { useUiStore } from "../store/useUiStore";
 import type { ForgeAccount } from "../types/forge";
 import type { SshCheck, SshKeyInfo, SshSetupInfo } from "../types/git";
+import { tr, quoted } from "../i18n";
 
 type StepId = "key" | "upload" | "host" | "check";
 type StepState = "waiting" | "running" | "done" | "failed";
 
 const STEP_LABELS: Record<StepId, string> = {
-  key: "Clé SSH",
-  upload: "Enregistrement sur le compte",
-  host: "Empreinte du serveur",
-  check: "Test de la connexion",
+  key: tr("Clé SSH"),
+  upload: tr("Enregistrement sur le compte"),
+  host: tr("Empreinte du serveur"),
+  check: tr("Test de la connexion"),
 };
 
 const NEW_KEY = "__new__";
@@ -103,15 +104,15 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
     try {
       const client = await useAccountsStore.getState().client(account);
       await client.addSshKey(title.trim(), selected.public_key);
-      mark("upload", "done", `« ${title.trim()} »`);
+      mark("upload", "done", quoted(title.trim()));
     } catch (e) {
       const message = errorMessage(e);
       if (!isKeyAlreadyRegistered(message)) {
-        mark("upload", "failed", "Merathon n'a pas pu ajouter la clé");
+        mark("upload", "failed", tr("Merathon n'a pas pu ajouter la clé"));
         setPause({ kind: "manual", error: message });
         return;
       }
-      mark("upload", "done", "Clé déjà connue de la forge");
+      mark("upload", "done", tr("Clé déjà connue de la forge"));
     }
     await checkHost(selected);
   }
@@ -119,7 +120,7 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
   async function addedByHand() {
     if (!key) return;
     setPause(null);
-    mark("upload", "done", "Ajoutée sur la page de la forge");
+    mark("upload", "done", tr("Ajoutée sur la page de la forge"));
     await checkHost(key);
   }
 
@@ -128,12 +129,12 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
     try {
       const status = await sshHostStatus(host);
       if (status.state === "known") {
-        mark("host", "done", "Déjà connu dans known_hosts");
+        mark("host", "done", tr("Déjà connu dans known_hosts"));
       } else if (status.published) {
         await sshTrustHost(host, status.fingerprint);
-        mark("host", "done", `Conforme à l'empreinte publiée : ${status.fingerprint}`);
+        mark("host", "done", tr("Conforme à l'empreinte publiée : {fingerprint}", { fingerprint: status.fingerprint }));
       } else {
-        mark("host", "waiting", "À valider");
+        mark("host", "waiting", tr("À valider"));
         setPause({ kind: "fingerprint", fingerprint: status.fingerprint });
         return;
       }
@@ -151,7 +152,7 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
     mark("host", "running");
     try {
       await sshTrustHost(host, fingerprint);
-      mark("host", "done", `Validée : ${fingerprint}`);
+      mark("host", "done", tr("Validée : {fingerprint}", { fingerprint }));
     } catch (e) {
       mark("host", "failed", errorMessage(e));
       setPause({ kind: "stopped" });
@@ -167,7 +168,7 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
       const check = await sshCheckConnection(host, selected.name);
       mark("check", check.authenticated ? "done" : "failed", check.message);
       setPause({ kind: "finished", check });
-      if (check.authenticated) notify("success", `Clé SSH configurée pour ${account.label}`);
+      if (check.authenticated) notify("success", tr("Clé SSH configurée pour {label}", { label: account.label }));
     } catch (e) {
       mark("check", "failed", errorMessage(e));
       setPause({ kind: "stopped" });
@@ -177,24 +178,24 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
   async function copyPublicKey() {
     if (!key) return;
     await navigator.clipboard.writeText(key.public_key);
-    notify("success", "Clé publique copiée");
+    notify("success", tr("Clé publique copiée"));
   }
 
   return (
-    <Modal title={`Configurer SSH · ${account.label}`} onClose={onClose} width="w-[560px]">
+    <Modal title={tr("Configurer SSH · {label}", { label: account.label })} onClose={onClose} width="w-[560px]">
       <div className="px-4 py-3 space-y-3 text-xs text-[var(--color-text)] overflow-y-auto">
         {loadError && <p role="alert" className="text-red-400">{loadError}</p>}
-        {!info && !loadError && <p className="text-[var(--color-muted)]">Lecture de ~/.ssh…</p>}
+        {!info && !loadError && <p className="text-[var(--color-muted)]">{tr("Lecture de ~/.ssh…")}</p>}
         {info && !started && (
           <>
             <fieldset className="space-y-1.5">
-              <legend className="font-semibold mb-1">Clé à utiliser</legend>
+              <legend className="font-semibold mb-1">{tr("Clé à utiliser")}</legend>
               {info.keys.map((k) => (
                 <label key={k.name} className="flex items-start gap-2 cursor-pointer">
                   <input type="radio" name="ssh-key" className="mt-0.5" checked={choice === k.name} onChange={() => setChoice(k.name)} />
                   <span className="min-w-0">
                     <span className="font-mono">{k.path}</span>
-                    {k.encrypted && <span className="text-[var(--color-muted)]"> · avec passphrase</span>}
+                    {k.encrypted && <span className="text-[var(--color-muted)]">{" "}{tr("· avec passphrase")}</span>}
                     <span className="block text-[10px] text-[var(--color-muted)] break-all">{k.fingerprint}</span>
                   </span>
                 </label>
@@ -202,12 +203,12 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
               {info.new_key_path && (
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input type="radio" name="ssh-key" className="mt-0.5" checked={creating} onChange={() => setChoice(NEW_KEY)} />
-                  <span>Créer <span className="font-mono">{info.new_key_path}</span> (ed25519)</span>
+                  <span>{tr("Créer")}{" "}<span className="font-mono">{info.new_key_path}</span> (ed25519)</span>
                 </label>
               )}
               {!info.new_key_path && info.keys.length === 0 && (
                 <p role="alert" className="text-amber-300">
-                  Un fichier id_ed25519 existe sans partie .pub lisible. Merathon ne l'écrase pas : régénère le .pub avec ssh-keygen -y, puis reviens ici.
+                  {tr("Un fichier id_ed25519 existe sans partie .pub lisible. Merathon ne l'écrase pas : régénère le .pub avec ssh-keygen -y, puis reviens ici.")}
                 </p>
               )}
             </fieldset>
@@ -215,37 +216,37 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
             {creating && (
               <div className="space-y-1.5">
                 <label className="block">
-                  <span className="block font-semibold mb-1">Passphrase (facultative)</span>
+                  <span className="block font-semibold mb-1">{tr("Passphrase (facultative)")}</span>
                   <input type="password" autoComplete="new-password" className={inputClass} value={passphrase} onChange={(e) => setPassphrase(e.target.value)} />
                 </label>
                 {passphrase && (
                   <label className="block">
-                    <span className="block mb-1">Confirme la passphrase</span>
+                    <span className="block mb-1">{tr("Confirme la passphrase")}</span>
                     <input type="password" autoComplete="new-password" className={inputClass} value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
                   </label>
                 )}
                 <p className="text-[11px] text-[var(--color-muted)]">
-                  Sans passphrase, quiconque copie le fichier accède à tes dépôts. Avec, il faudra ajouter la clé à ton agent SSH (ssh-add) : Merathon ne la demande pas lors des fetch et push.
+                  {tr("Sans passphrase, quiconque copie le fichier accède à tes dépôts. Avec, il faudra ajouter la clé à ton agent SSH (ssh-add) : Merathon ne la demande pas lors des fetch et push.")}
                 </p>
                 {mismatch && <p role="alert" className="text-amber-300">{mismatch}</p>}
               </div>
             )}
 
             <label className="block">
-              <span className="block font-semibold mb-1">Nom de la clé sur {host}</span>
+              <span className="block font-semibold mb-1">{tr("Nom de la clé sur {host}", { host })}</span>
               <input className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
             </label>
 
             <div>
-              <p className="font-semibold mb-1">Ce qui va se passer</p>
+              <p className="font-semibold mb-1">{tr("Ce qui va se passer")}</p>
               <ol className="list-decimal pl-4 space-y-0.5 text-[var(--color-muted)]">
-                <li>{creating ? `Création de ${chosenPath}. Aucun fichier existant n'est modifié.` : `Utilisation de ${chosenPath}, sans la modifier.`}</li>
+                <li>{creating ? tr("Création de {chosenPath}. Aucun fichier existant n'est modifié.", { chosenPath }) : tr("Utilisation de {chosenPath}, sans la modifier.", { chosenPath })}</li>
                 <li>
-                  Envoi de la clé publique au compte {account.username} sur {host}.
-                  {account.provider === "github" && " Le token doit avoir le scope write:public_key ; sinon, tu pourras l'ajouter à la main."}
+                  {tr("Envoi de la clé publique au compte {username} sur {host}.", { username: account.username, host })}
+                  {account.provider === "github" && tr(" Le token doit avoir le scope write:public_key ; sinon, tu pourras l'ajouter à la main.")}
                 </li>
-                <li>Vérification de l'empreinte du serveur, ajoutée à ~/.ssh/known_hosts si elle n'y est pas.</li>
-                <li>Test de la connexion SSH. Les remotes de tes dépôts ne changent pas.</li>
+                <li>{tr("Vérification de l'empreinte du serveur, ajoutée à ~/.ssh/known_hosts si elle n'y est pas.")}</li>
+                <li>{tr("Test de la connexion SSH. Les remotes de tes dépôts ne changent pas.")}</li>
               </ol>
             </div>
           </>
@@ -268,12 +269,12 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
         {pause?.kind === "manual" && key && (
           <div className="space-y-2 border-t border-overlay/10 pt-3">
             <p role="alert" className="text-amber-300 break-words">{pause.error}</p>
-            <p>Ajoute la clé publique toi-même sur {host}, puis continue :</p>
-            <textarea readOnly rows={3} aria-label="Clé publique" className={`${inputClass} font-mono text-[10px] break-all`} value={key.public_key} />
+            <p>{tr("Ajoute la clé publique toi-même sur {host}, puis continue :", { host })}</p>
+            <textarea readOnly rows={3} aria-label={tr("Clé publique")} className={`${inputClass} font-mono text-[10px] break-all`} value={key.public_key} />
             <div className="flex gap-2">
-              <button className={buttonClass} onClick={copyPublicKey}>Copier la clé publique</button>
-              <button className={buttonClass} onClick={() => openUrl(sshKeysPage(account))}>Ouvrir la page de {host}</button>
-              <button className={primaryClass} onClick={addedByHand}>Clé ajoutée, continuer</button>
+              <button className={buttonClass} onClick={copyPublicKey}>{tr("Copier la clé publique")}</button>
+              <button className={buttonClass} onClick={() => openUrl(sshKeysPage(account))}>{tr("Ouvrir la page de {host}", { host })}</button>
+              <button className={primaryClass} onClick={addedByHand}>{tr("Clé ajoutée, continuer")}</button>
             </div>
           </div>
         )}
@@ -281,12 +282,12 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
         {pause?.kind === "fingerprint" && (
           <div className="space-y-2 border-t border-overlay/10 pt-3">
             <p>
-              {host} n'est pas encore connu, et Merathon n'a pas d'empreinte de référence pour cette instance. Compare celle-ci à celle donnée par son administrateur :
+              {tr("{host} n'est pas encore connu, et Merathon n'a pas d'empreinte de référence pour cette instance. Compare celle-ci à celle donnée par son administrateur :", { host })}
             </p>
             <p className="font-mono break-all">{pause.fingerprint}</p>
             <div className="flex gap-2">
-              <button className={primaryClass} onClick={() => trustFingerprint(pause.fingerprint)}>L'empreinte est correcte</button>
-              <button className={buttonClass} onClick={onClose}>Annuler</button>
+              <button className={primaryClass} onClick={() => trustFingerprint(pause.fingerprint)}>{tr("L'empreinte est correcte")}</button>
+              <button className={buttonClass} onClick={onClose}>{tr("Annuler")}</button>
             </div>
           </div>
         )}
@@ -299,11 +300,11 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
       <div className="px-4 py-3 border-t border-overlay/10 flex justify-end gap-2">
         {!started ? (
           <>
-            <button className={buttonClass} onClick={onClose}>Annuler</button>
-            <button className={primaryClass} disabled={!info || !title.trim() || !!mismatch || !chosenPath} onClick={start}>Configurer</button>
+            <button className={buttonClass} onClick={onClose}>{tr("Annuler")}</button>
+            <button className={primaryClass} disabled={!info || !title.trim() || !!mismatch || !chosenPath} onClick={start}>{tr("Configurer")}</button>
           </>
         ) : (
-          <button className={buttonClass} onClick={onClose}>Fermer</button>
+          <button className={buttonClass} onClick={onClose}>{tr("Fermer")}</button>
         )}
       </div>
     </Modal>
@@ -315,7 +316,7 @@ function FinishedNote({ account, check, encrypted, onRetry }: { account: ForgeAc
     return (
       <div className="space-y-2 border-t border-overlay/10 pt-3">
         <p role="alert" className="text-amber-300">{connectionHint(encrypted, check.message)}</p>
-        <button className={buttonClass} onClick={onRetry}>Vérifier à nouveau</button>
+        <button className={buttonClass} onClick={onRetry}>{tr("Vérifier à nouveau")}</button>
       </div>
     );
   }
@@ -324,11 +325,11 @@ function FinishedNote({ account, check, encrypted, onRetry }: { account: ForgeAc
     <div className="space-y-1 border-t border-overlay/10 pt-3">
       {otherAccount && (
         <p role="alert" className="text-amber-300">
-          Cette clé appartient au compte {check.username}, pas à {account.username} : SSH agira en tant que {check.username}. Un seul compte par hôte est pris en charge pour l'instant.
+          {tr("Cette clé appartient au compte {username}, pas à {username2} : SSH agira en tant que {username}. Un seul compte par hôte est pris en charge pour l'instant.", { username: check.username, username2: account.username })}
         </p>
       )}
       <p className="text-[var(--color-muted)]">
-        Les dépôts en SSH (git@…) peuvent utiliser cette clé. Ceux en HTTPS continuent d'utiliser le token.
+        {tr("Les dépôts en SSH (git@…) peuvent utiliser cette clé. Ceux en HTTPS continuent d'utiliser le token.")}
       </p>
     </div>
   );
@@ -336,8 +337,8 @@ function FinishedNote({ account, check, encrypted, onRetry }: { account: ForgeAc
 
 function StepIcon({ state }: { state: StepState }) {
   const className = "shrink-0 mt-0.5";
-  if (state === "done") return <><CircleCheck size={13} className={`${className} text-green-400`} aria-hidden /><span className="sr-only">Terminé : </span></>;
-  if (state === "failed") return <><CircleAlert size={13} className={`${className} text-amber-300`} aria-hidden /><span className="sr-only">Échec : </span></>;
-  if (state === "running") return <><LoaderCircle size={13} className={`${className} animate-spin`} aria-hidden /><span className="sr-only">En cours : </span></>;
-  return <><Circle size={13} className={`${className} text-[var(--color-muted)]`} aria-hidden /><span className="sr-only">À venir : </span></>;
+  if (state === "done") return <><CircleCheck size={13} className={`${className} text-green-400`} aria-hidden /><span className="sr-only">{tr("Terminé :")}{" "}</span></>;
+  if (state === "failed") return <><CircleAlert size={13} className={`${className} text-amber-300`} aria-hidden /><span className="sr-only">{tr("Échec :")}{" "}</span></>;
+  if (state === "running") return <><LoaderCircle size={13} className={`${className} animate-spin`} aria-hidden /><span className="sr-only">{tr("En cours :")}{" "}</span></>;
+  return <><Circle size={13} className={`${className} text-[var(--color-muted)]`} aria-hidden /><span className="sr-only">{tr("À venir :")}{" "}</span></>;
 }

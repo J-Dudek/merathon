@@ -27,7 +27,7 @@ pub fn graphql_url(base_url: &str) -> String {
 
 /// Chemin d'API relatif (avec éventuelle query string), sans possibilité de viser un autre hôte.
 pub fn validate_api_path(path: &str) -> Result<(), String> {
-    let refused = || format!("Chemin d'API refusé : {path}");
+    let refused = || tr!("Chemin d'API refusé : {path}", "API path refused: {path}");
     if !path.starts_with('/') || path.starts_with("//") || path.len() > 2048 {
         return Err(refused());
     }
@@ -53,7 +53,7 @@ fn http_error(host: &str, e: ureq::Error) -> String {
             status_message(host, code, detail.trim())
         }
         // Le détail distingue une URL erronée d'un certificat non reconnu ou d'un proxy.
-        ureq::Error::Transport(t) => format!("Impossible de joindre {host} ({t}) : vérifie l'URL de l'instance et ta connexion"),
+        ureq::Error::Transport(t) => tr!("Impossible de joindre {host} ({t}) : vérifie l'URL de l'instance et ta connexion", "Could not reach {host} ({t}): check the instance URL and your connection"),
     }
 }
 
@@ -61,19 +61,19 @@ fn http_error(host: &str, e: ureq::Error) -> String {
 fn status_message(host: &str, code: u16, detail: &str) -> String {
     let lower = detail.to_lowercase();
     let explanation = match code {
-        401 => "Token refusé : vérifie sa validité ou reconnecte le compte".to_string(),
+        401 => tr!("Token refusé : vérifie sa validité ou reconnecte le compte", "Token refused: check that it is valid or reconnect the account"),
         // 403 : droits insuffisants pour cette action, ou limite de requêtes ; le token lui-même est valide.
-        403 | 429 if lower.contains("rate limit") => "Limite de requêtes atteinte : réessaie dans quelques minutes".to_string(),
-        429 => "Trop de requêtes : réessaie dans quelques minutes".to_string(),
-        403 => "Action refusée : ton compte ou ton token n'a pas les droits nécessaires".to_string(),
-        404 => "Introuvable : la ressource n'existe pas ou ton token n'y a pas accès".to_string(),
-        405 => "Action impossible dans l'état actuel".to_string(),
-        409 => "Conflit : la ressource a changé entre-temps, actualise puis réessaie".to_string(),
-        422 => "Requête refusée".to_string(),
-        500..=599 => format!("{host} rencontre un problème (erreur {code}) : réessaie plus tard"),
+        403 | 429 if lower.contains("rate limit") => tr!("Limite de requêtes atteinte : réessaie dans quelques minutes", "Rate limit reached: try again in a few minutes"),
+        429 => tr!("Trop de requêtes : réessaie dans quelques minutes", "Too many requests: try again in a few minutes"),
+        403 => tr!("Action refusée : ton compte ou ton token n'a pas les droits nécessaires", "Action refused: your account or token does not have the required permissions"),
+        404 => tr!("Introuvable : la ressource n'existe pas ou ton token n'y a pas accès", "Not found: the resource does not exist or your token cannot access it"),
+        405 => tr!("Action impossible dans l'état actuel", "Action not possible in the current state"),
+        409 => tr!("Conflit : la ressource a changé entre-temps, actualise puis réessaie", "Conflict: the resource changed in the meantime, refresh then try again"),
+        422 => tr!("Requête refusée", "Request refused"),
+        500..=599 => tr!("{host} rencontre un problème (erreur {code}) : réessaie plus tard", "{host} is having a problem (error {code}): try again later"),
         _ => format!("Erreur {code}"),
     };
-    let explanation = if (500..=599).contains(&code) { explanation } else { format!("{host} : {explanation}") };
+    let explanation = if (500..=599).contains(&code) { explanation } else { tr!("{host} : {explanation}", "{host}: {explanation}") };
     if detail.is_empty() { explanation } else { format!("{explanation} — {detail}") }
 }
 
@@ -102,7 +102,7 @@ fn api_error_message(json: &Value) -> Option<String> {
 fn validate_method(method: &str) -> Result<(), String> {
     match method {
         "GET" | "POST" | "PUT" | "PATCH" => Ok(()),
-        _ => Err(format!("Méthode d'API refusée : {method}")),
+        _ => Err(tr!("Méthode d'API refusée : {method}", "API method refused: {method}")),
     }
 }
 
@@ -122,12 +122,12 @@ pub fn request_json(account: &Account, token: &str, method: &str, path: &str, bo
 /// Requête GraphQL GitHub. Les erreurs GraphQL arrivent avec un statut 200 : elles sont converties en erreur.
 pub fn graphql(account: &Account, token: &str, query: &str, variables: &Value) -> Result<Value, String> {
     if account.provider != Provider::Github {
-        return Err("GraphQL n'est utilisé que pour GitHub".into());
+        return Err(tr!("GraphQL n'est utilisé que pour GitHub", "GraphQL is only used for GitHub"));
     }
     let body = serde_json::json!({ "query": query, "variables": variables });
     let response = send_json(account, token, "POST", &graphql_url(&account.base_url), Some(&body))?;
     if let Some(message) = response.get("errors").filter(|e| e.as_array().is_some_and(|a| !a.is_empty())).and_then(|_| api_error_message(&response)) {
-        return Err(format!("API GitHub : {message}"));
+        return Err(tr!("API GitHub : {message}", "GitHub API: {message}"));
     }
     Ok(response.get("data").cloned().unwrap_or(Value::Null))
 }
@@ -150,11 +150,11 @@ fn send_json(account: &Account, token: &str, method: &str, url: &str, body: Opti
         None => request.call(),
     }
     .map_err(|e| http_error(&host, e))?;
-    let text = response.into_string().map_err(|e| format!("Réponse illisible de {host} : {e}"))?;
+    let text = response.into_string().map_err(|e| tr!("Réponse illisible de {host} : {e}", "Unreadable response from {host}: {e}"))?;
     if text.trim().is_empty() {
         return Ok(Value::Null);
     }
-    serde_json::from_str(&text).map_err(|e| format!("Réponse illisible de {host} : {e}"))
+    serde_json::from_str(&text).map_err(|e| tr!("Réponse illisible de {host} : {e}", "Unreadable response from {host}: {e}"))
 }
 
 #[cfg(test)]

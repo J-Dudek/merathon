@@ -1,5 +1,6 @@
 import type { ReviewThread } from "../types/forge";
 import type { CommitTrailers } from "../types/git";
+import { tr } from "../i18n";
 
 /**
  * Fils de revue traités par un commit, notés en trailers à la fin de son message :
@@ -122,5 +123,5 @@ export function planThreadReplies(commits: CommitTrailers[], threads: ReviewThre
 
 /** Réponse publiée sur le fil : les forges transforment les SHA en liens vers les commits. */
 export function threadReplyBody(hashes: string[]): string {
-  return `Traité dans ${hashes.join(", ")}.\n\n${THREAD_REPLY_MARKER}`;
+  return tr("Traité dans {list}.\n\n{THREAD_REPLY_MARKER}", { list: hashes.join(", "), THREAD_REPLY_MARKER });
 }

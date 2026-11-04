@@ -24,7 +24,7 @@ pub async fn notify_desktop(app: AppHandle, title: String, body: String) -> Resu
         tauri::async_runtime::spawn_blocking(move || match linux::notify(&title, &body) {
             Ok(id) => Ok(Some(id)),
             Err(e) if crate::is_wsl() => wsl::notify(&title, &body).map(|()| None).map_err(|toast| {
-                format!("aucun serveur de notifications dans WSL ({e}) et notification Windows impossible ({toast})")
+                tr!("aucun serveur de notifications dans WSL ({e}) et notification Windows impossible ({toast})", "no notification server in WSL ({e}) and Windows notification failed ({toast})")
             }),
             Err(e) => Err(e),
         })
@@ -145,7 +145,7 @@ mod wsl {
                 match Command::new(exe).args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &command]).output() {
                     Ok(output) => output,
                     Err(e) => {
-                        last_error = format!("{exe} : {e}");
+                        last_error = tr!("{exe} : {e}", "{exe}: {e}");
                         continue;
                     }
                 };

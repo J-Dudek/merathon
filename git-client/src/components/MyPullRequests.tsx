@@ -12,6 +12,7 @@ import { PRRow, checkoutPullRequest, markPullRequestRead, useLinkedForge } from 
 import { PullRequestReviewDialog } from "./PullRequestReviewDialog";
 import { PanelSection as Section } from "./PanelSection";
 import type { ForgeAccount, MyPullRequests, PrSummary } from "../types/forge";
+import { tr } from "../i18n";
 
 /**
  * PR / MR ouvertes du compte, tous projets confondus. Rechargées après chaque synchronisation périodique, qui s'en
@@ -83,14 +84,14 @@ export function MyPullRequestsSection({ account, showAccount }: {
         typeLabel={prLabel}
         indent={24}
         subtitle={subtitle}
-        hint="Clic : voir le détail · Clic droit : navigateur, lu / non lu"
+        hint={tr("Clic : voir le détail · Clic droit : navigateur, lu / non lu")}
         onClick={() => setReviewing(pr)}
         onContextMenu={(e) => open(e, [
-          { label: "Voir le détail…", action: () => setReviewing(pr) },
-          { label: "Ouvrir dans le navigateur", action: () => openUrl(pr.url) },
+          { label: tr("Voir le détail…"), action: () => setReviewing(pr) },
+          { label: tr("Ouvrir dans le navigateur"), action: () => openUrl(pr.url) },
           freshness.kind === "read"
-            ? { label: "Marquer comme non lue", action: () => useSeenPrsStore.getState().markUnread(keyOf(pr)) }
-            : { label: "Marquer comme lue", action: () => markPullRequestRead(account, pr.projectPath, pr) },
+            ? { label: tr("Marquer comme non lue"), action: () => useSeenPrsStore.getState().markUnread(keyOf(pr)) }
+            : { label: tr("Marquer comme lue"), action: () => markPullRequestRead(account, pr.projectPath, pr) },
         ])}
         meta={meta}
       />
@@ -98,20 +99,20 @@ export function MyPullRequestsSection({ account, showAccount }: {
   }
 
   const refresh = (
-    <button className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Rafraîchir" aria-label={`Rafraîchir mes ${prLabel}s`} onClick={reload}>
+    <button className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]" title={tr("Rafraîchir")} aria-label={tr("Rafraîchir mes {prLabel}s", { prLabel })} onClick={reload}>
       <RotateCw size={12} />
     </button>
   );
   const status = (
     <>
-      {loading && <p className="px-3 py-1 text-xs text-[var(--color-muted)]">Chargement…</p>}
+      {loading && <p className="px-3 py-1 text-xs text-[var(--color-muted)]">{tr("Chargement…")}</p>}
       {error && <p className="px-3 py-1 text-xs text-red-400 break-words">{error}</p>}
     </>
   );
 
   return (
     <>
-      <Section title={`${prLabel}s à traiter${suffix}`} action={refresh}>
+      <Section title={tr("{prLabel}s à traiter{suffix}", { prLabel, suffix })} action={refresh}>
         {status}
         {data && groupByProject(data.assigned).map(([project, prs]) => (
           <div key={project}>
@@ -121,17 +122,17 @@ export function MyPullRequestsSection({ account, showAccount }: {
             {prs.map((pr) => row(pr, `${prLabel}${sign}${pr.number} · ${pr.author} · ${pr.sourceBranch} → ${pr.targetBranch}`))}
           </div>
         ))}
-        {data && !data.assigned.length && <Empty text={`Aucune ${prLabel} assignée ou à relire`} />}
+        {data && !data.assigned.length && <Empty text={tr("Aucune {prLabel} assignée ou à relire", { prLabel })} />}
       </Section>
 
-      <Section title={`Mes ${prLabel}s${suffix}`} action={refresh}>
+      <Section title={tr("Mes {prLabel}s{suffix}", { prLabel, suffix })} action={refresh}>
         {status}
         {data && sortByStatus(data.authored).map((pr) => row(
           pr,
           `${pr.projectPath}${sign}${pr.number} · ${pr.sourceBranch} → ${pr.targetBranch}`,
           <StatusBadges pr={pr} />,
         ))}
-        {data && !data.authored.length && <Empty text={`Aucune ${prLabel} ouverte par toi`} />}
+        {data && !data.authored.length && <Empty text={tr("Aucune {prLabel} ouverte par toi", { prLabel })} />}
       </Section>
 
       {menu && <ContextMenu menu={menu} onClose={close} />}
@@ -151,9 +152,9 @@ export function MyPullRequestsSection({ account, showAccount }: {
 }
 
 const CI_DOTS: Record<NonNullable<PrSummary["ci"]>, { className: string; label: string }> = {
-  success: { className: "bg-green-400", label: "réussie" },
-  failure: { className: "bg-red-400", label: "en échec" },
-  pending: { className: "bg-amber-300", label: "en cours" },
+  success: { className: "bg-green-400", label: tr("réussie") },
+  failure: { className: "bg-red-400", label: tr("en échec") },
+  pending: { className: "bg-amber-300", label: tr("en cours") },
 };
 
 /** État principal (brouillon, conflits, changements demandés…) et pastille de CI. Le brouillon est déjà signalé par la ligne. */

@@ -20,21 +20,22 @@ import { branchOnRemote, branchTree, flattenTree, localOnlyBranches, pullRequest
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
 import type { BranchInfo, StashInfo, SubmoduleInfo, TagInfo, WorktreeInfo } from "../types/git";
 import type { ForgePR } from "../types/forge";
+import { tr, trn, COLON, LIST_SEPARATOR } from "../i18n";
 
 const SUBMODULE_STATES: Record<SubmoduleInfo["state"], { label: string; color: string }> = {
-  uninitialized: { label: "non initialisé", color: "text-amber-300" },
-  commit_changed: { label: "autre commit", color: "text-sky-300" },
-  dirty: { label: "modifié", color: "text-yellow-400" },
+  uninitialized: { label: tr("non initialisé"), color: "text-amber-300" },
+  commit_changed: { label: tr("autre commit"), color: "text-sky-300" },
+  dirty: { label: tr("modifié"), color: "text-yellow-400" },
   ok: { label: "", color: "" },
 };
 
 function branchTitle(b: BranchInfo, localOnly: boolean): string {
-  if (b.upstream) return `suit ${b.upstream}`;
-  return localOnly ? "uniquement en local : absente des remotes" : "aucune branche distante suivie";
+  if (b.upstream) return tr("suit {upstream}", { upstream: b.upstream });
+  return localOnly ? tr("uniquement en local : absente des remotes") : tr("aucune branche distante suivie");
 }
 
 function submoduleTitle(sm: SubmoduleInfo): string {
-  const recorded = sm.recorded_hash ? `commit enregistré : ${sm.recorded_hash.slice(0, 7)}` : null;
+  const recorded = sm.recorded_hash ? tr("commit enregistré : {recorded_hash}", { recorded_hash: sm.recorded_hash.slice(0, 7) }) : null;
   return [sm.url ?? "", recorded].filter((line) => line !== null).join("\n");
 }
 
@@ -120,37 +121,37 @@ export function Sidebar() {
   async function deleteBranches(names: string[]) {
     const ui = useUiStore.getState();
     const n = names.length;
-    if (!(await confirmAction(`Supprimer ${n} branches locales ?`, `${names.join(", ")}\n\nLes commits non mergés ailleurs ne seront plus référencés.`, true)))
+    if (!(await confirmAction(tr("Supprimer {n} branches locales ?", { n }), tr("{list}\n\nLes commits non mergés ailleurs ne seront plus référencés.", { list: names.join(", ") }), true)))
       return;
     const failed: string[] = [];
     await runGit(async () => {
       for (const name of names) {
-        await deleteBranch(path, name).catch((e) => failed.push(`${name} : ${errorMessage(e)}`));
+        await deleteBranch(path, name).catch((e) => failed.push(`${name}${COLON}${errorMessage(e)}`));
       }
-    }, { busy: "Suppression des branches…" });
+    }, { busy: tr("Suppression des branches…") });
     clearPicked();
-    if (failed.length === 0) ui.notify("success", `${n} branches supprimées`);
-    else ui.notify("error", `${n - failed.length}/${n} branches supprimées. Échec : ${failed.join(" ; ")}`);
+    if (failed.length === 0) ui.notify("success", tr("{n} branches supprimées", { n }));
+    else ui.notify("error", tr("{value}/{n} branches supprimées. Échec : {list}", { value: n - failed.length, n, list: failed.join(LIST_SEPARATOR) }));
   }
 
   function pickedMenu(names: string[]): MenuEntry[] {
     return [
-      { label: `Supprimer les ${names.length} branches sélectionnées…`, danger: true, action: () => deleteBranches(names) },
+      { label: tr("Supprimer les {length} branches sélectionnées…", { length: names.length }), danger: true, action: () => deleteBranches(names) },
       "separator",
-      { label: "Annuler la sélection", action: clearPicked },
+      { label: tr("Annuler la sélection"), action: clearPicked },
     ];
   }
 
   function remoteGroupMenu(name: string): MenuEntry[] {
     return [
-      { label: `Fetch ${name}`, action: () => runGit(() => fetchRemote(path, name), { busy: "Fetch…", success: "Fetch terminé" }) },
-      { label: "Copier l'URL", action: () => navigator.clipboard.writeText(remotes.find((r) => r.name === name)?.url ?? "") },
+      { label: `Fetch ${name}`, action: () => runGit(() => fetchRemote(path, name), { busy: tr("Fetch…"), success: tr("Fetch terminé") }) },
+      { label: tr("Copier l'URL"), action: () => navigator.clipboard.writeText(remotes.find((r) => r.name === name)?.url ?? "") },
       "separator",
       {
-        label: "Supprimer le remote",
+        label: tr("Supprimer le remote"),
         danger: true,
         action: async () => {
-          if (await confirmAction(`Supprimer le remote « ${name} » ?`, "Seule la configuration locale est supprimée.", true))
+          if (await confirmAction(tr("Supprimer le remote « {name} » ?", { name }), tr("Seule la configuration locale est supprimée."), true))
             await runGit(() => removeRemote(path, name));
         },
       },
@@ -158,35 +159,35 @@ export function Sidebar() {
   }
 
   async function handleAddRemote() {
-    const name = await promptText("Nom du remote", { placeholder: "origin", initial: remotes.length ? "" : "origin" });
+    const name = await promptText(tr("Nom du remote"), { placeholder: "origin", initial: remotes.length ? "" : "origin" });
     if (!name) return;
-    const url = await promptText(`URL du remote « ${name} »`, { placeholder: "https://… ou git@…" });
-    if (url) await runGit(() => addRemote(path, name, url), { success: `Remote ${name} ajouté` });
+    const url = await promptText(tr("URL du remote « {name} »", { name }), { placeholder: tr("https://… ou git@…") });
+    if (url) await runGit(() => addRemote(path, name, url), { success: tr("Remote {name} ajouté", { name }) });
   }
 
   function tagMenu(t: TagInfo): MenuEntry[] {
     const remoteNames = remotes.map((r) => r.name);
     return [
-      { label: "Checkout (HEAD détaché)", action: () => runGit(() => checkoutCommit(path, t.name)) },
-      { label: `Créer une branche depuis ${t.name}…`, action: () => newBranchFrom(t.name) },
+      { label: tr("Checkout (HEAD détaché)"), action: () => runGit(() => checkoutCommit(path, t.name)) },
+      { label: tr("Créer une branche depuis {name}…", { name: t.name }), action: () => newBranchFrom(t.name) },
       ...remoteNames.map((r) => ({
-        label: `Push vers ${r}`,
-        action: () => runGit(() => pushTag(path, r, t.name), { busy: "Push…", success: `Tag ${t.name} poussé` }),
+        label: tr("Push vers {r}", { r }),
+        action: () => runGit(() => pushTag(path, r, t.name), { busy: tr("Push…"), success: tr("Tag {name} poussé", { name: t.name }) }),
       })),
       "separator" as const,
       {
-        label: "Supprimer",
+        label: tr("Supprimer"),
         danger: true,
         action: async () => {
-          if (await confirmAction(`Supprimer le tag « ${t.name} » ?`, undefined, true)) await runGit(() => deleteTag(path, t.name));
+          if (await confirmAction(tr("Supprimer le tag « {name} » ?", { name: t.name }), undefined, true)) await runGit(() => deleteTag(path, t.name));
         },
       },
       ...remoteNames.map((r) => ({
-        label: `Supprimer sur ${r}`,
+        label: tr("Supprimer sur {r}", { r }),
         danger: true,
         action: async () => {
-          if (await confirmAction(`Supprimer le tag « ${t.name} » sur ${r} ?`, undefined, true))
-            await runGit(() => deleteRemoteTag(path, r, t.name), { busy: "Suppression…" });
+          if (await confirmAction(tr("Supprimer le tag « {name} » sur {r} ?", { name: t.name, r }), undefined, true))
+            await runGit(() => deleteRemoteTag(path, r, t.name), { busy: tr("Suppression…") });
         },
       })),
     ];
@@ -194,14 +195,14 @@ export function Sidebar() {
 
   function stashMenu(s: StashInfo): MenuEntry[] {
     return [
-      { label: "Appliquer", action: () => runGit(() => stashApply(path, s.index, false), { success: "Stash appliqué" }) },
-      { label: "Appliquer et supprimer (pop)", action: () => runGit(() => stashApply(path, s.index, true), { success: "Stash réappliqué" }) },
+      { label: tr("Appliquer"), action: () => runGit(() => stashApply(path, s.index, false), { success: tr("Stash appliqué") }) },
+      { label: tr("Appliquer et supprimer (pop)"), action: () => runGit(() => stashApply(path, s.index, true), { success: tr("Stash réappliqué") }) },
       "separator",
       {
-        label: "Supprimer",
+        label: tr("Supprimer"),
         danger: true,
         action: async () => {
-          if (await confirmAction("Supprimer ce stash ?", s.message, true)) await runGit(() => stashDrop(path, s.index));
+          if (await confirmAction(tr("Supprimer ce stash ?"), s.message, true)) await runGit(() => stashDrop(path, s.index));
         },
       },
     ];
@@ -211,20 +212,20 @@ export function Sidebar() {
     const abs = `${path}/${sm.path}`;
     const initialized = sm.state !== "uninitialized";
     return [
-      { label: "Ouvrir dans un nouvel onglet", disabled: !initialized, action: () => openRepoAt(abs) },
-      { label: "Ouvrir dans une nouvelle fenêtre", disabled: !initialized, action: () => openNewWindow(abs) },
+      { label: tr("Ouvrir dans un nouvel onglet"), disabled: !initialized, action: () => openRepoAt(abs) },
+      { label: tr("Ouvrir dans une nouvelle fenêtre"), disabled: !initialized, action: () => openNewWindow(abs) },
       "separator",
       {
-        label: initialized ? "Mettre à jour (commit enregistré)" : "Initialiser et récupérer",
-        action: () => runGit(() => updateSubmodules(path, [sm.name]), { busy: "Sous-module…", success: `${sm.name} à jour` }),
+        label: initialized ? tr("Mettre à jour (commit enregistré)") : tr("Initialiser et récupérer"),
+        action: () => runGit(() => updateSubmodules(path, [sm.name]), { busy: "Sous-module…", success: tr("{name} à jour", { name: sm.name }) }),
       },
-      { label: "Copier l'URL", disabled: !sm.url, action: () => navigator.clipboard.writeText(sm.url ?? "") },
+      { label: tr("Copier l'URL"), disabled: !sm.url, action: () => navigator.clipboard.writeText(sm.url ?? "") },
     ];
   }
 
   function worktreeMenu(w: WorktreeInfo): MenuEntry[] {
     const remove: MenuEntry = {
-      label: w.valid ? "Supprimer…" : "Retirer de la liste…",
+      label: w.valid ? tr("Supprimer…") : tr("Retirer de la liste…"),
       danger: true,
       disabled: w.is_main || w.is_current || w.locked,
       hint: removalBlocker(w),
@@ -232,16 +233,16 @@ export function Sidebar() {
     };
     if (!w.valid) return [remove];
     return [
-      { label: "Ouvrir dans un onglet", action: () => openRepoAt(w.path) },
-      { label: "Ouvrir dans une nouvelle fenêtre", action: () => openNewWindow(w.path) },
-      { label: "Copier le chemin", action: () => navigator.clipboard.writeText(w.path) },
+      { label: tr("Ouvrir dans un onglet"), action: () => openRepoAt(w.path) },
+      { label: tr("Ouvrir dans une nouvelle fenêtre"), action: () => openNewWindow(w.path) },
+      { label: tr("Copier le chemin"), action: () => navigator.clipboard.writeText(w.path) },
       "separator",
       remove,
     ];
   }
 
   async function handleNewWorktree() {
-    const branch = await promptText("Nouveau worktree", { placeholder: "nom-de-branche", message: `Nouvelle branche depuis ${info?.head_branch ?? "HEAD"}` });
+    const branch = await promptText(tr("Nouveau worktree"), { placeholder: tr("nom-de-branche"), message: tr("Nouvelle branche depuis {value}", { value: info?.head_branch ?? "HEAD" }) });
     if (branch) await createWorktree(branch, true);
   }
 
@@ -250,7 +251,7 @@ export function Sidebar() {
   return (
     // pr-4 : sous Linux, la barre de défilement superposée capte les clics sur les ~20 px du bord droit (boutons + des sections…).
     <div className="flex flex-col h-full bg-[var(--color-bg-secondary)] text-sm select-none overflow-y-auto py-1 pr-4">
-      <Group title="Local" count={local.length}>
+      <Group title={tr("Local")} count={local.length}>
         <BranchTree
           nodes={localTree}
           depth={0}
@@ -275,10 +276,10 @@ export function Sidebar() {
       </Group>
 
       <Group
-        title="Distant"
+        title={tr("Distant")}
         count={remoteBranches.length}
         onAdd={handleAddRemote}
-        addTitle="Ajouter un remote"
+        addTitle={tr("Ajouter un remote")}
       >
         {remoteNames.map((name) => (
           <SubGroup key={name} title={name} onContextMenu={(e) => openMenu(e, remoteGroupMenu(name))}>
@@ -309,7 +310,7 @@ export function Sidebar() {
           title={forge.account.provider === "gitlab" ? "Merge requests" : "Pull requests"}
           count={forgePrs.prs.length}
           onAdd={forgePrs.reload}
-          addTitle={`Rafraîchir (${forge.projectPath})`}
+          addTitle={tr("Rafraîchir ({projectPath})", { projectPath: forge.projectPath })}
           addIcon={RefreshCw}
         >
           <li><PullRequestList forge={forge} list={forgePrs} indent={24} /></li>
@@ -342,10 +343,10 @@ export function Sidebar() {
 
       {submodules.length > 0 && (
         <Group
-          title="Sous-modules"
+          title={tr("Sous-modules")}
           count={submodules.length}
-          onAdd={() => runGit(() => updateSubmodules(path), { busy: "Sous-modules…", success: "Sous-modules à jour" })}
-          addTitle="Initialiser et mettre à jour tous les sous-modules"
+          onAdd={() => runGit(() => updateSubmodules(path), { busy: "Sous-modules…", success: tr("Sous-modules à jour") })}
+          addTitle={tr("Initialiser et mettre à jour tous les sous-modules")}
           addIcon={RefreshCw}
         >
           {submodules.map((sm) => {
@@ -365,7 +366,7 @@ export function Sidebar() {
         </Group>
       )}
 
-      <Group title="Worktrees" count={worktrees.length} defaultOpen={false} onAdd={handleNewWorktree} addTitle="Nouveau worktree">
+      <Group title="Worktrees" count={worktrees.length} defaultOpen={false} onAdd={handleNewWorktree} addTitle={tr("Nouveau worktree")}>
         {worktrees.map((w) => {
           const state = worktreeState(w);
           return (
@@ -389,25 +390,25 @@ export function Sidebar() {
           count={lfs.files.length}
           defaultOpen={!lfs.version || lfs.files.some((f) => !f.downloaded)}
           onAdd={async () => {
-            const pattern = await promptText("Suivre avec Git LFS", { placeholder: "*.psd", message: "Motif de fichiers (ajouté à .gitattributes)" });
-            if (pattern) await runGit(() => lfsTrack(path, pattern), { success: `${pattern} suivi avec LFS` });
+            const pattern = await promptText(tr("Suivre avec Git LFS"), { placeholder: "*.psd", message: tr("Motif de fichiers (ajouté à .gitattributes)") });
+            if (pattern) await runGit(() => lfsTrack(path, pattern), { success: tr("{pattern} suivi avec LFS", { pattern }) });
           }}
-          addTitle="Suivre un motif avec LFS"
+          addTitle={tr("Suivre un motif avec LFS")}
         >
           {!lfs.version ? (
             <li className="px-6 py-1 text-[11px] text-amber-300">
-              git-lfs n'est pas installé : les fichiers LFS ne peuvent être ni récupérés ni poussés.
+              {tr("git-lfs n'est pas installé : les fichiers LFS ne peuvent être ni récupérés ni poussés.")}
             </li>
           ) : (
             <>
               {lfs.files.some((f) => !f.downloaded) && (
                 <li className="px-6 py-1 flex items-center gap-2 text-[11px] text-amber-300">
-                  {lfs.files.filter((f) => !f.downloaded).length} fichier(s) non téléchargé(s)
+                  {tr("{length} fichier(s) non téléchargé(s)", { length: lfs.files.filter((f) => !f.downloaded).length })}
                   <button
                     className="ml-auto px-1.5 rounded bg-overlay/10 hover:bg-overlay/15 text-[var(--color-text)]"
-                    onClick={() => runGit(() => lfsPull(path), { busy: "LFS…", success: "Fichiers LFS récupérés" })}
+                    onClick={() => runGit(() => lfsPull(path), { busy: "LFS…", success: tr("Fichiers LFS récupérés") })}
                   >
-                    Récupérer
+                    {tr("Récupérer")}
                   </button>
                 </li>
               )}
@@ -416,10 +417,10 @@ export function Sidebar() {
                   key={p}
                   icon={FileBox}
                   label={p}
-                  title="Motif suivi par Git LFS"
+                  title={tr("Motif suivi par Git LFS")}
                   onContextMenu={(e) => openMenu(e, [
-                    { label: "Ne plus suivre avec LFS", action: () => runGit(() => lfsTrack(path, p, true)) },
-                    { label: "Récupérer les fichiers LFS", action: () => runGit(() => lfsPull(path), { busy: "LFS…", success: "Fichiers LFS récupérés" }) },
+                    { label: tr("Ne plus suivre avec LFS"), action: () => runGit(() => lfsTrack(path, p, true)) },
+                    { label: tr("Récupérer les fichiers LFS"), action: () => runGit(() => lfsPull(path), { busy: "LFS…", success: tr("Fichiers LFS récupérés") }) },
                   ])}
                 />
               ))}
@@ -435,7 +436,7 @@ export function Sidebar() {
             icon={Archive}
             label={s.message.replace(/^On [^:]+: /, "")}
             title={s.message}
-            onDoubleClick={() => runGit(() => stashApply(path, s.index, false), { success: "Stash appliqué" })}
+            onDoubleClick={() => runGit(() => stashApply(path, s.index, false), { success: tr("Stash appliqué") })}
             onContextMenu={(e) => openMenu(e, stashMenu(s))}
           />
         ))}
@@ -449,15 +450,15 @@ export function Sidebar() {
 
 /** Pourquoi un worktree ne peut pas être supprimé. */
 function removalBlocker(w: WorktreeInfo): string | undefined {
-  if (w.is_main) return "Worktree principal";
-  if (w.is_current) return "Worktree affiché";
-  return w.locked ? "Verrouillé" : undefined;
+  if (w.is_main) return tr("Worktree principal");
+  if (w.is_current) return tr("Worktree affiché");
+  return w.locked ? tr("Verrouillé") : undefined;
 }
 
 function worktreeState(w: WorktreeInfo): string | null {
-  if (!w.valid) return "introuvable";
-  if (w.locked) return "verrouillé";
-  return w.is_main ? "principal" : null;
+  if (!w.valid) return tr("introuvable");
+  if (w.locked) return tr("verrouillé");
+  return w.is_main ? tr("principal") : null;
 }
 
 function Group({ title, count, children, defaultOpen = true, onAdd, addTitle, addIcon: AddIcon = Plus }: {
@@ -497,7 +498,7 @@ function Group({ title, count, children, defaultOpen = true, onAdd, addTitle, ad
           </button>
         )}
       </div>
-      {open && (count > 0 || !!onAdd ? <ul>{children}</ul> : <p className="px-6 py-0.5 text-[11px] text-[var(--color-muted)] italic">aucun</p>)}
+      {open && (count > 0 || !!onAdd ? <ul>{children}</ul> : <p className="px-6 py-0.5 text-[11px] text-[var(--color-muted)] italic">{tr("aucun")}</p>)}
     </div>
   );
 }
@@ -562,7 +563,7 @@ function BranchFolder({ name, count, depth, children }: {
         <span className="truncate">{name}</span>
         <span className="ml-1 text-[10px] opacity-50">
           <span aria-hidden>{count}</span>
-          <span className="sr-only">, {count} branche{count > 1 ? "s" : ""}</span>
+          <span className="sr-only">, {trn(count, "{n} branche", "{n} branches")}</span>
         </span>
       </button>
       {open && <ul>{children}</ul>}
@@ -621,7 +622,7 @@ function Row({ icon: Icon, label, active, selected, dimmed, solo, depth = 0, tit
         role="button"
         tabIndex={0}
         aria-current={active ? "true" : undefined}
-        title={dimmed ? `${title ?? label}\nMasquée dans le graphe` : title}
+        title={dimmed ? tr("{value}\nMasquée dans le graphe", { value: title ?? label }) : title}
         className="flex-1 min-w-0 min-h-6 flex items-center gap-2 py-[3px] cursor-default outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
         style={{ paddingLeft: rowPadding(depth) }}
         onClick={onClick}
@@ -634,8 +635,8 @@ function Row({ icon: Icon, label, active, selected, dimmed, solo, depth = 0, tit
         {solo && <span className="text-[9px] px-1 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent-text)] shrink-0">solo</span>}
         {trailing}
         {dimmed && <EyeOff size={11} className="shrink-0 text-[var(--color-muted)]" aria-hidden />}
-        {dimmed && <span className="sr-only">, masquée dans le graphe</span>}
-        {selected && <span className="sr-only">, sélectionnée</span>}
+        {dimmed && <span className="sr-only">{tr(", masquée dans le graphe")}</span>}
+        {selected && <span className="sr-only">{tr(", sélectionnée")}</span>}
       </div>
       {action}
     </li>
@@ -653,7 +654,7 @@ function PrBadge({ prs, gitlab, fresh, onOpen }: { prs: ForgePR[]; gitlab: boole
       className={`relative shrink-0 px-1 text-[9px] font-mono rounded border ${
         first.draft ? "border-overlay/20 text-[var(--color-muted)]" : "border-green-500/50 text-green-300"
       } hover:bg-overlay/10`}
-      title={`${title}${fresh ? "\nNon lue ou modifiée depuis ta dernière consultation" : ""}\nClic : voir le détail`}
+      title={tr("{title}{value}\nClic : voir le détail", { title, value: fresh ? tr("\nNon lue ou modifiée depuis ta dernière consultation") : "" })}
       onClick={(e) => {
         e.stopPropagation();
         onOpen(first.number);
@@ -662,7 +663,7 @@ function PrBadge({ prs, gitlab, fresh, onOpen }: { prs: ForgePR[]; gitlab: boole
     >
       {gitlab ? "MR" : "PR"} {sign}{first.number}{prs.length > 1 ? ` +${prs.length - 1}` : ""}
       {fresh && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-sky-400" aria-hidden />}
-      {fresh && <span className="sr-only">, nouveau</span>}
+      {fresh && <span className="sr-only">{tr(", nouveau")}</span>}
     </button>
   );
 }
@@ -670,8 +671,8 @@ function PrBadge({ prs, gitlab, fresh, onOpen }: { prs: ForgePR[]; gitlab: boole
 function LocalOnlyBadge() {
   return (
     <span className="shrink-0 px-1 text-[9px] italic rounded border border-dashed border-[var(--color-accent)]/50 text-[var(--color-accent-text)]">
-      <span aria-hidden>local</span>
-      <span className="sr-only">, uniquement en local</span>
+      <span aria-hidden>{tr("local")}</span>
+      <span className="sr-only">{tr(", uniquement en local")}</span>
     </span>
   );
 }
@@ -679,13 +680,13 @@ function LocalOnlyBadge() {
 function AheadBehind({ ahead, behind }: { ahead: number; behind: number }) {
   if (!ahead && !behind) return null;
   return (
-    <span className="shrink-0 text-[10px] font-mono text-[var(--color-muted)]" title={`${ahead} en avance, ${behind} en retard`}>
+    <span className="shrink-0 text-[10px] font-mono text-[var(--color-muted)]" title={tr("{ahead} en avance, {behind} en retard", { ahead, behind })}>
       <span aria-hidden>
         {ahead > 0 && <span className="inline-flex items-center"><ArrowUp size={10} />{ahead}</span>}
         {behind > 0 && <span className="ml-0.5 inline-flex items-center"><ArrowDown size={10} />{behind}</span>}
       </span>
       <span className="sr-only">
-        {[ahead > 0 && `, ${ahead} en avance`, behind > 0 && `, ${behind} en retard`].filter(Boolean).join("")}
+        {[ahead > 0 && tr(", {ahead} en avance", { ahead }), behind > 0 && tr(", {behind} en retard", { behind })].filter(Boolean).join("")}
       </span>
     </span>
   );

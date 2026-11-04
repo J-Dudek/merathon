@@ -2,6 +2,7 @@ import { Plus, X } from "lucide-react";
 import { usePendingByRepo } from "../lib/pendingPullRequests";
 import { useRepoStore } from "../store/useRepoStore";
 import { useTabsStore, type RepoTab } from "../store/useTabsStore";
+import { tr } from "../i18n";
 
 /** Onglets des dépôts ouverts dans la fenêtre. */
 export function TabBar() {
@@ -17,13 +18,13 @@ export function TabBar() {
 
   return (
     <div className="flex items-stretch h-8 shrink-0 bg-[var(--color-bg-secondary)] border-b border-overlay/10 overflow-x-auto">
-      <nav aria-label="Dépôts ouverts" className="flex items-stretch min-w-0">
+      <nav aria-label={tr("Dépôts ouverts")} className="flex items-stretch min-w-0">
         {tabs.map((tab) => {
           const path = pathOf(tab);
           const active = tab.id === activeId;
-          const name = path?.split(/[\\/]/).pop() || "Nouvel onglet";
+          const name = path?.split(/[\\/]/).pop() || tr("Nouvel onglet");
           const count = path ? pending[path] ?? 0 : 0;
-          const activity = count > 0 ? `${count} PR / MR avec du nouveau` : null;
+          const activity = count > 0 ? tr("{count} PR / MR avec du nouveau", { count }) : null;
           return (
             <div
               key={tab.id}
@@ -48,8 +49,8 @@ export function TabBar() {
                   e.stopPropagation();
                   closeTab(tab.id);
                 }}
-                aria-label={`Fermer l'onglet ${name}`}
-                title="Fermer l'onglet (Ctrl+W)"
+                aria-label={tr("Fermer l'onglet {name}", { name })}
+                title={tr("Fermer l'onglet (Ctrl+W)")}
               >
                 <X size={12} className="mx-auto" />
               </button>
@@ -60,8 +61,8 @@ export function TabBar() {
       <button
         className="px-3 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/5"
         onClick={newTab}
-        title="Nouvel onglet (Ctrl+T)"
-        aria-label="Nouvel onglet"
+        title={tr("Nouvel onglet (Ctrl+T)")}
+        aria-label={tr("Nouvel onglet")}
       >
         <Plus size={14} />
       </button>

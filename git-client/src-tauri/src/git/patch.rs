@@ -91,11 +91,11 @@ fn raw_hunks(diff: &Diff) -> Result<Vec<RawHunk>, GitError> {
     };
     if delta.status() != Delta::Modified {
         return Err(GitError::Other(
-            "L'indexation partielle ne s'applique qu'aux fichiers modifiés (pas aux fichiers nouveaux, supprimés ou renommés)".into(),
+            tr!("L'indexation partielle ne s'applique qu'aux fichiers modifiés (pas aux fichiers nouveaux, supprimés ou renommés)", "Partial staging only applies to modified files (not to new, deleted or renamed files)"),
         ));
     }
     let patch = Patch::from_diff(diff, 0)?
-        .ok_or_else(|| GitError::Other("Fichier binaire : indexation partielle impossible".into()))?;
+        .ok_or_else(|| GitError::Other(tr!("Fichier binaire : indexation partielle impossible", "Binary file: partial staging not possible")))?;
 
     let mut hunks = Vec::new();
     for h in 0..patch.num_hunks() {
@@ -128,7 +128,7 @@ pub fn apply_lines(
     let hunks = raw_hunks(&diff)?;
     let hunk = hunks
         .get(hunk_index)
-        .ok_or_else(|| GitError::Other("Le fichier a changé : rafraîchis le diff".into()))?;
+        .ok_or_else(|| GitError::Other(tr!("Le fichier a changé : rafraîchis le diff", "The file has changed: refresh the diff")))?;
 
     let selected: HashSet<usize> = match lines {
         Some(l) => l.into_iter().collect(),
@@ -136,7 +136,7 @@ pub fn apply_lines(
     };
     let reverse = action != LineAction::Stage;
     let patch = build_patch(file_path, hunk, &selected, reverse)
-        .ok_or_else(|| GitError::Other("Aucune ligne modifiée sélectionnée".into()))?;
+        .ok_or_else(|| GitError::Other(tr!("Aucune ligne modifiée sélectionnée", "No modified line selected")))?;
 
     let location = if action == LineAction::Discard { ApplyLocation::WorkDir } else { ApplyLocation::Index };
     repo.apply(&Diff::from_buffer(&patch)?, location, None)?;

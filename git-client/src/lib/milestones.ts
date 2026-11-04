@@ -1,3 +1,5 @@
+import { language, tr } from "../i18n";
+
 /**
  * Paliers festifs : chaque commit, branche, PR / MR ou fusion est compté, et certains totaux déclenchent une animation.
  * Logique pure (compteurs, tirage au sort) ; l'affichage est dans components/Celebration.tsx.
@@ -100,34 +102,34 @@ export const kindEmojis = (kind: MilestoneKind) => EMOJIS[kind];
 
 const TITLES: Record<MilestoneKind, string[]> = {
   commit: [
-    "{n} commits, ça se fête !",
-    "{n} commits au compteur !",
-    "Et de {n} commits !",
-    "{n} commits : l'historique vous dit merci",
-    "{n} commits, la machine est lancée",
+    tr("{n} commits, ça se fête !"),
+    tr("{n} commits au compteur !"),
+    tr("Et de {n} commits !"),
+    tr("{n} commits : l'historique vous dit merci"),
+    tr("{n} commits, la machine est lancée"),
   ],
   branch: [
-    "{n} branches plantées !",
-    "{n} branches : un vrai jardinier",
-    "Et de {n} branches !",
-    "{n} branches, la forêt grandit",
+    tr("{n} branches plantées !"),
+    tr("{n} branches : un vrai jardinier"),
+    tr("Et de {n} branches !"),
+    tr("{n} branches, la forêt grandit"),
   ],
   pr: [
-    "{n} pull requests envoyées !",
-    "{n} PR / MR : les relecteurs n'ont qu'à bien se tenir",
-    "Et de {n} demandes de fusion !",
-    "{n} PR / MR, quelle productivité",
+    tr("{n} pull requests envoyées !"),
+    tr("{n} PR / MR : les relecteurs n'ont qu'à bien se tenir"),
+    tr("Et de {n} demandes de fusion !"),
+    tr("{n} PR / MR, quelle productivité"),
   ],
   merge: [
-    "{n} fusions réussies !",
-    "{n} merges : tout s'emboîte",
-    "Et de {n} fusions !",
+    tr("{n} fusions réussies !"),
+    tr("{n} merges : tout s'emboîte"),
+    tr("Et de {n} fusions !"),
   ],
 };
 
 const FIRSTS: Partial<Record<MilestoneKind, string>> = {
-  branch: "Première branche créée !",
-  pr: "Première PR / MR ouverte !",
+  branch: tr("Première branche créée !"),
+  pr: tr("Première PR / MR ouverte !"),
 };
 
 /** Nom de l'action au pluriel, pour le prochain palier. */
@@ -135,35 +137,43 @@ const PLURALS: Record<MilestoneKind, string> = {
   commit: "commits",
   branch: "branches",
   pr: "PR / MR",
-  merge: "fusions",
+  merge: tr("fusions"),
 };
 
 const FEMININE: Record<MilestoneKind, boolean> = { commit: false, branch: true, pr: true, merge: true };
 
+/** « 1st », « 22nd », « 13th »… */
+export function englishOrdinal(n: number): string {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  const suffix = teen ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
 /** « 1er », « 1re », « 10ᵉ »… */
 function ordinal(kind: MilestoneKind, n: number): string {
+  if (language === "en") return englishOrdinal(n);
   if (n !== 1) return `${n}ᵉ`;
   return FEMININE[kind] ? "1re" : "1er";
 }
 
 /** Ce qui vient d'être fait, avant l'ordinal puis après : « de faire votre » 10ᵉ « commit ». */
 const REASONS: Record<MilestoneKind, [string, string]> = {
-  commit: ["de faire votre", "commit"],
-  branch: ["de créer votre", "branche"],
-  pr: ["d'ouvrir votre", "PR / MR"],
-  merge: ["de réussir votre", "fusion"],
+  commit: [tr("de faire votre"), "commit"],
+  branch: [tr("de créer votre"), tr("branche")],
+  pr: [tr("d'ouvrir votre"), "PR / MR"],
+  merge: [tr("de réussir votre"), tr("fusion")],
 };
 
 /** Phrase qui explique l'animation : « Vous venez de faire votre 10ᵉ commit avec Merathon. » */
 export function milestoneReason(kind: MilestoneKind, count: number): string {
   const [verb, noun] = REASONS[kind];
-  return `Vous venez ${verb} ${ordinal(kind, count)} ${noun} avec Merathon.`;
+  return tr("Vous venez {verb} {ordinal} {noun} avec Merathon.", { verb, ordinal: ordinal(kind, count), noun });
 }
 
 /** Libellé d'une récompense : « 10ᵉ commit », « 1re branche », « Surprise au 4ᵉ commit ». */
 export function rewardLabel(r: Pick<Reward, "kind" | "count" | "surprise">): string {
   const label = `${ordinal(r.kind, r.count)} ${REASONS[r.kind][1]}`;
-  return r.surprise ? `Surprise au ${label}` : label;
+  return r.surprise ? tr("Surprise au {label}", { label }) : label;
 }
 
 /** Paliers atteints avec `count` actions, du plus petit au plus grand. */
@@ -181,11 +191,11 @@ export function nextMilestone(kind: MilestoneKind, count: number): number {
 }
 
 const SURPRISES = [
-  "Commit porte-bonheur 🍀",
-  "Celui-là, il sent bon",
-  "Un commit sauvage apparaît !",
-  "Joli message de commit (on suppose)",
-  "Pile dans le mille",
+  tr("Commit porte-bonheur 🍀"),
+  tr("Celui-là, il sent bon"),
+  tr("Un commit sauvage apparaît !"),
+  tr("Joli message de commit (on suppose)"),
+  tr("Pile dans le mille"),
 ];
 
 const pick = <T>(list: T[], rand: () => number): T => list[Math.min(list.length - 1, Math.floor(rand() * list.length))];
@@ -221,9 +231,9 @@ export function recordEvent(
     emoji: pick(EMOJIS[kind], rand),
     title,
     reason: surprise
-      ? `Aucun palier cette fois : chaque commit a 1 chance sur ${Math.round(1 / SURPRISE_CHANCE)} de déclencher une surprise, et celui-ci (le ${ordinal(kind, count)}) a gagné.`
+      ? tr("Aucun palier cette fois : chaque commit a 1 chance sur {value} de déclencher une surprise, et celui-ci (le {ordinal}) a gagné.", { value: Math.round(1 / SURPRISE_CHANCE), ordinal: ordinal(kind, count) })
       : milestoneReason(kind, count),
-    next: `Prochain palier : ${next} ${PLURALS[kind]}`,
+    next: tr("Prochain palier : {next} {value}", { next, value: PLURALS[kind] }),
     nextCount: next,
     tier: surprise ? 0 : milestoneTier(kind, count),
     surprise,

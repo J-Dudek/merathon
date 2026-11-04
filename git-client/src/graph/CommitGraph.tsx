@@ -23,6 +23,7 @@ import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type M
 import { dispatchContextMenu, isContextMenuKey, listKeyIndex } from "../lib/keyboardContextMenu";
 import type { BranchInfo, CommitInfo, MergeResult, RefLabel } from "../types/git";
 import { resizeKeyDelta } from "../lib/resizeKeys";
+import { tr, trn, locale } from "../i18n";
 
 const INFO_OFFSET = 20;
 const OVERSCAN = 10;
@@ -110,7 +111,7 @@ export function CommitGraph() {
     const oldest = selected[selected.length - 1];
     const base = oldest?.parents[0];
     if (!base) {
-      ui.notify("error", "Le premier commit du dépôt ne peut pas être squashé");
+      ui.notify("error", tr("Le premier commit du dépôt ne peut pas être squashé"));
       return;
     }
     const todo = await runGit(() => rebaseTodo(path, base), { refresh: false });
@@ -122,18 +123,18 @@ export function CommitGraph() {
     }
 
     const result = await ui.ask({
-      title: `Squasher ${hashes.length} commits sur ${head}`,
-      message: "Ils seront fusionnés en un seul commit, à la place du plus ancien. L'historique de la branche sera réécrit.",
+      title: tr("Squasher {length} commits sur {head}", { length: hashes.length, head }),
+      message: tr("Ils seront fusionnés en un seul commit, à la place du plus ancien. L'historique de la branche sera réécrit."),
       input: { multiline: true, initial: check.commits.map((c) => c.message.trim()).join("\n\n") },
-      confirmLabel: "Squasher",
+      confirmLabel: tr("Squasher"),
     });
     if (!result) return;
     const plan = squashPlan(todo, hashes, result.value);
     if (typeof plan === "string") return;
 
     clearMulti();
-    const outcome = await runGit(() => interactiveRebase(path, base, plan.steps, plan.mode), { busy: "Squash…" });
-    if (outcome && !outcome.stopped) ui.notify("success", `${hashes.length} commits squashés (ancienne position : ORIG_HEAD)`);
+    const outcome = await runGit(() => interactiveRebase(path, base, plan.steps, plan.mode), { busy: tr("Squash…") });
+    if (outcome && !outcome.stopped) ui.notify("success", tr("{length} commits squashés (ancienne position : ORIG_HEAD)", { length: hashes.length }));
     else reportInteractive(outcome);
   }
 
@@ -153,7 +154,7 @@ export function CommitGraph() {
     const ok = await runGit(async () => {
       for (const c of picked) {
         const result = await cherryPick(path, c.hash).catch((e) => {
-          throw new Error(`${errorMessage(e)} (${c.short_hash} ; ${done}/${picked.length} commits appliqués)`);
+          throw new Error(tr("{error} ({short_hash} ; {done}/{length} commits appliqués)", { error: errorMessage(e), short_hash: c.short_hash, done, length: picked.length }));
         });
         if (!result.success) {
           stopped = result;
@@ -166,7 +167,7 @@ export function CommitGraph() {
     clearMulti();
     if (!ok) return;
     if (!stopped) {
-      ui.notify("success", `${picked.length} commits cherry-pickés dans ${head}`);
+      ui.notify("success", tr("{length} commits cherry-pickés dans {head}", { length: picked.length, head }));
       return;
     }
     // Comme reportMerge : le panneau de droite affiche les fichiers en conflit à résoudre.
@@ -174,8 +175,8 @@ export function CommitGraph() {
     const rest = picked.slice(done + 1).map((c) => c.short_hash);
     ui.notify(
       "info",
-      `Conflit en appliquant ${picked[done].short_hash} (${done}/${picked.length} déjà appliqués).` +
-        (rest.length ? ` Restent à cherry-picker après résolution : ${rest.join(", ")}.` : ""),
+      tr("Conflit en appliquant {short_hash} ({done}/{length} déjà appliqués).", { short_hash: picked[done].short_hash, done, length: picked.length }) +
+        (rest.length ? tr(" Restent à cherry-picker après résolution : {list}.", { list: rest.join(", ") }) : ""),
     );
   }
 
@@ -190,21 +191,21 @@ export function CommitGraph() {
     const merges = selected.some((c) => c.parents.length > 1);
     const already = selected.some((c) => headAncestors.has(c.hash));
     let pickHint: string | undefined;
-    if (merges) pickHint = "Impossible avec un commit de merge dans la sélection";
-    else if (already) pickHint = `Certains commits sont déjà dans ${head}`;
+    if (merges) pickHint = tr("Impossible avec un commit de merge dans la sélection");
+    else if (already) pickHint = tr("Certains commits sont déjà dans {head}", { head });
     return [
       ...(hashes.length === 2
-        ? [{ label: "Comparer les 2 commits", hint: "Fichiers modifiés de l'un à l'autre", action: () => compareSelected(hashes) }]
+        ? [{ label: tr("Comparer les 2 commits"), hint: tr("Fichiers modifiés de l'un à l'autre"), action: () => compareSelected(hashes) }]
         : []),
       {
-        label: `Cherry-pick des ${hashes.length} commits dans ${head}`,
-        hint: pickHint ?? "Du plus ancien au plus récent",
+        label: tr("Cherry-pick des {length} commits dans {head}", { length: hashes.length, head }),
+        hint: pickHint ?? tr("Du plus ancien au plus récent"),
         disabled: merges || already,
         action: () => cherryPickSelected(hashes),
       },
-      { label: `Squasher les ${hashes.length} commits sélectionnés…`, action: () => squashSelected(hashes) },
+      { label: tr("Squasher les {length} commits sélectionnés…", { length: hashes.length }), action: () => squashSelected(hashes) },
       "separator",
-      { label: "Annuler la sélection", action: clearMulti },
+      { label: tr("Annuler la sélection"), action: clearMulti },
     ];
   }
 
@@ -216,30 +217,30 @@ export function CommitGraph() {
     const ui = useUiStore.getState();
     const headBranch = branches.find((b) => b.is_head && !b.is_remote);
     const pushed = !!headBranch?.upstream && headBranch.ahead === 0;
-    const pushedWarning = pushed ? `\nCe commit est déjà sur ${headBranch!.upstream} : il faudra ensuite un push forcé.` : "";
+    const pushedWarning = pushed ? tr("\nCe commit est déjà sur {upstream} : il faudra ensuite un push forcé.", { upstream: headBranch!.upstream }) : "";
     const fullMessage = async () => (await getCommitDetails(path, commit.hash)).message.trim();
     const { setCommitDraft } = useRepoStore.getState();
 
     return [
-      { header: `Dernier commit de ${head}` },
+      { header: tr("Dernier commit de {head}", { head }) },
       {
-        label: "Modifier le message…",
+        label: tr("Modifier le message…"),
         action: async () => {
           const message = await runGit(fullMessage, { refresh: false });
           if (message === undefined) return;
           const result = await ui.ask({
-            title: "Modifier le message du commit",
-            message: `Le contenu du commit ne change pas ; les fichiers indexés n'y sont pas ajoutés.${pushedWarning}`,
+            title: tr("Modifier le message du commit"),
+            message: tr("Le contenu du commit ne change pas ; les fichiers indexés n'y sont pas ajoutés.{pushedWarning}", { pushedWarning }),
             input: { multiline: true, initial: message },
-            confirmLabel: "Modifier",
+            confirmLabel: tr("Modifier"),
           });
           const next = result?.value.trim();
-          if (next && next !== message) await runGit(() => rewordHead(path, next), { success: "Message modifié" });
+          if (next && next !== message) await runGit(() => rewordHead(path, next), { success: tr("Message modifié") });
         },
       },
       {
-        label: "Amend : ajouter les modifications indexées…",
-        hint: "Ouvre le panneau de commit en mode amend",
+        label: tr("Amend : ajouter les modifications indexées…"),
+        hint: tr("Ouvre le panneau de commit en mode amend"),
         action: async () => {
           const message = await runGit(fullMessage, { refresh: false });
           if (message === undefined) return;
@@ -249,17 +250,17 @@ export function CommitGraph() {
         },
       },
       {
-        label: "Annuler ce commit",
-        hint: commit.parents.length ? "Ses modifications restent indexées" : "Premier commit du dépôt",
+        label: tr("Annuler ce commit"),
+        hint: commit.parents.length ? tr("Ses modifications restent indexées") : tr("Premier commit du dépôt"),
         disabled: commit.parents.length === 0,
         action: async () => {
           const ok = await confirmAction(
-            `Annuler le commit ${commit.short_hash} ?`,
-            `${head} revient au commit précédent ; les modifications restent indexées, prêtes à être commitées à nouveau.${pushedWarning}`,
+            tr("Annuler le commit {short_hash} ?", { short_hash: commit.short_hash }),
+            tr("{head} revient au commit précédent ; les modifications restent indexées, prêtes à être commitées à nouveau.{pushedWarning}", { head, pushedWarning }),
           );
           if (!ok) return;
           const message = await fullMessage().catch(() => commit.message);
-          const done = await runGit(() => resetTo(path, commit.parents[0], "soft"), { success: "Commit annulé, modifications indexées" });
+          const done = await runGit(() => resetTo(path, commit.parents[0], "soft"), { success: tr("Commit annulé, modifications indexées") });
           if (done === undefined) return;
           if (!useRepoStore.getState().commitDraft.summary.trim()) setCommitDraft({ ...draftFromMessage(message), amend: false });
           setSelectedCommit(null);
@@ -289,7 +290,7 @@ export function CommitGraph() {
     const tips = commit.refs.map(branchOf).filter((b): b is BranchInfo => !!b && !b.is_head);
     const localNames = new Set(tips.filter((b) => !b.is_remote).map((b) => b.upstream ?? ""));
     const shown = tips.filter((b) => !b.is_remote || !localNames.has(b.name)).slice(0, 2);
-    return shown.flatMap((b): MenuEntry[] => [{ header: b.is_remote ? `${b.name} (distante)` : b.name }, ...branchActions(b), "separator"]);
+    return shown.flatMap((b): MenuEntry[] => [{ header: b.is_remote ? tr("{name} (distante)", { name: b.name }) : b.name }, ...branchActions(b), "separator"]);
   }
 
   useEffect(() => {
@@ -328,15 +329,15 @@ export function CommitGraph() {
     const ask = useUiStore.getState().ask;
     const isMerge = commit.parents.length > 1;
     const inHead = headAncestors.has(commit.hash);
-    const inHeadHint = inHead ? `Déjà dans ${head}` : undefined;
+    const inHeadHint = inHead ? tr("Déjà dans {head}", { head }) : undefined;
 
     const reset = (mode: "soft" | "mixed" | "hard") => async () => {
       const descriptions = {
-        soft: "Les modifications des commits annulés restent indexées.",
-        mixed: "Les modifications des commits annulés restent dans la copie de travail (non indexées).",
-        hard: "Toutes les modifications locales et les commits suivants seront perdus.",
+        soft: tr("Les modifications des commits annulés restent indexées."),
+        mixed: tr("Les modifications des commits annulés restent dans la copie de travail (non indexées)."),
+        hard: tr("Toutes les modifications locales et les commits suivants seront perdus."),
       };
-      if (await confirmAction(`Reset ${mode} de ${head} sur ${commit.short_hash} ?`, descriptions[mode], mode === "hard"))
+      if (await confirmAction(tr("Reset {mode} de {head} sur {short_hash} ?", { mode, head, short_hash: commit.short_hash }), descriptions[mode], mode === "hard"))
         await runGit(() => resetTo(path, commit.hash, mode));
     };
 
@@ -344,80 +345,80 @@ export function CommitGraph() {
       ...headCommitEntries(commit),
       ...tipBranchEntries(commit),
       {
-        label: "Checkout ce commit (HEAD détaché)",
+        label: tr("Checkout ce commit (HEAD détaché)"),
         action: () => runGit(() => checkoutCommit(path, commit.hash)),
       },
       {
-        label: "Créer une branche ici…",
+        label: tr("Créer une branche ici…"),
         action: async () => {
           const result = await ask({
-            title: "Nouvelle branche",
-            message: `Depuis ${commit.short_hash} — ${commit.message}`,
-            input: { placeholder: "nom-de-branche" },
-            checkbox: { label: "Basculer sur la nouvelle branche", initial: true },
-            confirmLabel: "Créer",
+            title: tr("Nouvelle branche"),
+            message: tr("Depuis {short_hash} — {message}", { short_hash: commit.short_hash, message: commit.message }),
+            input: { placeholder: tr("nom-de-branche") },
+            checkbox: { label: tr("Basculer sur la nouvelle branche"), initial: true },
+            confirmLabel: tr("Créer"),
           });
           const name = result?.value.trim();
-          if (name) await runGit(() => createBranch(path, name, commit.hash, result!.checked), { success: `Branche ${name} créée` });
+          if (name) await runGit(() => createBranch(path, name, commit.hash, result!.checked), { success: tr("Branche {name} créée", { name }) });
         },
       },
       {
-        label: "Créer un tag ici…",
+        label: tr("Créer un tag ici…"),
         action: async () => {
-          const name = await useUiStore.getState().ask({ title: "Nouveau tag", input: { placeholder: "v1.0.0" }, confirmLabel: "Suivant" });
+          const name = await useUiStore.getState().ask({ title: tr("Nouveau tag"), input: { placeholder: "v1.0.0" }, confirmLabel: tr("Suivant") });
           const tag = name?.value.trim();
           if (!tag) return;
           const msg = await ask({
             title: `Tag ${tag}`,
-            message: "Un message crée un tag annoté ; laisse vide pour un tag léger.",
+            message: tr("Un message crée un tag annoté ; laisse vide pour un tag léger."),
             input: { placeholder: "Message (optionnel)", multiline: true },
-            confirmLabel: "Créer le tag",
+            confirmLabel: tr("Créer le tag"),
           });
-          if (msg) await runGit(() => createTag(path, tag, commit.hash, msg.value.trim() || null), { success: `Tag ${tag} créé` });
+          if (msg) await runGit(() => createTag(path, tag, commit.hash, msg.value.trim() || null), { success: tr("Tag {tag} créé", { tag }) });
         },
       },
       "separator",
       {
-        label: `Cherry-pick dans ${head}`,
+        label: tr("Cherry-pick dans {head}", { head }),
         disabled: isMerge || inHead,
         hint: inHeadHint,
-        action: async () => reportMerge(await runGit(() => cherryPick(path, commit.hash)), "Cherry-pick terminé"),
+        action: async () => reportMerge(await runGit(() => cherryPick(path, commit.hash)), tr("Cherry-pick terminé")),
       },
       {
-        label: "Revert ce commit",
+        label: tr("Revert ce commit"),
         disabled: isMerge,
-        action: async () => reportMerge(await runGit(() => revertCommit(path, commit.hash)), "Revert terminé"),
+        action: async () => reportMerge(await runGit(() => revertCommit(path, commit.hash)), tr("Revert terminé")),
       },
       {
-        label: `Merger ce commit dans ${head}`,
+        label: tr("Merger ce commit dans {head}", { head }),
         disabled: inHead,
         hint: inHeadHint,
-        action: async () => reportMerge(await runGit(() => mergeBranch(path, commit.hash)), "Merge terminé"),
+        action: async () => reportMerge(await runGit(() => mergeBranch(path, commit.hash)), tr("Merge terminé")),
       },
       // Le rebase interactif réécrit les commits de la branche courante postérieurs à celui-ci : il doit en être un ancêtre.
       ...(inHead && commit.hash !== info?.head_hash
         ? [{
-            label: `Rebase interactif de ${head} depuis ce commit…`,
+            label: tr("Rebase interactif de {head} depuis ce commit…", { head }),
             action: () => useUiStore.getState().setInteractiveRebaseBase(commit.hash),
           }]
         : []),
       {
-        label: `Rebaser ${head} sur ce commit`,
+        label: tr("Rebaser {head} sur ce commit", { head }),
         disabled: inHead,
         hint: inHeadHint,
         action: async () => {
-          if (await confirmAction(`Rebaser ${head} sur ${commit.short_hash} ?`, "Les commits de la branche courante seront réécrits."))
-            reportMerge(await runGit(() => rebaseOnto(path, commit.hash)), "Rebase terminé");
+          if (await confirmAction(tr("Rebaser {head} sur {short_hash} ?", { head, short_hash: commit.short_hash }), tr("Les commits de la branche courante seront réécrits.")))
+            reportMerge(await runGit(() => rebaseOnto(path, commit.hash)), tr("Rebase terminé"));
         },
       },
       "separator",
-      { label: `Reset ${head} ici — soft`, action: reset("soft") },
-      { label: `Reset ${head} ici — mixed`, action: reset("mixed") },
-      { label: `Reset ${head} ici — hard`, action: reset("hard"), danger: true },
+      { label: tr("Reset {head} ici — soft", { head }), action: reset("soft") },
+      { label: tr("Reset {head} ici — mixed", { head }), action: reset("mixed") },
+      { label: tr("Reset {head} ici — hard", { head }), action: reset("hard"), danger: true },
       "separator",
-      { label: "Copier le hash complet", action: () => navigator.clipboard.writeText(commit.hash) },
-      { label: "Copier le hash court", action: () => navigator.clipboard.writeText(commit.short_hash) },
-      { label: "Copier le message", action: () => navigator.clipboard.writeText(commit.message) },
+      { label: tr("Copier le hash complet"), action: () => navigator.clipboard.writeText(commit.hash) },
+      { label: tr("Copier le hash court"), action: () => navigator.clipboard.writeText(commit.short_hash) },
+      { label: tr("Copier le message"), action: () => navigator.clipboard.writeText(commit.message) },
     ];
   }
 
@@ -427,13 +428,13 @@ export function CommitGraph() {
         selectedCommit ? "hover:bg-overlay/5 text-[var(--color-muted)]" : "bg-overlay/10 text-[var(--color-text)]"
       }`}
       onClick={() => selectOne(null)}
-      title="Afficher les modifications en cours"
+      title={tr("Afficher les modifications en cours")}
     >
       <span className="w-2.5 h-2.5 rounded-full border-2 border-dashed border-[var(--color-accent)]" aria-hidden />
       <span className="italic"><span aria-hidden>// </span>WIP</span>
-      <span className="sr-only">, modifications en cours :</span>
+      <span className="sr-only">{tr(", modifications en cours :")}</span>
       <span className="text-[var(--color-muted)]">
-        {status.length} fichier{status.length > 1 ? "s" : ""} modifié{status.length > 1 ? "s" : ""}
+        {trn(status.length, "{n} fichier modifié", "{n} fichiers modifiés")}
       </span>
     </button>
   );
@@ -443,7 +444,7 @@ export function CommitGraph() {
       <div className="flex flex-col h-full">
         {wipRow}
         <div className="flex-1 flex items-center justify-center text-[var(--color-muted)] text-sm">
-          Aucun commit pour l'instant — indexe des fichiers et crée le premier commit
+          {tr("Aucun commit pour l'instant — indexe des fichiers et crée le premier commit")}
         </div>
       </div>
     );
@@ -458,7 +459,7 @@ export function CommitGraph() {
         className="ml-auto shrink-0 text-[var(--color-accent-text)] hover:underline"
         onClick={() => useGraphFilterStore.getState().clear(repoPath)}
       >
-        Tout afficher
+        {tr("Tout afficher")}
       </button>
     </div>
   );
@@ -468,7 +469,7 @@ export function CommitGraph() {
       <div className="flex flex-col h-full">
         {filterBar}
         <div className="flex-1 flex items-center justify-center text-[var(--color-muted)] text-sm">
-          {searchQuery ? "Aucun commit correspondant à la recherche" : "Aucun commit à afficher avec ce filtre"}
+          {searchQuery ? tr("Aucun commit correspondant à la recherche") : tr("Aucun commit à afficher avec ce filtre")}
         </div>
       </div>
     );
@@ -486,7 +487,7 @@ export function CommitGraph() {
           ref={containerRef}
           role="listbox"
           tabIndex={0}
-          aria-label="Historique des commits"
+          aria-label={tr("Historique des commits")}
           aria-multiselectable
           aria-activedescendant={selectedCommit ? rowId(selectedCommit.hash) : undefined}
           className="relative flex-1 overflow-y-auto overflow-x-hidden select-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
@@ -584,7 +585,7 @@ function GraphResizer({ graphWidth, fullWidth }: { graphWidth: number; fullWidth
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Largeur de l'arbre des branches"
+      aria-label={tr("Largeur de l'arbre des branches")}
       aria-valuenow={graphWidth}
       aria-valuemin={MIN_GRAPH_WIDTH}
       aria-valuemax={Math.max(fullWidth, graphWidth)}
@@ -594,7 +595,7 @@ function GraphResizer({ graphWidth, fullWidth }: { graphWidth: number; fullWidth
       style={{ left: graphWidth }}
       onPointerDown={startResize}
       onDoubleClick={() => setGraphWidth(null)}
-      title="Redimensionner l'arbre des branches (double-clic ou Entrée : tout afficher ; flèches au clavier)"
+      title={tr("Redimensionner l'arbre des branches (double-clic ou Entrée : tout afficher ; flèches au clavier)")}
     >
       {/* Fine bordure toujours visible pour repérer la poignée, comme celle des panneaux latéraux. */}
       <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-overlay/10 group-hover:bg-transparent" />
@@ -605,9 +606,9 @@ function GraphResizer({ graphWidth, fullWidth }: { graphWidth: number; fullWidth
 /** Résumé du filtre du graphe : branches en solo, ou branches masquées. */
 function filterLabel(filter: GraphFilter): string {
   const names = (keys: string[]) => keys.map((k) => k.slice(k.indexOf(":") + 1)).join(", ");
-  if (filter.solo.length) return `Solo : ${names(filter.solo)}`;
+  if (filter.solo.length) return tr("Solo : {names}", { names: names(filter.solo) });
   const n = filter.hidden.length;
-  return n > 1 ? `${n} branches masquées : ${names(filter.hidden)}` : `Branche masquée : ${names(filter.hidden)}`;
+  return n > 1 ? tr("{n} branches masquées : {names}", { n, names: names(filter.hidden) }) : tr("Branche masquée : {names}", { names: names(filter.hidden) });
 }
 
 /** Identifiant DOM d'une ligne du graphe (descendant actif de la liste). */
@@ -632,7 +633,7 @@ interface CommitRowProps {
 function CommitRow({
   commit, row, count, rowHeight, graphWidth, isSelected, containerWidth, localOnly, onClick, onContextMenu, onRefMenu,
 }: CommitRowProps) {
-  const date = new Date(commit.timestamp * 1000).toLocaleDateString("fr-FR", {
+  const date = new Date(commit.timestamp * 1000).toLocaleDateString(locale, {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -668,13 +669,13 @@ function CommitRow({
           {commit.refs.length > 4 && (
             <span className="text-[10px] text-[var(--color-muted)]" title={commit.refs.slice(4).map((r) => r.name).join("\n")}>
               <span aria-hidden>+{commit.refs.length - 4}</span>
-              <span className="sr-only">et {commit.refs.slice(4).map((r) => `${REF_KINDS[r.kind]} ${r.name}`).join(", ")}</span>
+              <span className="sr-only">{tr("et")}{" "}{commit.refs.slice(4).map((r) => `${REF_KINDS[r.kind]} ${r.name}`).join(", ")}</span>
             </span>
           )}
         </div>
       )}
       <span className="text-xs text-[var(--color-text)] truncate flex-1">
-        {commit.parents.length > 1 && <span className="sr-only">Commit de fusion : </span>}
+        {commit.parents.length > 1 && <span className="sr-only">{tr("Commit de fusion :")}{" "}</span>}
         {commit.message}
       </span>
       {/* Fenêtre étroite : auteur, hash et date restent lus par les lecteurs d'écran et affichés dans le détail du commit. */}
@@ -695,25 +696,25 @@ const REF_STYLES: Record<RefLabel["kind"], string> = {
 const REF_ICONS: Record<RefLabel["kind"], LucideIcon> = { head: GitBranch, local: GitBranch, remote: Cloud, tag: Tag };
 
 /** Nature de l'étiquette, restituée à la place de son icône. */
-const REF_KINDS: Record<RefLabel["kind"], string> = { head: "branche courante", local: "branche", remote: "branche distante", tag: "tag" };
+const REF_KINDS: Record<RefLabel["kind"], string> = { head: tr("branche courante"), local: tr("branche"), remote: tr("branche distante"), tag: "tag" };
 
 function RefBadge({ label, localOnly, onContextMenu }: {
   label: RefLabel;
   localOnly: boolean;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
-  const title = label.kind === "head" ? `${label.name} (branche courante)` : label.name;
+  const title = label.kind === "head" ? tr("{name} (branche courante)", { name: label.name }) : label.name;
   const Icon = REF_ICONS[label.kind];
   return (
     <span
       className={`px-1 text-[10px] rounded font-mono border whitespace-nowrap ${REF_STYLES[label.kind]} ${localOnly ? "border-dashed" : ""}`}
-      title={localOnly ? `${title} — uniquement en local, absente des remotes` : title}
+      title={localOnly ? tr("{title} — uniquement en local, absente des remotes", { title }) : title}
       onContextMenu={onContextMenu}
     >
       <Icon size={10} className="inline mr-0.5 -mt-0.5" />
       <span className="sr-only">{REF_KINDS[label.kind]} </span>
       {label.name}
-      {localOnly && <span className="ml-1 italic"><span aria-hidden>local</span><span className="sr-only">, uniquement en local</span></span>}
+      {localOnly && <span className="ml-1 italic"><span aria-hidden>{tr("local")}</span><span className="sr-only">{tr(", uniquement en local")}</span></span>}
       <span className="sr-only">, </span>
     </span>
   );

@@ -7,6 +7,7 @@ import { useJournalStore, type JournalEntry } from "../store/useJournalStore";
 import { errorMessage } from "../lib/actions";
 import { attachTerminal, LEAVE_TERMINAL_HINT, restartTerminal } from "../lib/terminals";
 import { resizeKeyDelta } from "../lib/resizeKeys";
+import { tr, trn, locale, COLON } from "../i18n";
 
 const HEADER_HEIGHT = 28;
 const MIN_HEIGHT = 120;
@@ -62,7 +63,7 @@ export function BottomPanel() {
           <div
             role="separator"
             aria-orientation="horizontal"
-            aria-label="Hauteur du panneau du bas"
+            aria-label={tr("Hauteur du panneau du bas")}
             aria-valuenow={panel.height}
             aria-valuemin={MIN_HEIGHT}
             tabIndex={0}
@@ -75,7 +76,7 @@ export function BottomPanel() {
             }}
             className="absolute -top-1 left-0 right-0 h-2 cursor-row-resize z-10 outline-none focus-visible:bg-[var(--color-accent)]"
             onPointerDown={startResize}
-            title="Redimensionner (flèches haut / bas au clavier)"
+            title={tr("Redimensionner (flèches haut / bas au clavier)")}
           />
         )}
         <PanelTab
@@ -87,31 +88,31 @@ export function BottomPanel() {
           Terminal
         </PanelTab>
         <PanelTab name="journal" active={journalVisible} onClick={() => select("journal")}>
-          Journal
+          {tr("Journal")}
           {newErrors > 0 && (
             <span className="ml-1.5 text-[9px] px-1 rounded-full bg-red-700 text-white leading-4">
               <span aria-hidden>{newErrors}</span>
-              <span className="sr-only">, {newErrors} nouvelle{newErrors > 1 ? "s" : ""} erreur{newErrors > 1 ? "s" : ""}</span>
+              <span className="sr-only">, {trn(newErrors, "{n} nouvelle erreur", "{n} nouvelles erreurs")}</span>
             </span>
           )}
         </PanelTab>
 
         <div className="ml-auto flex items-center gap-1 pr-2">
           {panel.open && panel.tab === "terminal" && (
-            <HeaderBtn onClick={() => restartTerminal(tabId)} title="Relancer le shell"><RotateCw size={13} className="mx-auto" /></HeaderBtn>
+            <HeaderBtn onClick={() => restartTerminal(tabId)} title={tr("Relancer le shell")}><RotateCw size={13} className="mx-auto" /></HeaderBtn>
           )}
           {journalVisible && (
             <>
               <label className="flex items-center gap-1 text-[10px] text-[var(--color-muted)] mr-2 cursor-pointer">
                 <input type="checkbox" checked={onlyRepo} onChange={(e) => setOnlyRepo(e.target.checked)} />
-                Ce dépôt seulement
+                {tr("Ce dépôt seulement")}
               </label>
-              <HeaderBtn onClick={clear} title="Effacer le journal"><Eraser size={13} className="mx-auto" /></HeaderBtn>
+              <HeaderBtn onClick={clear} title={tr("Effacer le journal")}><Eraser size={13} className="mx-auto" /></HeaderBtn>
             </>
           )}
           <HeaderBtn
             onClick={() => setPanel({ open: !panel.open })}
-            title={panel.open ? "Replier (Ctrl+J)" : "Déplier (Ctrl+J)"}
+            title={panel.open ? "Replier (Ctrl+J)" : tr("Déplier (Ctrl+J)")}
             expanded={panel.open}
           >
             {panel.open ? <ChevronDown size={14} className="mx-auto" /> : <ChevronUp size={14} className="mx-auto" />}
@@ -144,19 +145,19 @@ function TerminalView({ tabId, path }: { tabId: number; path: string }) {
       setError(errorMessage(e));
     }
   }, [tabId, path]);
-  if (error) return <p className="p-3 text-xs text-red-400 font-mono whitespace-pre-wrap">Terminal indisponible : {error}</p>;
+  if (error) return <p className="p-3 text-xs text-red-400 font-mono whitespace-pre-wrap">{tr("Terminal indisponible : {error}", { error })}</p>;
   return <div ref={ref} className="h-full w-full pl-2 pt-1" />;
 }
 
 const STATUS: Record<JournalEntry["status"], { icon: LucideIcon; label: string; color: string }> = {
-  running: { icon: Ellipsis, label: "en cours", color: "text-[var(--color-muted)]" },
-  success: { icon: Check, label: "réussie", color: "text-green-400" },
-  warning: { icon: TriangleAlert, label: "avertissement", color: "text-yellow-400" },
-  error: { icon: X, label: "échec", color: "text-red-400" },
+  running: { icon: Ellipsis, label: tr("en cours"), color: "text-[var(--color-muted)]" },
+  success: { icon: Check, label: tr("réussie"), color: "text-green-400" },
+  warning: { icon: TriangleAlert, label: tr("avertissement"), color: "text-yellow-400" },
+  error: { icon: X, label: tr("échec"), color: "text-red-400" },
 };
 
 function formatTime(ms: number) {
-  return new Date(ms).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return new Date(ms).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 function formatDuration(ms: number) {
@@ -186,8 +187,7 @@ function JournalView({ repo }: { repo: string | null }) {
     >
       {entries.length === 0 ? (
         <p className="text-[var(--color-muted)] italic font-sans text-xs py-2">
-          Aucune opération pour l'instant. Les actions faites dans l'application (commit, pull, push…) s'affichent
-          ici sous forme de commande git équivalente.
+          {tr("Aucune opération pour l'instant. Les actions faites dans l'application (commit, pull, push…) s'affichent ici sous forme de commande git équivalente.")}
         </p>
       ) : (
         entries.map((e) => {
@@ -203,7 +203,7 @@ function JournalView({ repo }: { repo: string | null }) {
                 )}
                 <span className={`shrink-0 w-3 self-center ${status.color}`}>
                   <status.icon size={12} strokeWidth={2.25} />
-                  <span className="sr-only">{status.label} : </span>
+                  <span className="sr-only">{status.label}{COLON}</span>
                 </span>
                 <span className="text-[var(--color-text)] truncate" title={e.command}>
                   <span className="text-[var(--color-accent-text)]">$ </span>

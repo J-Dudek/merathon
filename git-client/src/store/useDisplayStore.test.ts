@@ -14,12 +14,22 @@ describe("stepZoom", () => {
 describe("sanitize", () => {
   it("keeps valid settings and repairs invalid ones", () => {
     expect(sanitize({ zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light" })).toEqual({
-      zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light", notifications: defaultNotifications,
+      zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light", language: "fr", languageChosen: false, notifications: defaultNotifications,
     });
     expect(sanitize({ zoom: 9, terminalFontSize: 100, density: "énorme", syncInterval: 7, theme: "rose" })).toEqual({
       ...defaultDisplay, terminalFontSize: 24,
     });
     expect(sanitize(null)).toEqual(defaultDisplay);
+  });
+
+  it("keeps a supported language and ignores any other", () => {
+    expect(sanitize({ language: "en" }).language).toBe("en");
+    expect(sanitize({ language: "de" }).language).toBe("fr");
+  });
+
+  it("asks for the language when settings saved by an older version have no choice", () => {
+    expect(sanitize({ zoom: 1.25, theme: "dark" }).languageChosen).toBe(false);
+    expect(sanitize({ language: "en", languageChosen: true })).toMatchObject({ language: "en", languageChosen: true });
   });
 
   it("complète les réglages de notification incomplets ou invalides", () => {

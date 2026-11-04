@@ -59,7 +59,7 @@ pub struct SshCheck {
 /// Dossier `~/.ssh`, comme dans `git/auth.rs`.
 pub fn ssh_dir() -> Result<PathBuf, String> {
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
-    home.map(|h| PathBuf::from(h).join(".ssh")).ok_or_else(|| "Dossier personnel introuvable".to_string())
+    home.map(|h| PathBuf::from(h).join(".ssh")).ok_or_else(|| tr!("Dossier personnel introuvable", "Home folder not found"))
 }
 
 fn machine_name() -> String {
@@ -103,21 +103,21 @@ pub fn all_keys(dir: &Path) -> Vec<SshKeyInfo> {
 /// Clé existante désignée par son nom de fichier dans `~/.ssh` : aucun chemin arbitraire n'est accepté.
 pub fn existing_key(dir: &Path, name: &str) -> Result<SshKeyInfo, String> {
     if !is_plain_file_name(name) {
-        return Err(format!("Clé SSH refusée : {name}"));
+        return Err(tr!("Clé SSH refusée : {name}", "SSH key refused: {name}"));
     }
-    key_info(dir, name).ok_or_else(|| format!("Clé SSH introuvable ou sans fichier .pub : {name}"))
+    key_info(dir, name).ok_or_else(|| tr!("Clé SSH introuvable ou sans fichier .pub : {name}", "SSH key not found or without a .pub file: {name}"))
 }
 
 /// Crée la clé `name` (`id_ed25519` par défaut) et son `.pub` sans jamais écraser un fichier existant.
 pub fn create_key(dir: &Path, name: Option<&str>, comment: &str, passphrase: Option<&str>) -> Result<SshKeyInfo, String> {
     let name = name.unwrap_or(NEW_KEY);
     if !is_plain_file_name(name) || name.ends_with(".pub") {
-        return Err(format!("Nom de clé SSH refusé : {name}"));
+        return Err(tr!("Nom de clé SSH refusé : {name}", "SSH key name refused: {name}"));
     }
     let private_path = dir.join(name);
     let public_path = dir.join(format!("{name}.pub"));
     if private_path.exists() || public_path.exists() {
-        return Err(format!("{} existe déjà : elle n'est jamais écrasée", private_path.display()));
+        return Err(tr!("{} existe déjà : elle n'est jamais écrasée", "{} already exists: it is never overwritten", private_path.display()));
     }
     create_private_dir(dir)?;
 
@@ -135,7 +135,7 @@ pub fn create_key(dir: &Path, name: Option<&str>, comment: &str, passphrase: Opt
         let _ = fs::remove_file(&private_path);
         return Err(e);
     }
-    key_info(dir, name).ok_or_else(|| "Clé créée mais illisible".to_string())
+    key_info(dir, name).ok_or_else(|| tr!("Clé créée mais illisible", "Key created but unreadable"))
 }
 
 fn create_private_dir(dir: &Path) -> Result<(), String> {
@@ -162,14 +162,14 @@ fn write_new(path: &Path, content: &[u8], mode: u32) -> Result<(), String> {
     }
     #[cfg(not(unix))]
     let _ = mode;
-    let mut file = options.open(path).map_err(|e| format!("{} : {e}", path.display()))?;
+    let mut file = options.open(path).map_err(|e| tr!("{} : {e}", "{}: {e}", path.display()))?;
     file.write_all(content).map_err(|e| e.to_string())
 }
 
 /// Hôte d'un compte, tel qu'il sera passé à `ssh` : il ne doit pas pouvoir être pris pour une option.
 fn valid_host(host: &str) -> Result<(), String> {
     let ok = !host.is_empty() && !host.starts_with('-') && host.chars().all(|c| c.is_ascii_alphanumeric() || ".-:".contains(c));
-    if ok { Ok(()) } else { Err(format!("Hôte SSH invalide : {host}")) }
+    if ok { Ok(()) } else { Err(tr!("Hôte SSH invalide : {host}", "Invalid SSH host: {host}")) }
 }
 
 fn command(program: &str) -> Command {
@@ -187,9 +187,9 @@ fn command(program: &str) -> Command {
 fn run(mut cmd: Command, program: &str) -> Result<Output, String> {
     cmd.output().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
-            format!("{program} est introuvable : installe OpenSSH pour vérifier la connexion")
+            tr!("{program} est introuvable : installe OpenSSH pour vérifier la connexion", "{program} not found: install OpenSSH to check the connection")
         } else {
-            format!("{program} : {e}")
+            tr!("{program} : {e}", "{program}: {e}")
         }
     })
 }
@@ -215,7 +215,7 @@ fn parse_scan(host: &str, output: &str) -> Result<(String, String), String> {
         let key = PublicKey::from_openssh(&format!("{kind} {data}")).map_err(|e| e.to_string())?;
         return Ok((format!("{name} {kind} {data}"), key.fingerprint(HashAlg::Sha256).to_string()));
     }
-    Err(format!("{host} ne répond pas en SSH sur le port 22, ou ne propose pas de clé ed25519"))
+    Err(tr!("{host} ne répond pas en SSH sur le port 22, ou ne propose pas de clé ed25519", "{host} does not answer over SSH on port 22, or does not offer an ed25519 key"))
 }
 
 fn scan(host: &str) -> Result<(String, String), String> {
@@ -229,8 +229,7 @@ fn scan(host: &str) -> Result<(String, String), String> {
 fn matches_published(host: &str, fingerprint: &str) -> Result<Option<bool>, String> {
     let Some((_, expected)) = PUBLISHED_FINGERPRINTS.iter().find(|(h, _)| *h == host) else { return Ok(None) };
     if *expected != fingerprint {
-        return Err(format!(
-            "L'empreinte reçue de {host} ({fingerprint}) ne correspond pas à celle publiée ({expected}) : la connexion est peut-être interceptée. Configuration interrompue."
+        return Err(tr!("L'empreinte reçue de {host} ({fingerprint}) ne correspond pas à celle publiée ({expected}) : la connexion est peut-être interceptée. Configuration interrompue.", "The fingerprint received from {host} ({fingerprint}) does not match the published one ({expected}): the connection may be intercepted. Setup stopped."
         ));
     }
     Ok(Some(true))
@@ -251,7 +250,7 @@ pub fn trust_host(dir: &Path, host: &str, fingerprint: &str) -> Result<(), Strin
     valid_host(host)?;
     let (line, current) = scan(host)?;
     if current != fingerprint {
-        return Err(format!("L'empreinte de {host} a changé pendant la configuration ({current}) : recommence et vérifie-la."));
+        return Err(tr!("L'empreinte de {host} a changé pendant la configuration ({current}) : recommence et vérifie-la.", "The fingerprint of {host} changed during setup ({current}): start again and check it."));
     }
     matches_published(host, &current)?;
     add_known_host(dir, &line)
@@ -282,7 +281,8 @@ fn parse_check(output: &str) -> SshCheck {
     };
     let username = between("Hi ", '!').or_else(|| between("Welcome to GitLab, ", '!'));
     let authenticated = username.is_some() || text.contains("successfully authenticated");
-    let message = text.lines().rfind(|l| !l.trim().is_empty()).unwrap_or("Aucune réponse du serveur").trim().to_string();
+    let no_response = tr!("Aucune réponse du serveur", "No response from the server");
+    let message = text.lines().rfind(|l| !l.trim().is_empty()).unwrap_or(&no_response).trim().to_string();
     SshCheck { authenticated, username, message }
 }
 

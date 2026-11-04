@@ -1,6 +1,7 @@
 import type { RebaseMode, RebaseStep } from "../ipc/commands";
 import type { TodoCommit } from "../types/git";
 import { appendThreadTrailers, extractThreadTrailers, mergeThreadLinks } from "./threadTrailers";
+import { tr } from "../i18n";
 
 export interface SquashPlan {
   steps: RebaseStep[];
@@ -18,9 +19,9 @@ export interface SquashPlan {
 export function squashPlan(todo: TodoCommit[], selected: string[], message: string): SquashPlan | string {
   const wanted = new Set(selected);
   const commits = todo.filter((c) => wanted.has(c.hash));
-  if (wanted.size < 2) return "Sélectionne au moins deux commits";
-  if (commits.length !== wanted.size) return "Les commits sélectionnés doivent tous appartenir à la branche courante";
-  if (commits.some((c) => c.is_merge)) return "Un commit de merge ne peut pas être squashé";
+  if (wanted.size < 2) return tr("Sélectionne au moins deux commits");
+  if (commits.length !== wanted.size) return tr("Les commits sélectionnés doivent tous appartenir à la branche courante");
+  if (commits.some((c) => c.is_merge)) return tr("Un commit de merge ne peut pas être squashé");
 
   const [target, ...rest] = commits;
   const last = rest[rest.length - 1];
@@ -36,7 +37,7 @@ export function squashPlan(todo: TodoCommit[], selected: string[], message: stri
   if (todo.some((c) => c.is_merge)) {
     // Merges conservés : l'ordre ne bouge pas, les commits sélectionnés doivent donc se suivre.
     if (rest.some((c) => !wanted.has(c.parents[0]))) {
-      return "L'historique contient des merges : les commits sélectionnés doivent se suivre";
+      return tr("L'historique contient des merges : les commits sélectionnés doivent se suivre");
     }
     return { mode: "preserve", commits, steps: todo.map((c) => (wanted.has(c.hash) && c !== target ? squash(c) : pick(c))) };
   }

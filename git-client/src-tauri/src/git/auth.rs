@@ -94,8 +94,7 @@ pub fn remote_callbacks<'a>(creds: Option<Credentials>, location: &Path) -> Remo
         attempt.set(n + 1);
 
         let Some(candidate) = list.get(n) else {
-            return Err(git2::Error::from_str(&format!(
-                "Authentification refusée pour {url} : ajoute un compte avec un token valide pour cet hôte, ou configure une clé SSH"
+            return Err(git2::Error::from_str(&tr!("Authentification refusée pour {url} : ajoute un compte avec un token valide pour cet hôte, ou configure une clé SSH", "Authentication refused for {url}: add an account with a valid token for this host, or set up an SSH key"
             )));
         };
 

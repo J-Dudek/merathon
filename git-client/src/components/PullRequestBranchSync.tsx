@@ -7,10 +7,10 @@ import {
 } from "../ipc/commands";
 import { runGit } from "../lib/actions";
 import { replyToPushedThreads } from "../lib/threadReplies";
-import { plural } from "../lib/strings";
 import type { LocalBranchUpdate, PrRebase } from "../types/git";
 import type { PullRequestDetails } from "../types/forge";
 import { Button } from "./Modal";
+import { tr, trn } from "../i18n";
 
 type SyncState =
   | { kind: "checking" }
@@ -25,14 +25,14 @@ const short = (hash: string) => hash.slice(0, 7);
 
 /** Message après le force push, selon ce qui est arrivé à la branche locale du même nom. */
 function pushedMessage(branch: string, local: LocalBranchUpdate): string {
-  const done = `${branch} rebasée et poussée`;
+  const done = tr("{branch} rebasée et poussée", { branch });
   switch (local) {
     case "updated":
-      return `${done} ; la branche locale a suivi.`;
+      return tr("{done} ; la branche locale a suivi.", { done });
     case "diverged":
-      return `${done}. La branche locale ${branch} contient d'autres commits : elle n'a pas été modifiée.`;
+      return tr("{done}. La branche locale {branch} contient d'autres commits : elle n'a pas été modifiée.", { done, branch });
     case "dirty":
-      return `${done}. La branche locale ${branch} est extraite avec des modifications qui seraient écrasées : elle n'a pas été mise à jour.`;
+      return tr("{done}. La branche locale {branch} est extraite avec des modifications qui seraient écrasées : elle n'a pas été mise à jour.", { done, branch });
     default:
       return done;
   }
@@ -71,15 +71,15 @@ export function PullRequestBranchSync({ details, remoteName, onCheckout, onPushe
         if (d.head !== details.headSha) {
           setState({
             kind: "unavailable",
-            reason: `${tracked} (${short(d.head)}) ne correspond pas à la tête de la PR (${short(details.headSha)}) : ` +
-              "branche d'un fork, ou modifiée depuis le chargement de la PR.",
+            reason: tr("{tracked} ({short}) ne correspond pas à la tête de la PR ({short2}) : ", { tracked, short: short(d.head), short2: short(details.headSha) }) +
+              tr("branche d'un fork, ou modifiée depuis le chargement de la PR."),
           });
         } else {
           setState(d.behind > 0 ? { kind: "behind", behind: d.behind, head: d.head } : { kind: "up_to_date" });
         }
       } catch {
         if (!cancelled) {
-          setState({ kind: "unavailable", reason: `${tracked} est introuvable dans le dépôt local (branche d'un fork ?).` });
+          setState({ kind: "unavailable", reason: tr("{tracked} est introuvable dans le dépôt local (branche d'un fork ?).", { tracked }) });
         }
       }
     })();
@@ -119,14 +119,14 @@ export function PullRequestBranchSync({ details, remoteName, onCheckout, onPushe
 
   async function forcePush(head: string, result: PrRebase) {
     const ok = await confirmAction(
-      `Forcer le push de ${sourceBranch} ?`,
-      `La branche distante est remplacée par la version rebasée sur ${targetBranch} (${plural(result.commits, "commit")}, historique linéaire).\n` +
-        "Le push est annulé si quelqu'un a poussé sur la branche entre-temps.",
+      tr("Forcer le push de {sourceBranch} ?", { sourceBranch }),
+      tr("La branche distante est remplacée par la version rebasée sur {targetBranch} ({count}, historique linéaire).\n", { targetBranch, count: trn(result.commits, "{n} commit", "{n} commits") }) +
+        tr("Le push est annulé si quelqu'un a poussé sur la branche entre-temps."),
       true,
     );
     if (!ok) return;
     setPending("push");
-    const pushed = await runGit(() => forcePushPullRequest(path, remoteName, sourceBranch, head), { busy: `Push de ${sourceBranch}…` });
+    const pushed = await runGit(() => forcePushPullRequest(path, remoteName, sourceBranch, head), { busy: tr("Push de {sourceBranch}…", { sourceBranch }) });
     setPending(null);
     if (!pushed) return;
     prepared.current = null;
@@ -140,25 +140,25 @@ export function PullRequestBranchSync({ details, remoteName, onCheckout, onPushe
 
   return (
     <section className="flex flex-col gap-2 rounded border border-overlay/10 p-3 text-xs">
-      {state.kind === "checking" && <p className="text-[var(--color-muted)]">Vérification du retard sur {targetBranch}…</p>}
+      {state.kind === "checking" && <p className="text-[var(--color-muted)]">{tr("Vérification du retard sur {targetBranch}…", { targetBranch })}</p>}
 
       {state.kind === "unavailable" && (
-        <p className="text-[var(--color-muted)]">Retard sur {targetBranch} non vérifiable : {state.reason}</p>
+        <p className="text-[var(--color-muted)]">{tr("Retard sur {targetBranch} non vérifiable : {reason}", { targetBranch, reason: state.reason })}</p>
       )}
 
-      {state.kind === "up_to_date" && <p className="text-green-300"><Check size={12} className="inline mr-1 -mt-0.5" />À jour avec {targetBranch}</p>}
+      {state.kind === "up_to_date" && <p className="text-green-300"><Check size={12} className="inline mr-1 -mt-0.5" />{tr("À jour avec {targetBranch}", { targetBranch })}</p>}
 
       {state.kind === "behind" && (
         <div className="flex items-center gap-3">
           <p className="flex-1 text-amber-300">
-            En retard de {plural(state.behind, "commit")} sur {targetBranch}.
+            {tr("En retard de {count} sur {targetBranch}.", { count: trn(state.behind, "{n} commit", "{n} commits"), targetBranch })}
           </p>
           <Button
             onClick={() => rebase(state.head, state.behind)}
             disabled={!!pending}
-            title={`Rejoue les commits de ${sourceBranch} au-dessus de ${base}, sans toucher à la copie de travail`}
+            title={tr("Rejoue les commits de {sourceBranch} au-dessus de {base}, sans toucher à la copie de travail", { sourceBranch, base })}
           >
-            {pending === "rebase" ? "Rebase…" : `Rebaser sur ${targetBranch}`}
+            {pending === "rebase" ? tr("Rebase…") : tr("Rebaser sur {targetBranch}", { targetBranch })}
           </Button>
         </div>
       )}
@@ -166,12 +166,12 @@ export function PullRequestBranchSync({ details, remoteName, onCheckout, onPushe
       {state.kind === "conflict" && (
         <div className="flex items-start gap-3">
           <div className="flex-1 flex flex-col gap-1">
-            <p className="text-red-300 font-semibold">Rebase auto impossible, merci de checkout la branche.</p>
+            <p className="text-red-300 font-semibold">{tr("Rebase auto impossible, merci de checkout la branche.")}</p>
             <p className="text-[var(--color-muted)]">
-              En retard de {plural(state.behind, "commit")} sur {targetBranch}. Conflits dans :{" "}
+              {tr("En retard de {count} sur {targetBranch}. Conflits dans :", { count: trn(state.behind, "{n} commit", "{n} commits"), targetBranch })}
               <span className="font-mono text-[var(--color-text)]">{state.files.join(", ")}</span>
             </p>
-            <p className="text-[var(--color-muted)]">Rien n'a été modifié. Rebase la branche en local, résous les conflits, puis pousse-la.</p>
+            <p className="text-[var(--color-muted)]">{tr("Rien n'a été modifié. Rebase la branche en local, résous les conflits, puis pousse-la.")}</p>
           </div>
           {onCheckout && <Button onClick={onCheckout}>Checkout</Button>}
         </div>
@@ -181,22 +181,22 @@ export function PullRequestBranchSync({ details, remoteName, onCheckout, onPushe
         <div className="flex items-center gap-3">
           <div className="flex-1 flex flex-col gap-0.5">
             <p className="text-green-300">
-              Rebase réussi : {plural(state.result.commits, "commit")} rejoué{state.result.commits > 1 ? "s" : ""} sur {targetBranch}.
+              {trn(state.result.commits, "Rebase réussi : {n} commit rejoué sur {targetBranch}.", "Rebase réussi : {n} commits rejoués sur {targetBranch}.", { targetBranch })}
             </p>
             <p className="text-[var(--color-muted)]">
-              {state.result.skipped > 0 && `${plural(state.result.skipped, "commit")} retiré${state.result.skipped > 1 ? "s" : ""} (merge ou déjà dans la cible). `}
-              Pas encore poussé : <span className="font-mono">{short(state.head)}</span> →{" "}
+              {state.result.skipped > 0 && `${trn(state.result.skipped, "{n} commit retiré (merge ou déjà dans la cible).", "{n} commits retirés (merge ou déjà dans la cible).")} `}
+              {tr("Pas encore poussé :")}{" "}<span className="font-mono">{short(state.head)}</span> →{" "}
               <span className="font-mono">{short(state.result.new_head ?? "")}</span>
             </p>
           </div>
-          <Button onClick={cancel} disabled={!!pending}>Annuler</Button>
+          <Button onClick={cancel} disabled={!!pending}>{tr("Annuler")}</Button>
           <Button
             variant="danger"
             onClick={() => forcePush(state.head, state.result)}
             disabled={!!pending}
             title={`git push --force-with-lease=${sourceBranch}:${short(state.head)} ${remoteName} ${sourceBranch}`}
           >
-            {pending === "push" ? "Push…" : "Force push"}
+            {pending === "push" ? tr("Push…") : "Force push"}
           </Button>
         </div>
       )}

@@ -4,8 +4,3 @@ export function trimEndChars(value: string, chars = "/"): string {
   while (end > 0 && chars.includes(value[end - 1])) end--;
   return value.slice(0, end);
 }
-
-/** « 1 fichier », « 3 fichiers ». */
-export function plural(count: number, word: string): string {
-  return `${count} ${word}${count > 1 ? "s" : ""}`;
-}

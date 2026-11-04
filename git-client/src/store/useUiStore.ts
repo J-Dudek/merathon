@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { tr } from "../i18n";
 
 export interface Toast {
   id: number;
@@ -252,7 +253,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
 /** Fenêtre de confirmation simple. */
 export async function confirmAction(title: string, message?: string, danger = false): Promise<boolean> {
-  const result = await useUiStore.getState().ask({ title, message, danger, confirmLabel: danger ? "Confirmer" : "OK" });
+  const result = await useUiStore.getState().ask({ title, message, danger, confirmLabel: danger ? tr("Confirmer") : "OK" });
   return result !== null;
 }
 

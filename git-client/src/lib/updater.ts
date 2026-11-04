@@ -3,11 +3,12 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useUiStore, type DialogSection } from "../store/useUiStore";
 import { errorMessage } from "./actions";
+import { tr, percent } from "../i18n";
 
 /** Libellé de progression du téléchargement (pourcentage connu seulement si le serveur annonce la taille). */
 export function downloadLabel(received: number, total: number): string {
-  const base = "Téléchargement de la mise à jour…";
-  return total > 0 ? `${base} ${Math.min(100, Math.round((received * 100) / total))} %` : base;
+  const base = tr("Téléchargement de la mise à jour…");
+  return total > 0 ? `${base} ${percent(Math.min(100, Math.round((received * 100) / total)))}` : base;
 }
 
 /**
@@ -104,19 +105,19 @@ export async function checkForUpdates(manual = false) {
   try {
     update = await check();
   } catch (e) {
-    if (manual) ui.notify("error", `Impossible de vérifier les mises à jour : ${errorMessage(e)}`);
+    if (manual) ui.notify("error", tr("Impossible de vérifier les mises à jour : {error}", { error: errorMessage(e) }));
     return;
   }
   if (!update) {
-    if (manual) ui.notify("success", "Merathon est à jour");
+    if (manual) ui.notify("success", tr("Merathon est à jour"));
     return;
   }
 
   const answer = await ui.ask({
-    title: `Merathon ${update.version} est disponible`,
-    message: `Version installée : ${update.currentVersion}. L'application redémarrera après l'installation.`,
+    title: tr("Merathon {version} est disponible", { version: update.version }),
+    message: tr("Version installée : {currentVersion}. L'application redémarrera après l'installation.", { currentVersion: update.currentVersion }),
     sections: releaseNoteSections(update.body, update.currentVersion),
-    confirmLabel: "Installer et redémarrer",
+    confirmLabel: tr("Installer et redémarrer"),
   });
   if (!answer) return;
 
@@ -133,7 +134,7 @@ export async function checkForUpdates(manual = false) {
     });
     await relaunch();
   } catch (e) {
-    ui.notify("error", `Échec de la mise à jour : ${errorMessage(e)}`);
+    ui.notify("error", tr("Échec de la mise à jour : {error}", { error: errorMessage(e) }));
   } finally {
     ui.setBusy(null);
   }

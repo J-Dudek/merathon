@@ -155,7 +155,7 @@ pub fn force_push_pull_request(
     let source = rebased_ref(branch);
     let new_head = repo
         .refname_to_id(&source)
-        .map_err(|_| GitError::Other("Aucun rebase préparé pour cette branche : relance le rebase".into()))?;
+        .map_err(|_| GitError::Other(tr!("Aucun rebase préparé pour cette branche : relance le rebase", "No rebase prepared for this branch: run the rebase again")))?;
     let expected = Oid::from_str(expected)?;
     let target = format!("refs/heads/{branch}");
 
@@ -168,14 +168,14 @@ pub fn force_push_pull_request(
         for update in updates {
             if update.dst_refname().ok() == Some(target.as_str()) && update.src() != expected {
                 stale.set(Some(update.src()));
-                return Err(git2::Error::from_str("la branche distante a changé"));
+                return Err(git2::Error::from_str(&tr!("la branche distante a changé", "the remote branch has changed")));
             }
         }
         Ok(())
     });
     callbacks.push_update_reference(|refname, status| {
         if let Some(msg) = status {
-            rejected.borrow_mut().push(format!("{refname} : {msg}"));
+            rejected.borrow_mut().push(tr!("{refname} : {msg}", "{refname}: {msg}"));
         }
         Ok(())
     });
@@ -185,7 +185,7 @@ pub fn force_push_pull_request(
     drop(opts);
 
     if let Some(current) = stale.get() {
-        let current = if current.is_zero() { "supprimée".to_string() } else { format!("à {}", &current.to_string()[..7]) };
+        let current = if current.is_zero() { tr!("supprimée", "deleted") } else { tr!("à {}", "at {}", &current.to_string()[..7]) };
         return Err(GitError::Other(format!(
             "Push annulé : la branche distante {branch} a changé depuis le rebase (elle est maintenant {current}). \
              Actualise la PR puis relance le rebase."
@@ -194,7 +194,7 @@ pub fn force_push_pull_request(
     pushed?;
     let rejected = rejected.into_inner();
     if !rejected.is_empty() {
-        return Err(GitError::Other(format!("Push refusé par le serveur ({})", rejected.join(", "))));
+        return Err(GitError::Other(tr!("Push refusé par le serveur ({})", "Push refused by the server ({})", rejected.join(", "))));
     }
 
     repo.reference(&format!("refs/remotes/{remote_name}/{branch}"), new_head, true, "merathon: force push de la PR")?;

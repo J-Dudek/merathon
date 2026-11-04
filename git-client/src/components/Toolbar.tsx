@@ -17,12 +17,13 @@ import { useThemeStore } from "../lib/theme";
 import { useDisplayStore, type ThemePreference } from "../store/useDisplayStore";
 import logoMark from "../assets/logo-mark.webp";
 import type { RepoInfo } from "../types/git";
+import { tr, trn } from "../i18n";
 
 /** Position courante affichée dans la barre d'outils. */
 function headLabel(info: RepoInfo): string {
   const rebase = info.interactive_rebase;
-  if (rebase) return `Rebase interactif ${rebase.step}/${rebase.total}`;
-  if (info.head_detached) return `HEAD détaché @ ${info.head_hash?.slice(0, 7)}`;
+  if (rebase) return tr("Rebase interactif {step}/{total}", { step: rebase.step, total: rebase.total });
+  if (info.head_detached) return tr("HEAD détaché @ {head_hash}", { head_hash: info.head_hash?.slice(0, 7) });
   return info.head_branch ?? "";
 }
 
@@ -49,87 +50,87 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
   function repoMenu(): MenuEntry[] {
     const others = recent.filter((p) => p !== repoPath).slice(0, 6);
     return [
-      { header: "Dépôt" },
-      { label: "Ouvrir…", icon: FolderOpen, shortcut: "Ctrl+O", action: chooseAndOpenRepo },
-      { label: "Cloner…", icon: CloudDownload, action: onClone },
-      { label: "Initialiser…", icon: FolderPlus, action: chooseAndInitRepo },
+      { header: tr("Dépôt") },
+      { label: tr("Ouvrir…"), icon: FolderOpen, shortcut: "Ctrl+O", action: chooseAndOpenRepo },
+      { label: tr("Cloner…"), icon: CloudDownload, action: onClone },
+      { label: tr("Initialiser…"), icon: FolderPlus, action: chooseAndInitRepo },
       ...(others.length > 0
         ? [
-            { header: "Récents" },
+            { header: tr("Récents") },
             ...others.map((p) => ({ label: p.split(/[\\/]/).pop() ?? p, hint: p, icon: History, action: () => openRepoAt(p) })),
           ]
         : []),
       "separator",
-      { label: "Nouvel onglet", icon: SquarePlus, shortcut: "Ctrl+T", action: newTab },
-      { label: "Nouvelle fenêtre", icon: AppWindow, shortcut: "Ctrl+Maj+N", action: () => openNewWindow() },
+      { label: tr("Nouvel onglet"), icon: SquarePlus, shortcut: "Ctrl+T", action: newTab },
+      { label: tr("Nouvelle fenêtre"), icon: AppWindow, shortcut: "Ctrl+Maj+N", action: () => openNewWindow() },
       ...(repoPath || tabCount > 1
-        ? [{ label: "Fermer l'onglet", icon: X, shortcut: "Ctrl+W", action: () => closeTab(activeTab) }]
+        ? [{ label: tr("Fermer l'onglet"), icon: X, shortcut: "Ctrl+W", action: () => closeTab(activeTab) }]
         : []),
       "separator",
-      { label: "Préférences…", icon: Settings, shortcut: "Ctrl+,", action: () => setPreferencesOpen(true) },
-      { label: "Rechercher des mises à jour…", icon: RefreshCw, action: () => checkForUpdates(true) },
-      { label: "Mémo Git", icon: BookOpen, action: () => setMemoOpen(true) },
-      { label: "À propos de Merathon", icon: Info, action: () => setPreferencesOpen(true, "about") },
+      { label: tr("Préférences…"), icon: Settings, shortcut: "Ctrl+,", action: () => setPreferencesOpen(true) },
+      { label: tr("Rechercher des mises à jour…"), icon: RefreshCw, action: () => checkForUpdates(true) },
+      { label: tr("Mémo Git"), icon: BookOpen, action: () => setMemoOpen(true) },
+      { label: tr("À propos de Merathon"), icon: Info, action: () => setPreferencesOpen(true, "about") },
     ];
   }
 
   async function doPull(rebase: boolean) {
     if (!repoPath) return;
-    const result = await runGit(() => pull(repoPath, rebase), { busy: rebase ? "Pull (rebase)…" : "Pull…" });
-    reportMerge(result, "Pull terminé");
+    const result = await runGit(() => pull(repoPath, rebase), { busy: rebase ? "Pull (rebase)…" : tr("Pull…") });
+    reportMerge(result, tr("Pull terminé"));
   }
 
   async function doPush(force = false) {
     if (!repoPath || !info?.head_branch) return;
     if (force) {
       const ok = await ask({
-        title: "Push forcé",
-        message: `Écraser la branche distante de « ${info.head_branch} » avec la version locale ?\nLes commits distants absents en local seront perdus.`,
+        title: tr("Push forcé"),
+        message: tr("Écraser la branche distante de « {head_branch} » avec la version locale ?\nLes commits distants absents en local seront perdus.", { head_branch: info.head_branch }),
         danger: true,
-        confirmLabel: "Forcer le push",
+        confirmLabel: tr("Forcer le push"),
       });
       if (!ok) return;
     }
     await pushBranch(repoPath, info.head_branch, {
       force,
-      success: head?.upstream ? `Push de ${info.head_branch} terminé` : `${info.head_branch} publiée sur le remote`,
+      success: head?.upstream ? tr("Push de {head_branch} terminé", { head_branch: info.head_branch }) : tr("{head_branch} publiée sur le remote", { head_branch: info.head_branch }),
     });
   }
 
   async function doFetch() {
     if (!repoPath) return;
-    await runGit(() => fetchRemote(repoPath), { busy: "Fetch…", success: "Fetch terminé" });
+    await runGit(() => fetchRemote(repoPath), { busy: tr("Fetch…"), success: tr("Fetch terminé") });
   }
 
   async function doBranch() {
     if (!repoPath) return;
     const result = await ask({
-      title: "Nouvelle branche",
-      message: `Depuis ${info?.head_branch ?? "HEAD"}`,
-      input: { placeholder: "nom-de-branche" },
-      checkbox: { label: "Basculer sur la nouvelle branche", initial: true },
-      confirmLabel: "Créer",
+      title: tr("Nouvelle branche"),
+      message: tr("Depuis {value}", { value: info?.head_branch ?? "HEAD" }),
+      input: { placeholder: tr("nom-de-branche") },
+      checkbox: { label: tr("Basculer sur la nouvelle branche"), initial: true },
+      confirmLabel: tr("Créer"),
     });
     const name = result?.value.trim();
     if (!name) return;
-    await runGit(() => createBranch(repoPath, name, "HEAD", result!.checked), { success: `Branche ${name} créée` });
+    await runGit(() => createBranch(repoPath, name, "HEAD", result!.checked), { success: tr("Branche {name} créée", { name }) });
   }
 
   async function doStash() {
     if (!repoPath) return;
     const result = await ask({
-      title: "Mettre de côté (stash)",
+      title: tr("Mettre de côté (stash)"),
       input: { placeholder: "Message (optionnel)" },
-      checkbox: { label: "Inclure les fichiers non suivis", initial: true },
+      checkbox: { label: tr("Inclure les fichiers non suivis"), initial: true },
       confirmLabel: "Stash",
     });
     if (!result) return;
-    await runGit(() => stashSave(repoPath, result.value.trim() || null, result.checked), { success: "Modifications mises de côté" });
+    await runGit(() => stashSave(repoPath, result.value.trim() || null, result.checked), { success: tr("Modifications mises de côté") });
   }
 
   async function doPop() {
     if (!repoPath || stashes.length === 0) return;
-    await runGit(() => stashApply(repoPath, 0, true), { success: "Stash réappliqué" });
+    await runGit(() => stashApply(repoPath, 0, true), { success: tr("Stash réappliqué") });
   }
 
   const disabled = !repoPath || !!busy;
@@ -139,16 +140,16 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
       {/* Titre de niveau 1 pour les technologies d'assistance : les panneaux ont des titres de niveau 2. */}
       <h1 className="sr-only">Merathon{repoName ? ` — ${repoName}` : ""}</h1>
       <Tooltip
-        title="Ouvrir le menu du dépôt"
+        title={tr("Ouvrir le menu du dépôt")}
         lines={[
-          "Ouvrir, cloner, dépôts récents, onglets, préférences…",
+          tr("Ouvrir, cloner, dépôts récents, onglets, préférences…"),
           ...(repoPath ? [<span className="font-mono">{repoPath}</span>] : []),
         ]}
       >
         <button
           className="flex items-center gap-2 px-2 py-1 rounded hover:bg-overlay/10 max-w-60 min-w-0"
           onClick={(e) => openMenu(e, repoMenu())}
-          aria-label={repoPath ? `Ouvrir le menu du dépôt (${repoPath})` : "Ouvrir le menu du dépôt"}
+          aria-label={repoPath ? tr("Ouvrir le menu du dépôt ({repoPath})", { repoPath }) : tr("Ouvrir le menu du dépôt")}
           aria-haspopup="menu"
         >
           <img
@@ -164,22 +165,22 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
         </button>
       </Tooltip>
       {info && (
-        <span className="text-xs font-mono text-[var(--color-accent-text)] truncate max-w-48" title="Branche courante">
+        <span className="text-xs font-mono text-[var(--color-accent-text)] truncate max-w-48" title={tr("Branche courante")}>
           {!info.interactive_rebase && !info.head_detached && <GitBranch size={12} className="inline mr-1 -mt-0.5" />}
-          <span className="sr-only">Branche courante : </span>
+          <span className="sr-only">{tr("Branche courante :")}{" "}</span>
           {headLabel(info)}
         </span>
       )}
       {repoPath && (
         <Tooltip
-          title={syncing ? "Synchronisation en cours…" : "Synchroniser maintenant"}
-          lines={["Fetch de chaque dépôt ouvert et actualisation de ses PR / MR"]}
+          title={syncing ? tr("Synchronisation en cours…") : tr("Synchroniser maintenant")}
+          lines={[tr("Fetch de chaque dépôt ouvert et actualisation de ses PR / MR")]}
         >
           <button
             className="p-1 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10 disabled:opacity-40 disabled:hover:bg-transparent"
             onClick={() => void syncOpenRepos()}
             disabled={syncing || !!busy}
-            aria-label="Synchroniser les dépôts ouverts"
+            aria-label={tr("Synchroniser les dépôts ouverts")}
           >
             <RefreshCw size={13} strokeWidth={1.75} className={syncing ? "animate-spin" : ""} />
           </button>
@@ -192,11 +193,11 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
         label="Pull"
         icon={ArrowDown}
         badge={head?.behind}
-        badgeLabel={(n) => `${n} commit${n > 1 ? "s" : ""} à récupérer`}
+        badgeLabel={(n) => trn(n, "{n} commit à récupérer", "{n} commits à récupérer")}
         disabled={disabled || !head}
         onClick={() => doPull(false)}
         onMenu={(e) => openMenu(e, [
-          { label: "Pull (fast-forward si possible, sinon merge)", action: () => doPull(false) },
+          { label: tr("Pull (fast-forward si possible, sinon merge)"), action: () => doPull(false) },
           { label: "Pull (rebase)", action: () => doPull(true) },
         ])}
       />
@@ -204,18 +205,18 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
         label="Push"
         icon={ArrowUp}
         badge={head?.ahead}
-        badgeLabel={(n) => `${n} commit${n > 1 ? "s" : ""} à envoyer`}
+        badgeLabel={(n) => trn(n, "{n} commit à envoyer", "{n} commits à envoyer")}
         disabled={disabled || !head}
         onClick={() => doPush(false)}
         onMenu={(e) => openMenu(e, [
           { label: "Push", action: () => doPush(false) },
-          { label: "Push forcé…", action: () => doPush(true), danger: true },
+          { label: tr("Push forcé…"), action: () => doPush(true), danger: true },
         ])}
       />
       <ToolBtn label="Fetch" icon={RefreshCw} disabled={disabled} onClick={doFetch} />
-      <ToolBtn label="Branche" icon={GitBranch} disabled={disabled || !info?.head_hash} onClick={doBranch} />
+      <ToolBtn label={tr("Branche")} icon={GitBranch} disabled={disabled || !info?.head_hash} onClick={doBranch} />
       <ToolBtn label="Stash" icon={Archive} disabled={disabled} onClick={doStash} />
-      <ToolBtn label="Pop" icon={ArchiveRestore} badge={stashes.length || undefined} badgeLabel={(n) => `${n} stash${n > 1 ? "es" : ""}`} disabled={disabled || stashes.length === 0} onClick={doPop} />
+      <ToolBtn label="Pop" icon={ArchiveRestore} badge={stashes.length || undefined} badgeLabel={(n) => trn(n, "{n} stash", "{n} stashes")} disabled={disabled || stashes.length === 0} onClick={doPop} />
 
       {/* Opération en cours (Fetch…, Push…) : annoncée par une zone de statut toujours présente. */}
       <span role="status" className="text-xs text-[var(--color-muted)] ml-2">{busy ?? ""}</span>
@@ -226,8 +227,8 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
         <button
           className="text-xs px-2 py-1 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
           onClick={() => openNewWindow()}
-          title="Ouvrir une nouvelle fenêtre"
-          aria-label="Ouvrir une nouvelle fenêtre"
+          title={tr("Ouvrir une nouvelle fenêtre")}
+          aria-label={tr("Ouvrir une nouvelle fenêtre")}
         >
           <AppWindow size={14} strokeWidth={1.75} />
         </button>
@@ -239,9 +240,9 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
 }
 
 const THEMES: Record<ThemePreference, { label: string; icon: LucideIcon }> = {
-  system: { label: "Système", icon: Monitor },
-  dark: { label: "Sombre", icon: Moon },
-  light: { label: "Clair", icon: Sun },
+  system: { label: tr("Système"), icon: Monitor },
+  dark: { label: tr("Sombre"), icon: Moon },
+  light: { label: tr("Clair"), icon: Sun },
 };
 
 /** Choix du thème : l'icône montre le réglage actuel, un clic ouvre la liste (aussi dans les préférences). */
@@ -250,25 +251,25 @@ function ThemeButton({ onOpen }: { onOpen: (e: React.MouseEvent, items: MenuEntr
   const update = useDisplayStore((s) => s.update);
   const shown = useThemeStore((s) => s.theme);
   const { label, icon: Icon } = THEMES[preference];
-  const resolved = shown === "dark" ? "sombre" : "clair";
+  const resolved = shown === "dark" ? tr("sombre") : tr("clair");
   const current = preference === "system" ? `${label} (${resolved})` : label;
   const items: MenuEntry[] = [
-    { header: "Thème de couleurs" },
+    { header: tr("Thème de couleurs") },
     ...(Object.keys(THEMES) as ThemePreference[]).map((value) => ({
       label: THEMES[value].label,
       icon: THEMES[value].icon,
-      hint: value === "system" ? "Suit le réglage clair / sombre du système" : undefined,
+      hint: value === "system" ? tr("Suit le réglage clair / sombre du système") : undefined,
       checked: value === preference,
       action: () => update({ theme: value }),
     })),
   ];
 
   return (
-    <Tooltip title="Ouvrir le menu du thème" lines={[`Actuel : ${current}`]} align="right">
+    <Tooltip title={tr("Ouvrir le menu du thème")} lines={[tr("Actuel : {current}", { current })]} align="right">
       <button
         className="flex items-center gap-1.5 text-xs px-2 py-1 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
         onClick={(e) => onOpen(e, items)}
-        aria-label={`Thème : ${current}. Ouvrir le menu du thème`}
+        aria-label={tr("Thème : {current}. Ouvrir le menu du thème", { current })}
         aria-haspopup="menu"
       >
         <Icon size={14} strokeWidth={1.75} />
@@ -312,7 +313,7 @@ function ToolBtn({ label, icon: Icon, badge, badgeLabel, disabled, onClick, onMe
           className="text-[9px] min-w-6 px-1 rounded-r hover:bg-overlay/10 disabled:opacity-40 text-[var(--color-muted)]"
           disabled={disabled}
           onClick={onMenu}
-          aria-label={`Options ${label}`}
+          aria-label={tr("Options {label}", { label })}
           aria-haspopup="menu"
         >
           <ChevronDown size={12} />

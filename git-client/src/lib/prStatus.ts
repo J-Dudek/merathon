@@ -1,15 +1,16 @@
 import type { PrSummary } from "../types/forge";
+import { tr } from "../i18n";
 
 /** Où en est une PR / MR que j'ai ouverte, du plus bloquant au plus avancé. */
 export type MyPrStatus = "draft" | "conflicts" | "changes_requested" | "ci_failed" | "review_pending" | "approved";
 
 export const MY_PR_STATUSES: Record<MyPrStatus, { label: string; className: string }> = {
-  draft: { label: "Brouillon", className: "border-overlay/20 text-[var(--color-muted)]" },
-  conflicts: { label: "Conflits", className: "border-red-500/50 text-red-300" },
-  changes_requested: { label: "Changements demandés", className: "border-orange-400/50 text-orange-300" },
-  ci_failed: { label: "CI en échec", className: "border-red-500/50 text-red-300" },
-  review_pending: { label: "En attente de relecture", className: "border-sky-400/40 text-sky-300" },
-  approved: { label: "Approuvée", className: "border-green-500/50 text-green-300" },
+  draft: { label: tr("Brouillon"), className: "border-overlay/20 text-[var(--color-muted)]" },
+  conflicts: { label: tr("Conflits"), className: "border-red-500/50 text-red-300" },
+  changes_requested: { label: tr("Changements demandés"), className: "border-orange-400/50 text-orange-300" },
+  ci_failed: { label: tr("CI en échec"), className: "border-red-500/50 text-red-300" },
+  review_pending: { label: tr("En attente de relecture"), className: "border-sky-400/40 text-sky-300" },
+  approved: { label: tr("Approuvée"), className: "border-green-500/50 text-green-300" },
 };
 
 const ORDER = Object.keys(MY_PR_STATUSES) as MyPrStatus[];

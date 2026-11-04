@@ -7,6 +7,7 @@ import { remoteForAccount } from "./remoteUrl";
 import { planThreadReplies, threadLinksOf, threadReplyBody, type ThreadReplyPlan } from "./threadTrailers";
 import type { ForgeClient } from "../api/forge";
 import type { ForgeAccount } from "../types/forge";
+import { tr, COLON, LIST_SEPARATOR } from "../i18n";
 
 /** Commits arrivés sur `remote/branch` par un push : `from` est l'ancienne tête distante. */
 export interface PushedRange {
@@ -40,7 +41,7 @@ async function publish(client: ForgeClient, projectPath: string, number: number,
       if (plan.hashes.length) await client.replyToThread(projectPath, number, plan.thread, threadReplyBody(plan.hashes));
       if (plan.resolve) await client.resolveThread(projectPath, number, plan.thread, true);
     } catch (e) {
-      errors.push(`${plan.thread.path} : ${errorMessage(e)}`);
+      errors.push(`${plan.thread.path}${COLON}${errorMessage(e)}`);
     }
   }
   return errors;
@@ -68,11 +69,11 @@ export async function replyToPushedThreads(path: string, range: PushedRange, prN
     const errors = await publish(client, forge.projectPath, number, plans);
     const done = plans.length - errors.length;
     const ref = forge.account.provider === "github" ? `#${number}` : `!${number}`;
-    const threads = done > 1 ? `${done} fils` : "1 fil";
-    if (done) notify("success", `${threads} de revue mis à jour sur ${ref}`);
-    if (errors.length) notify("error", `Fils de revue non mis à jour sur ${ref} : ${errors.join(" ; ")}`);
+    const threads = done > 1 ? tr("{done} fils", { done }) : "1 fil";
+    if (done) notify("success", tr("{threads} de revue mis à jour sur {ref}", { threads, ref }));
+    if (errors.length) notify("error", tr("Fils de revue non mis à jour sur {ref} : {list}", { ref, list: errors.join(LIST_SEPARATOR) }));
   } catch (e) {
-    notify("error", `Réponses aux fils de revue impossibles : ${errorMessage(e)}`);
+    notify("error", tr("Réponses aux fils de revue impossibles : {error}", { error: errorMessage(e) }));
   }
 }
 
@@ -87,7 +88,7 @@ export async function pushBranch(path: string, branch: string, opts: { force?: b
   const tracking = (name: string) => useRepoStore.getState().branches.find((b) => b.is_remote && b.name === name)?.target_hash;
   const before = remote ? tracking(`${remote}/${branch}`) : undefined;
 
-  const pushed = await runGit(() => push(path, { branch, force: opts.force }).then(() => true), { busy: "Push…", success: opts.success });
+  const pushed = await runGit(() => push(path, { branch, force: opts.force }).then(() => true), { busy: tr("Push…"), success: opts.success });
   if (!pushed || !remote || !before) return;
   const after = tracking(`${remote}/${branch}`);
   if (after) await replyToPushedThreads(path, { remote, branch, from: before, to: after });

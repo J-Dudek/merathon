@@ -77,7 +77,7 @@ pub fn url_host(url: &str) -> Option<String> {
 /// URL d'instance acceptable : HTTPS obligatoire, sauf pour la machine locale (tests, dev).
 pub fn validate_base_url(url: &str) -> Result<(), String> {
     let url = url.trim();
-    let host = url_host(url).ok_or_else(|| format!("URL d'instance invalide : {url}"))?;
+    let host = url_host(url).ok_or_else(|| tr!("URL d'instance invalide : {url}", "Invalid instance URL: {url}"))?;
     let lower = url.to_ascii_lowercase();
     if lower.starts_with("https://") {
         return Ok(());
@@ -86,8 +86,7 @@ pub fn validate_base_url(url: &str) -> Result<(), String> {
     if lower.starts_with("http://") && local {
         return Ok(());
     }
-    Err(format!(
-        "L'instance doit être en HTTPS ({url}) : en HTTP, les identifiants circuleraient en clair"
+    Err(tr!("L'instance doit être en HTTPS ({url}) : en HTTP, les identifiants circuleraient en clair", "The instance must use HTTPS ({url}): over HTTP, credentials would travel in clear text"
     ))
 }
 
@@ -135,7 +134,7 @@ impl AccountStore {
             return Ok(Vec::new());
         }
         let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&raw).map_err(|e| format!("accounts.json illisible : {e}"))
+        serde_json::from_str(&raw).map_err(|e| tr!("accounts.json illisible : {e}", "accounts.json unreadable: {e}"))
     }
 
     fn write_accounts(&self, accounts: &[Account]) -> Result<(), String> {
@@ -153,7 +152,7 @@ impl AccountStore {
             account.id = new_id();
         }
         if token.is_none() && !accounts.iter().any(|a| a.id == account.id) {
-            return Err("Un token est requis pour un nouveau compte".into());
+            return Err(tr!("Un token est requis pour un nouveau compte", "A token is required for a new account"));
         }
         let secure_storage = match token {
             Some(token) => self.store_token(&account.id, token)?,
@@ -172,7 +171,7 @@ impl AccountStore {
         self.list()?
             .into_iter()
             .find(|a| a.id == id)
-            .ok_or_else(|| "Compte introuvable".to_string())
+            .ok_or_else(|| tr!("Compte introuvable", "Account not found"))
     }
 
     fn secret_in_keyring(&self, id: &str) -> bool {
@@ -200,7 +199,7 @@ impl AccountStore {
         }
         self.read_file_tokens()
             .remove(id)
-            .ok_or_else(|| "Token introuvable pour ce compte : reconnecte-le".to_string())
+            .ok_or_else(|| tr!("Token introuvable pour ce compte : reconnecte-le", "Token not found for this account: reconnect it"))
     }
 
     /// Token d'accès utilisable. Un token OAuth expiré est renouvelé (et ré-enregistré).
@@ -213,7 +212,7 @@ impl AccountStore {
             return Ok(oauth.access_token);
         }
         let renewed = oauth::refresh(&oauth)
-            .map_err(|e| format!("Session OAuth expirée ({e}) : reconnecte le compte"))?;
+            .map_err(|e| tr!("Session OAuth expirée ({e}) : reconnecte le compte", "OAuth session expired ({e}): reconnect the account"))?;
         self.store_token(id, &serde_json::to_string(&renewed).map_err(|e| e.to_string())?)?;
         Ok(renewed.access_token)
     }

@@ -6,6 +6,7 @@ import type {
 import { PR_PAGE_SIZE } from "../types/forge";
 import { errorMessage } from "../lib/actions";
 import { uniquePrs, type ApiGet, type ApiSend } from "./github";
+import { tr, COLON } from "../i18n";
 
 // Champs lus dans les réponses de l'API GitLab (le reste est ignoré).
 interface RawUser {
@@ -110,26 +111,26 @@ interface RawJob {
 
 /** Explication de `detailed_merge_status` (https://docs.gitlab.com/api/merge_requests/#merge-status). */
 const MERGE_STATUSES: Record<string, string> = {
-  mergeable: "Prête à merger",
-  can_be_merged: "Prête à merger",
-  checking: "Vérification de la mergeabilité en cours…",
-  unchecked: "Vérification de la mergeabilité en cours…",
-  preparing: "Vérification de la mergeabilité en cours…",
-  approvals_syncing: "Synchronisation des approbations…",
-  ci_must_pass: "Le pipeline doit réussir avant le merge",
-  ci_still_running: "Pipeline en cours",
-  discussions_not_resolved: "Des discussions ne sont pas résolues",
-  draft_status: "Brouillon : à passer en « prête » avant le merge",
-  not_approved: "Approbations requises manquantes",
-  requested_changes: "Des changements ont été demandés",
-  conflict: "Conflits avec la branche cible",
-  cannot_be_merged: "Conflits avec la branche cible",
-  need_rebase: "Rebase nécessaire sur la branche cible",
-  blocked_status: "Bloquée par une autre merge request",
-  not_open: "Merge request non ouverte",
+  mergeable: tr("Prête à merger"),
+  can_be_merged: tr("Prête à merger"),
+  checking: tr("Vérification de la mergeabilité en cours…"),
+  unchecked: tr("Vérification de la mergeabilité en cours…"),
+  preparing: tr("Vérification de la mergeabilité en cours…"),
+  approvals_syncing: tr("Synchronisation des approbations…"),
+  ci_must_pass: tr("Le pipeline doit réussir avant le merge"),
+  ci_still_running: tr("Pipeline en cours"),
+  discussions_not_resolved: tr("Des discussions ne sont pas résolues"),
+  draft_status: tr("Brouillon : à passer en « prête » avant le merge"),
+  not_approved: tr("Approbations requises manquantes"),
+  requested_changes: tr("Des changements ont été demandés"),
+  conflict: tr("Conflits avec la branche cible"),
+  cannot_be_merged: tr("Conflits avec la branche cible"),
+  need_rebase: tr("Rebase nécessaire sur la branche cible"),
+  blocked_status: tr("Bloquée par une autre merge request"),
+  not_open: tr("Merge request non ouverte"),
 };
 
-const PROJECT_TEMPLATE = "Modèle du projet";
+const PROJECT_TEMPLATE = tr("Modèle du projet");
 
 const API_STATES: Record<PullRequestState, string> = { open: "opened", merged: "merged", closed: "closed", all: "all" };
 
@@ -141,7 +142,7 @@ const MR_STATES: Record<RawMergeRequest["state"], ForgePR["state"]> = {
 };
 
 export class GitLabClient {
-  constructor(private get: ApiGet, private send: ApiSend = () => Promise.reject(new Error("Écriture non disponible"))) {}
+  constructor(private get: ApiGet, private send: ApiSend = () => Promise.reject(new Error(tr("Écriture non disponible")))) {}
 
   async addSshKey(title: string, key: string): Promise<void> {
     await this.send("POST", "/user/keys", { title, key });
@@ -245,10 +246,10 @@ export class GitLabClient {
     const status = raw.detailed_merge_status ?? raw.merge_status ?? "unchecked";
     const canMerge = raw.user?.can_merge !== false;
     let mergeStatus: string;
-    if (pr.state !== "open") mergeStatus = pr.state === "merged" ? "Déjà mergée" : "Fermée";
-    else if (!canMerge) mergeStatus = "Droits insuffisants pour merger";
-    else if (raw.merge_when_pipeline_succeeds) mergeStatus = "Auto-merge programmé : merge dès que le pipeline réussit";
-    else mergeStatus = MERGE_STATUSES[status] ?? `Merge impossible (${status})`;
+    if (pr.state !== "open") mergeStatus = pr.state === "merged" ? tr("Déjà mergée") : tr("Fermée");
+    else if (!canMerge) mergeStatus = tr("Droits insuffisants pour merger");
+    else if (raw.merge_when_pipeline_succeeds) mergeStatus = tr("Auto-merge programmé : merge dès que le pipeline réussit");
+    else mergeStatus = MERGE_STATUSES[status] ?? tr("Merge impossible ({status})", { status });
 
     const squashOption = settings.squash_option ?? "default_off";
     let methods: MergeMethod[] = ["merge", "squash"];
@@ -301,7 +302,7 @@ export class GitLabClient {
 
   /** L'API REST ne permet que d'approuver ou de retirer son approbation ; un commentaire accompagne l'avis s'il y en a un. */
   async review(project: string, iid: number, event: ReviewEvent, body: string): Promise<void> {
-    if (event === "request_changes") throw new Error("La demande de changements n'est pas disponible dans l'API GitLab");
+    if (event === "request_changes") throw new Error(tr("La demande de changements n'est pas disponible dans l'API GitLab"));
     const path = `/projects/${this.encodeProject(project)}/merge_requests/${iid}`;
     await this.send("POST", `${path}/${event}`, null);
     if (body.trim()) await this.addComment(project, iid, body);
@@ -347,7 +348,7 @@ export class GitLabClient {
   /** Les trois commits de `diff_refs` situent la ligne dans la version du diff commentée. */
   async addLineComment(project: string, iid: number, ctx: ReviewContext, position: LinePosition, body: string): Promise<void> {
     const refs = ctx.diffRefs;
-    if (!refs) throw new Error("Références du diff indisponibles : recharge la merge request");
+    if (!refs) throw new Error(tr("Références du diff indisponibles : recharge la merge request"));
     await this.send("POST", `/projects/${this.encodeProject(project)}/merge_requests/${iid}/discussions`, {
       body,
       position: {
@@ -377,7 +378,7 @@ export class GitLabClient {
    * général et l'approbation. Un échec n'interrompt pas les suivants ; les brouillons non publiés sont conservés.
    */
   async submitReview(project: string, iid: number, ctx: ReviewContext, review: ReviewSubmission): Promise<SubmittedReview> {
-    if (review.verdict === "request_changes") throw new Error("La demande de changements n'est pas disponible dans l'API GitLab");
+    if (review.verdict === "request_changes") throw new Error(tr("La demande de changements n'est pas disponible dans l'API GitLab"));
     const publishedIds: string[] = [];
     const errors: string[] = [];
     for (const draft of review.comments) {
@@ -385,15 +386,15 @@ export class GitLabClient {
         await this.addLineComment(project, iid, ctx, draft.position, draft.body);
         publishedIds.push(draft.id);
       } catch (e) {
-        errors.push(`${draft.position.path}:${draft.position.line} : ${errorMessage(e)}`);
+        errors.push(`${draft.position.path}:${draft.position.line}${COLON}${errorMessage(e)}`);
       }
     }
     if (review.body.trim()) {
-      await this.addComment(project, iid, review.body).catch((e) => errors.push(`commentaire : ${errorMessage(e)}`));
+      await this.addComment(project, iid, review.body).catch((e) => errors.push(tr("commentaire : {error}", { error: errorMessage(e) })));
     }
     if (review.verdict === "approve") {
       await this.send("POST", `/projects/${this.encodeProject(project)}/merge_requests/${iid}/approve`, null)
-        .catch((e) => errors.push(`approbation : ${errorMessage(e)}`));
+        .catch((e) => errors.push(tr("approbation : {error}", { error: errorMessage(e) })));
     }
     return { publishedIds, errors };
   }

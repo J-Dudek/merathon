@@ -4,6 +4,7 @@ import { addPatAccount, listAccounts, removeAccount, renameAccount, updateAccoun
 import { forgeClient, type ForgeClient } from "../api/forge";
 import { useUiStore } from "./useUiStore";
 import { trimEndChars } from "../lib/strings";
+import { tr } from "../i18n";
 
 interface AccountsStore {
   accounts: ForgeAccount[];
@@ -39,7 +40,7 @@ function warnIfInsecure(saved: SavedAccount) {
       .getState()
       .notify(
         "info",
-        "Aucun trousseau système disponible : le token est stocké dans un fichier lisible uniquement par ton utilisateur. Installe/active un trousseau (GNOME Keyring, KWallet…) pour plus de sécurité.",
+        tr("Aucun trousseau système disponible : le token est stocké dans un fichier lisible uniquement par ton utilisateur. Installe/active un trousseau (GNOME Keyring, KWallet…) pour plus de sécurité."),
       );
   }
 }

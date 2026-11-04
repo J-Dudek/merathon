@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import type { ForgeUser } from "../types/forge";
 import { inputClass } from "./Modal";
 import { fieldLabel } from "../lib/fieldLabel";
+import { tr } from "../i18n";
 
 const labelClass = "text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]";
 
@@ -24,7 +25,7 @@ export function UserPicker({ label, choices, value, onChange, self }: {
       value={value.map((u) => u.username)}
       onChange={(names) => onChange(names.map((n) => byName.get(n)!).filter(Boolean))}
       action={self && !value.some((u) => u.username === self.username)
-        ? { label: "Moi", run: () => onChange([...value, self]) }
+        ? { label: tr("Moi"), run: () => onChange([...value, self]) }
         : undefined}
     />
   );
@@ -70,8 +71,8 @@ export function TagPicker({ label, choices, value, onChange, action }: {
         {/* Liste de suggestions au clavier : flèches pour choisir, Entrée pour ajouter, Échap pour fermer. */}
         <input
           className={inputClass}
-          placeholder={choices.length ? "Rechercher…" : "Aucun choix disponible"}
-          {...fieldLabel(`${label} : ajouter`)}
+          placeholder={choices.length ? tr("Rechercher…") : tr("Aucun choix disponible")}
+          {...fieldLabel(tr("{label} : ajouter", { label }))}
           role="combobox"
           aria-autocomplete="list"
           aria-expanded={open}
@@ -104,7 +105,7 @@ export function TagPicker({ label, choices, value, onChange, action }: {
         <ul
           id={listId}
           role="listbox"
-          aria-label={`Suggestions : ${label}`}
+          aria-label={tr("Suggestions : {label}", { label })}
           className={open ? "absolute z-10 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[var(--color-bg-elevated)] border border-overlay/10 rounded shadow-xl" : "hidden"}
         >
           {open && suggestions.map((c, i) => (
@@ -130,7 +131,7 @@ export function TagPicker({ label, choices, value, onChange, action }: {
             <span key={key} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-overlay/10 text-[11px] text-[var(--color-text)]">
               {colorOf(key) && <span className="w-2 h-2 rounded-full" style={{ background: colorOf(key) }} aria-hidden />}
               {key}
-              <button className="text-[var(--color-muted)] hover:text-[var(--color-text)]" aria-label={`Retirer ${key}`} onClick={() => onChange(value.filter((v) => v !== key))}>
+              <button className="text-[var(--color-muted)] hover:text-[var(--color-text)]" aria-label={tr("Retirer {key}", { key })} onClick={() => onChange(value.filter((v) => v !== key))}>
                 <X size={11} />
               </button>
             </span>

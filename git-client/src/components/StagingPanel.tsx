@@ -10,7 +10,6 @@ import {
 } from "../ipc/commands";
 import { errorMessage, reportInteractive, reportMerge, runGit } from "../lib/actions";
 import { ContextMenu, useContextMenu, type MenuEntry } from "./ContextMenu";
-import { plural } from "../lib/strings";
 import { fileTree, visibleFiles, type FileNode } from "../lib/fileTree";
 import { ignoreDirPattern, ignoreExtensionPattern, ignoreFilePattern, ignoreFolderPattern } from "../lib/gitignore";
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
@@ -22,14 +21,15 @@ import { appendThreadTrailers, draftFromMessage, type ThreadLinks } from "../lib
 import { useCachedOpenPullRequests, useLinkedForge } from "./PullRequestList";
 import { ReviewThreadPicker } from "./ReviewThreadPicker";
 import { EmojiInput, EmojiTextarea } from "./EmojiAssist";
+import { tr, trn, quoted } from "../i18n";
 
 const STATE_LABELS: Record<Exclude<RepoState, "clean">, string> = {
-  merge: "Merge en cours",
-  rebase: "Rebase en cours",
-  cherrypick: "Cherry-pick en cours",
-  revert: "Revert en cours",
-  bisect: "Bisect en cours",
-  apply: "Application de patch en cours",
+  merge: tr("Merge en cours"),
+  rebase: tr("Rebase en cours"),
+  cherrypick: tr("Cherry-pick en cours"),
+  revert: tr("Revert en cours"),
+  bisect: tr("Bisect en cours"),
+  apply: tr("Application de patch en cours"),
 };
 
 /** Le fichier est-il celui affiché au centre (diff ou résolution de conflit) ? */
@@ -40,21 +40,21 @@ function isShown(center: CenterView, f: FileStatus): boolean {
 
 /** Consigne affichée pendant un merge / rebase / cherry-pick… */
 function operationHint(state: RepoState, conflicts: number): string {
-  if (conflicts > 0) return `${plural(conflicts, "conflit")} à résoudre : clique sur un fichier pour choisir les versions.`;
-  return state === "rebase" ? "Tous les conflits sont résolus : continue le rebase." : "Tous les conflits sont résolus : commite pour terminer.";
+  if (conflicts > 0) return tr("{count} à résoudre : clique sur un fichier pour choisir les versions.", { count: trn(conflicts, "{n} conflit", "{n} conflits") });
+  return state === "rebase" ? tr("Tous les conflits sont résolus : continue le rebase.") : tr("Tous les conflits sont résolus : commite pour terminer.");
 }
 
 function commitLabel(committing: boolean, amend: boolean, state: RepoState, stagedCount: number): string {
-  if (committing) return "Commit…";
-  if (amend) return "Modifier le dernier commit";
-  if (state === "merge") return "Commiter le merge";
-  return `Commiter ${plural(stagedCount, "fichier")}`;
+  if (committing) return tr("Commit…");
+  if (amend) return tr("Modifier le dernier commit");
+  if (state === "merge") return tr("Commiter le merge");
+  return tr("Commiter {count}", { count: trn(stagedCount, "{n} fichier", "{n} fichiers") });
 }
 
 function interactiveHint(stop: InteractiveStop, conflicts: number): string {
-  if (stop.reason === "edit") return "Modifie ce commit (case « amend » ci-dessous) ou ajoute des commits, puis Continuer.";
-  if (conflicts > 0) return `${plural(conflicts, "conflit")} à résoudre (clique sur un fichier), puis Continuer.`;
-  return "Conflits résolus : clique sur Continuer pour créer le commit et poursuivre.";
+  if (stop.reason === "edit") return tr("Modifie ce commit (case « amend » ci-dessous) ou ajoute des commits, puis Continuer.");
+  if (conflicts > 0) return tr("{count} à résoudre (clique sur un fichier), puis Continuer.", { count: trn(conflicts, "{n} conflit", "{n} conflits") });
+  return tr("Conflits résolus : clique sur Continuer pour créer le commit et poursuivre.");
 }
 
 const TREE_KEY = "merathon.stagingTree";
@@ -210,7 +210,7 @@ export function StagingPanel() {
   }
 
   const viewToggle = (
-    <HeaderBtn title={treeMode ? "Afficher en liste" : "Afficher en arborescence"} onClick={toggleTreeMode}>
+    <HeaderBtn title={treeMode ? tr("Afficher en liste") : tr("Afficher en arborescence")} onClick={toggleTreeMode}>
       {treeMode ? <List size={12} /> : <ListTree size={12} />}
     </HeaderBtn>
   );
@@ -222,11 +222,11 @@ export function StagingPanel() {
   }
 
   async function discard(files: FileStatus[]) {
-    const label = files.length === 1 ? `« ${files[0].path} »` : `${files.length} fichiers`;
+    const label = files.length === 1 ? quoted(files[0].path) : tr("{length} fichiers", { length: files.length });
     const untracked = files.some((f) => f.status === "untracked");
     const ok = await confirmAction(
-      `Annuler les modifications de ${label} ?`,
-      untracked ? "Les fichiers non suivis seront supprimés définitivement." : "Les modifications non indexées seront perdues.",
+      tr("Annuler les modifications de {label} ?", { label }),
+      untracked ? tr("Les fichiers non suivis seront supprimés définitivement.") : tr("Les modifications non indexées seront perdues."),
       true,
     );
     if (ok) await runGit(() => discardFiles(path, files.map((f) => f.path)));
@@ -234,27 +234,27 @@ export function StagingPanel() {
 
   /** Indexer / désindexer / annuler plusieurs fichiers d'une même section. */
   function stageEntries(files: FileStatus[]): MenuEntry[] {
-    const n = plural(files.length, "fichier");
+    const n = trn(files.length, "{n} fichier", "{n} fichiers");
     const section = sectionOf(files[0]);
     return [
       section === "s"
-        ? { label: `Désindexer ${n}`, action: () => runGit(() => unstageFiles(path, pathsOf(files))) }
-        : { label: section === "c" ? `Marquer ${n} comme résolus (indexer)` : `Indexer ${n}`, action: () => runGit(() => stageFiles(path, pathsOf(files))) },
-      ...(section === "u" ? [{ label: `Annuler les modifications de ${n}…`, danger: true, action: () => discard(files) }] : []),
+        ? { label: tr("Désindexer {n}", { n }), action: () => runGit(() => unstageFiles(path, pathsOf(files))) }
+        : { label: section === "c" ? tr("Marquer {n} comme résolus (indexer)", { n }) : tr("Indexer {n}", { n }), action: () => runGit(() => stageFiles(path, pathsOf(files))) },
+      ...(section === "u" ? [{ label: tr("Annuler les modifications de {n}…", { n }), danger: true, action: () => discard(files) }] : []),
     ];
   }
 
   /** Menu d'une sélection de plusieurs fichiers d'une même section. */
   function filesMenu(files: FileStatus[]): MenuEntry[] {
-    const n = plural(files.length, "fichier");
+    const n = trn(files.length, "{n} fichier", "{n} fichiers");
     return [
       ...stageEntries(files),
       ...(files.every((f) => f.status === "untracked")
-        ? ["separator" as const, { label: `Ajouter ${n} au .gitignore`, action: () => ignore(files.map((f) => ignoreFilePattern(f.path))) }]
+        ? ["separator" as const, { label: tr("Ajouter {n} au .gitignore", { n }), action: () => ignore(files.map((f) => ignoreFilePattern(f.path))) }]
         : []),
       "separator",
-      { label: "Copier les chemins", action: () => navigator.clipboard.writeText(pathsOf(files).join("\n")) },
-      { label: "Annuler la sélection", action: clearSelection },
+      { label: tr("Copier les chemins"), action: () => navigator.clipboard.writeText(pathsOf(files).join("\n")) },
+      { label: tr("Annuler la sélection"), action: clearSelection },
     ];
   }
 
@@ -265,11 +265,11 @@ export function StagingPanel() {
       { header: `${dir}/` },
       ...stageEntries(files),
       ...(files.every((f) => f.status === "untracked")
-        ? ["separator" as const, { label: "Ignorer ce dossier", hint: pattern, action: () => ignore([pattern]) }]
+        ? ["separator" as const, { label: tr("Ignorer ce dossier"), hint: pattern, action: () => ignore([pattern]) }]
         : []),
       "separator",
-      { label: "Copier le chemin", action: () => navigator.clipboard.writeText(dir) },
-      { label: "Afficher dans le gestionnaire de fichiers", action: () => revealItemInDir(`${path}/${dir}`).catch((e) => notify("error", errorMessage(e))) },
+      { label: tr("Copier le chemin"), action: () => navigator.clipboard.writeText(dir) },
+      { label: tr("Afficher dans le gestionnaire de fichiers"), action: () => revealItemInDir(`${path}/${dir}`).catch((e) => notify("error", errorMessage(e))) },
     ];
   }
 
@@ -279,21 +279,21 @@ export function StagingPanel() {
     const abs = `${path}/${f.path}`;
     return [
       f.staged
-        ? { label: "Désindexer", action: () => runGit(() => unstageFiles(path, [f.path])) }
-        : { label: f.status === "conflicted" ? "Marquer comme résolu (indexer)" : "Indexer", action: () => runGit(() => stageFiles(path, [f.path])) },
+        ? { label: tr("Désindexer"), action: () => runGit(() => unstageFiles(path, [f.path])) }
+        : { label: f.status === "conflicted" ? tr("Marquer comme résolu (indexer)") : tr("Indexer"), action: () => runGit(() => stageFiles(path, [f.path])) },
       ...(!f.staged && f.status !== "conflicted"
-        ? [{ label: "Annuler les modifications…", danger: true, action: () => discard([f]) }]
+        ? [{ label: tr("Annuler les modifications…"), danger: true, action: () => discard([f]) }]
         : []),
       ...lfsEntry(f),
       ...ignoreEntries(f),
       "separator" as const,
-      { label: "Copier le chemin", action: () => navigator.clipboard.writeText(f.path) },
-      { label: "Afficher dans le gestionnaire de fichiers", action: () => revealItemInDir(abs).catch((e) => notify("error", errorMessage(e))) },
+      { label: tr("Copier le chemin"), action: () => navigator.clipboard.writeText(f.path) },
+      { label: tr("Afficher dans le gestionnaire de fichiers"), action: () => revealItemInDir(abs).catch((e) => notify("error", errorMessage(e))) },
     ];
   }
 
   function ignore(patterns: string[]) {
-    return runGit(() => ignorePatterns(path, patterns), { success: "Ajouté au .gitignore" });
+    return runGit(() => ignorePatterns(path, patterns), { success: tr("Ajouté au .gitignore") });
   }
 
   /** Propose d'ignorer le fichier, son extension ou son dossier (fichier pas encore suivi). */
@@ -303,9 +303,9 @@ export function StagingPanel() {
       pattern ? [{ label, hint: pattern, action: () => ignore([pattern]) }] : [];
     return [
       "separator",
-      ...entry("Ajouter au .gitignore", ignoreFilePattern(f.path)),
-      ...entry("Ignorer cette extension", ignoreExtensionPattern(f.path)),
-      ...entry("Ignorer ce dossier", ignoreFolderPattern(f.path)),
+      ...entry(tr("Ajouter au .gitignore"), ignoreFilePattern(f.path)),
+      ...entry(tr("Ignorer cette extension"), ignoreExtensionPattern(f.path)),
+      ...entry(tr("Ignorer ce dossier"), ignoreFolderPattern(f.path)),
     ];
   }
 
@@ -316,8 +316,8 @@ export function StagingPanel() {
     const pattern = `*${ext}`;
     if (lfs?.patterns.includes(pattern)) return [];
     return [{
-      label: `Suivre les fichiers ${pattern} avec Git LFS`,
-      action: () => runGit(() => lfsTrack(path, pattern), { success: `${pattern} suivi avec LFS (.gitattributes modifié)` }),
+      label: tr("Suivre les fichiers {pattern} avec Git LFS", { pattern }),
+      action: () => runGit(() => lfsTrack(path, pattern), { success: tr("{pattern} suivi avec LFS (.gitattributes modifié)", { pattern }) }),
     }];
   }
 
@@ -341,7 +341,7 @@ export function StagingPanel() {
     const text = description.trim() ? `${summary.trim()}\n\n${description.trim()}` : summary.trim();
     const message = appendThreadTrailers(text, threads);
     const hash = await runGit(() => createCommit(path, message, amend), {
-      success: amend ? "Commit modifié" : undefined,
+      success: amend ? tr("Commit modifié") : undefined,
     });
     setCommitting(false);
     if (hash) {
@@ -358,8 +358,8 @@ export function StagingPanel() {
           conflicts={conflicted.length}
           onContinue={async () => reportInteractive(await runGit(() => continueInteractiveRebase(path)))}
           onAbort={async () => {
-            if (await confirmAction("Annuler le rebase interactif ?", "La branche et les fichiers reviennent à leur état d'avant le rebase.", true))
-              await runGit(() => abortInteractiveRebase(path), { success: "Rebase interactif annulé" });
+            if (await confirmAction(tr("Annuler le rebase interactif ?"), tr("La branche et les fichiers reviennent à leur état d'avant le rebase."), true))
+              await runGit(() => abortInteractiveRebase(path), { success: tr("Rebase interactif annulé") });
           }}
         />
       )}
@@ -375,25 +375,25 @@ export function StagingPanel() {
               <>
                 <SmallBtn
                   disabled={conflicted.length > 0}
-                  onClick={async () => reportMerge(await runGit(() => continueRebase(path)), "Rebase terminé")}
+                  onClick={async () => reportMerge(await runGit(() => continueRebase(path)), tr("Rebase terminé"))}
                 >
-                  Continuer
+                  {tr("Continuer")}
                 </SmallBtn>
                 <SmallBtn danger onClick={async () => {
-                  if (await confirmAction("Annuler le rebase ?", "La branche revient à son état d'avant le rebase.", true))
-                    await runGit(() => abortRebase(path), { success: "Rebase annulé" });
+                  if (await confirmAction(tr("Annuler le rebase ?"), tr("La branche revient à son état d'avant le rebase."), true))
+                    await runGit(() => abortRebase(path), { success: tr("Rebase annulé") });
                 }}>
-                  Annuler le rebase
+                  {tr("Annuler le rebase")}
                 </SmallBtn>
               </>
             ) : (
               <SmallBtn danger onClick={async () => {
-                if (await confirmAction("Tout annuler ?", "La copie de travail revient à l'état du dernier commit.", true)) {
-                  await runGit(() => abortMerge(path), { success: "Opération annulée" });
+                if (await confirmAction(tr("Tout annuler ?"), tr("La copie de travail revient à l'état du dernier commit."), true)) {
+                  await runGit(() => abortMerge(path), { success: tr("Opération annulée") });
                   updateDraft({ summary: "", description: "", threads: {} });
                 }
               }}>
-                Annuler l'opération
+                {tr("Annuler l'opération")}
               </SmallBtn>
             )}
           </div>
@@ -403,12 +403,12 @@ export function StagingPanel() {
       <div className="flex-1 overflow-y-auto">
         {conflicted.length > 0 && (
           <FileSection
-            title="Conflits"
+            title={tr("Conflits")}
             count={conflicted.length}
             actions={
               <>
                 <SelectionActions files={pickedIn("c")} onClear={clearSelection}>
-                  <HeaderBtn title="Marquer la sélection comme résolue" onClick={() => runGit(() => stageFiles(path, pathsOf(pickedIn("c"))))}>Résolus</HeaderBtn>
+                  <HeaderBtn title={tr("Marquer la sélection comme résolue")} onClick={() => runGit(() => stageFiles(path, pathsOf(pickedIn("c"))))}>{tr("Résolus")}</HeaderBtn>
                 </SelectionActions>
                 {viewToggle}
               </>
@@ -429,7 +429,7 @@ export function StagingPanel() {
         )}
 
         <FileSection
-          title="Non indexé"
+          title={tr("Non indexé")}
           count={unstaged.length}
           actions={unstaged.length > 0 && (
             <>
@@ -438,13 +438,13 @@ export function StagingPanel() {
                 onClear={clearSelection}
                 fallback={
                   <>
-                    <HeaderBtn title="Annuler toutes les modifications" onClick={() => discard(unstaged)}><Undo2 size={12} /></HeaderBtn>
-                    <HeaderBtn title="Tout indexer" onClick={() => runGit(() => stageAll(path))}>Tout indexer</HeaderBtn>
+                    <HeaderBtn title={tr("Annuler toutes les modifications")} onClick={() => discard(unstaged)}><Undo2 size={12} /></HeaderBtn>
+                    <HeaderBtn title={tr("Tout indexer")} onClick={() => runGit(() => stageAll(path))}>{tr("Tout indexer")}</HeaderBtn>
                   </>
                 }
               >
-                <HeaderBtn title="Annuler les modifications de la sélection" onClick={() => discard(pickedIn("u"))}><Undo2 size={12} /></HeaderBtn>
-                <HeaderBtn title="Indexer la sélection" onClick={() => runGit(() => stageFiles(path, pathsOf(pickedIn("u"))))}>Indexer</HeaderBtn>
+                <HeaderBtn title={tr("Annuler les modifications de la sélection")} onClick={() => discard(pickedIn("u"))}><Undo2 size={12} /></HeaderBtn>
+                <HeaderBtn title={tr("Indexer la sélection")} onClick={() => runGit(() => stageFiles(path, pathsOf(pickedIn("u"))))}>{tr("Indexer")}</HeaderBtn>
               </SelectionActions>
               {conflicted.length === 0 && viewToggle}
             </>
@@ -461,30 +461,30 @@ export function StagingPanel() {
               onContextMenu={(e) => openMenu(e, fileMenu(f))}
               actions={
                 <>
-                  <RowBtn title={`Annuler les modifications de ${f.path}`} onClick={() => discard(targets(f))}><Undo2 size={12} /></RowBtn>
-                  <RowBtn title={`Indexer ${f.path}`} onClick={() => runGit(() => stageFiles(path, pathsOf(targets(f))))}><Plus size={13} /></RowBtn>
+                  <RowBtn title={tr("Annuler les modifications de {path}", { path: f.path })} onClick={() => discard(targets(f))}><Undo2 size={12} /></RowBtn>
+                  <RowBtn title={tr("Indexer {path}", { path: f.path })} onClick={() => runGit(() => stageFiles(path, pathsOf(targets(f))))}><Plus size={13} /></RowBtn>
                 </>
               }
             />
           ), (files) => (
             <>
-              <RowBtn title="Annuler les modifications du dossier" onClick={() => discard(files)}><Undo2 size={12} /></RowBtn>
-              <RowBtn title="Indexer le dossier" onClick={() => runGit(() => stageFiles(path, files.map((f) => f.path)))}><Plus size={13} /></RowBtn>
+              <RowBtn title={tr("Annuler les modifications du dossier")} onClick={() => discard(files)}><Undo2 size={12} /></RowBtn>
+              <RowBtn title={tr("Indexer le dossier")} onClick={() => runGit(() => stageFiles(path, files.map((f) => f.path)))}><Plus size={13} /></RowBtn>
             </>
           ))}
         </FileSection>
 
         <FileSection
-          title="Indexé"
+          title={tr("Indexé")}
           count={staged.length}
           actions={staged.length > 0 && (
             <>
               <SelectionActions
                 files={pickedIn("s")}
                 onClear={clearSelection}
-                fallback={<HeaderBtn title="Tout désindexer" onClick={() => runGit(() => unstageAll(path))}>Tout désindexer</HeaderBtn>}
+                fallback={<HeaderBtn title={tr("Tout désindexer")} onClick={() => runGit(() => unstageAll(path))}>{tr("Tout désindexer")}</HeaderBtn>}
               >
-                <HeaderBtn title="Désindexer la sélection" onClick={() => runGit(() => unstageFiles(path, pathsOf(pickedIn("s"))))}>Désindexer</HeaderBtn>
+                <HeaderBtn title={tr("Désindexer la sélection")} onClick={() => runGit(() => unstageFiles(path, pathsOf(pickedIn("s"))))}>{tr("Désindexer")}</HeaderBtn>
               </SelectionActions>
               {conflicted.length === 0 && unstaged.length === 0 && viewToggle}
             </>
@@ -499,15 +499,15 @@ export function StagingPanel() {
               picked={isPicked(f)}
               onClick={(e) => handleClick(e, f)}
               onContextMenu={(e) => openMenu(e, fileMenu(f))}
-              actions={<RowBtn title={`Désindexer ${f.path}`} onClick={() => runGit(() => unstageFiles(path, pathsOf(targets(f))))}><Minus size={13} /></RowBtn>}
+              actions={<RowBtn title={tr("Désindexer {path}", { path: f.path })} onClick={() => runGit(() => unstageFiles(path, pathsOf(targets(f))))}><Minus size={13} /></RowBtn>}
             />
           ), (files) => (
-            <RowBtn title="Désindexer le dossier" onClick={() => runGit(() => unstageFiles(path, files.map((f) => f.path)))}><Minus size={13} /></RowBtn>
+            <RowBtn title={tr("Désindexer le dossier")} onClick={() => runGit(() => unstageFiles(path, files.map((f) => f.path)))}><Minus size={13} /></RowBtn>
           ))}
         </FileSection>
 
         {status.length === 0 && state === "clean" && (
-          <p className="p-3 text-xs text-[var(--color-muted)] italic">Aucune modification en cours</p>
+          <p className="p-3 text-xs text-[var(--color-muted)] italic">{tr("Aucune modification en cours")}</p>
         )}
       </div>
 
@@ -515,8 +515,8 @@ export function StagingPanel() {
         <IdentityProblem />
         <EmojiInput
           className={commitInput}
-          placeholder="Résumé du commit"
-          {...fieldLabel("Résumé du commit")}
+          placeholder={tr("Résumé du commit")}
+          {...fieldLabel(tr("Résumé du commit"))}
           value={summary}
           maxLength={200}
           onChange={setSummary}
@@ -525,8 +525,8 @@ export function StagingPanel() {
         <EmojiTextarea
           className={`${commitInput} resize-none`}
           rows={3}
-          placeholder="Description (optionnelle)"
-          {...fieldLabel("Description du commit (optionnelle)")}
+          placeholder={tr("Description (optionnelle)")}
+          {...fieldLabel(tr("Description du commit (optionnelle)"))}
           value={description}
           onChange={setDescription}
           onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && handleCommit()}
@@ -544,13 +544,13 @@ export function StagingPanel() {
             disabled={!info?.head_hash || state !== "clean"}
             onChange={(e) => toggleAmend(e.target.checked)}
           />
-          Modifier le dernier commit (amend)
+          {tr("Modifier le dernier commit (amend)")}
         </label>
         <button
           className="bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white text-xs font-semibold py-1.5 rounded transition-opacity"
           onClick={handleCommit}
           disabled={!canCommit}
-          title="Ctrl+Entrée"
+          title={tr("Ctrl+Entrée")}
         >
           {commitLabel(committing, amend, state, staged.length)}
         </button>
@@ -576,21 +576,21 @@ function ThreadLinksRow({ threads, prRef, onPick, onClear }: {
   if (!prRef && !actions.length) return null;
   const resolve = actions.filter((a) => a === "resolve").length;
   const parts = [
-    ...(resolve ? [`${resolve} à résoudre`] : []),
-    ...(actions.length - resolve ? [`${actions.length - resolve} à répondre`] : []),
+    ...(resolve ? [tr("{resolve} à résoudre", { resolve })] : []),
+    ...(actions.length - resolve ? [tr("{value} à répondre", { value: actions.length - resolve })] : []),
   ];
   return (
     <div className="flex items-center gap-2 text-[11px] text-[var(--color-muted)]">
       <MessageSquare size={12} aria-hidden className="shrink-0" />
       {prRef ? (
         <button className="hover:text-[var(--color-text)] underline-offset-2 hover:underline" onClick={onPick}>
-          {actions.length ? `Fils de revue ${prRef} : ${parts.join(", ")}` : `Lier des fils de revue ${prRef}…`}
+          {actions.length ? tr("Fils de revue {prRef} : {list}", { prRef, list: parts.join(", ") }) : tr("Lier des fils de revue {prRef}…", { prRef })}
         </button>
       ) : (
-        <span>Fils de revue : {parts.join(", ")} (aucune PR ouverte pour cette branche)</span>
+        <span>{tr("Fils de revue : {list} (aucune PR ouverte pour cette branche)", { list: parts.join(", ") })}</span>
       )}
       {actions.length > 0 && (
-        <button className="ml-auto hover:text-[var(--color-text)]" title="Ne plus lier de fil de revue" aria-label="Ne plus lier de fil de revue" onClick={onClear}>
+        <button className="ml-auto hover:text-[var(--color-text)]" title={tr("Ne plus lier de fil de revue")} aria-label={tr("Ne plus lier de fil de revue")} onClick={onClear}>
           <X size={12} />
         </button>
       )}
@@ -607,7 +607,7 @@ function InteractiveBanner({ stop, conflicts, onContinue, onAbort }: {
   return (
     <div className="px-3 py-2 border-b border-sky-400/30 bg-sky-500/10 flex flex-col gap-1.5 shrink-0">
       <p className="text-xs font-semibold text-sky-300">
-        Rebase interactif — étape {stop.step}/{stop.total}
+        {tr("Rebase interactif — étape {step}/{total}", { step: stop.step, total: stop.total })}
       </p>
       <RebaseTimeline stop={stop} />
       <p className="text-[11px] text-sky-100">
@@ -619,10 +619,10 @@ function InteractiveBanner({ stop, conflicts, onContinue, onAbort }: {
           disabled={stop.reason === "conflict" && conflicts > 0}
           className="text-[11px] px-2 py-0.5 rounded bg-green-800 hover:opacity-90 text-white disabled:opacity-40"
         >
-          Continuer
+          {tr("Continuer")}
         </button>
         <button onClick={onAbort} className="text-[11px] px-2 py-0.5 rounded bg-red-800 hover:opacity-90 text-white">
-          Annuler le rebase
+          {tr("Annuler le rebase")}
         </button>
       </div>
     </div>
@@ -652,12 +652,12 @@ function FileSection({ title, count, actions, children }: {
 }
 
 const STATUS_BADGE: Record<FileStatus["status"], { letter: string; label: string; color: string }> = {
-  modified: { letter: "M", label: "modifié", color: "text-yellow-400" },
-  added: { letter: "A", label: "ajouté", color: "text-green-400" },
-  deleted: { letter: "D", label: "supprimé", color: "text-red-400" },
-  renamed: { letter: "R", label: "renommé", color: "text-sky-400" },
-  untracked: { letter: "?", label: "non suivi", color: "text-green-300" },
-  conflicted: { letter: "!", label: "en conflit", color: "text-red-400" },
+  modified: { letter: "M", label: tr("modifié"), color: "text-yellow-400" },
+  added: { letter: "A", label: tr("ajouté"), color: "text-green-400" },
+  deleted: { letter: "D", label: tr("supprimé"), color: "text-red-400" },
+  renamed: { letter: "R", label: tr("renommé"), color: "text-sky-400" },
+  untracked: { letter: "?", label: tr("non suivi"), color: "text-green-300" },
+  conflicted: { letter: "!", label: tr("en conflit"), color: "text-red-400" },
 };
 
 /** Clic au clavier : Entrée ou Espace, avec les touches de modification (Ctrl / Maj pour la sélection multiple). */
@@ -684,9 +684,9 @@ function SelectionActions({ files, onClear, fallback, children }: {
   if (files.length === 0) return fallback;
   return (
     <>
-      <span className="text-[10px] text-[var(--color-accent-text)] self-center">{plural(files.length, "sélectionné")}</span>
+      <span className="text-[10px] text-[var(--color-accent-text)] self-center">{trn(files.length, "{n} sélectionné", "{n} sélectionnés")}</span>
       {children}
-      <HeaderBtn title="Annuler la sélection" onClick={onClear}><X size={12} /></HeaderBtn>
+      <HeaderBtn title={tr("Annuler la sélection")} onClick={onClear}><X size={12} /></HeaderBtn>
     </>
   );
 }
@@ -721,10 +721,10 @@ function FileTree({ nodes, depth, isOpen, onToggle, onFolderMenu, row, folderAct
           <button type="button" aria-expanded={open} className="flex-1 min-w-0 flex items-center gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60 rounded">
             {open ? <ChevronDown size={11} className="w-3 shrink-0 text-[var(--color-muted)]" /> : <ChevronRight size={11} className="w-3 shrink-0 text-[var(--color-muted)]" />}
             <span className="flex-1 truncate text-[11px] font-mono text-[var(--color-muted)]">
-              <span className="sr-only">Dossier </span>
+              <span className="sr-only">{tr("Dossier")}{" "}</span>
               {node.name}
               <span className="ml-1.5 opacity-60" aria-hidden>{node.files.length}</span>
-              <span className="sr-only">, {plural(node.files.length, "fichier")}</span>
+              <span className="sr-only">, {trn(node.files.length, "{n} fichier", "{n} fichiers")}</span>
             </span>
           </button>
           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">{folderActions?.(node.files)}</div>
@@ -780,7 +780,7 @@ function FileRow({ file, depth, shown, picked, onClick, onContextMenu, actions }
         <span className="flex-1 truncate text-[11px] font-mono">
           <span className="text-[var(--color-text)]">{name}</span>
           {dir && <span className="text-[var(--color-muted)] ml-1.5">{dir}</span>}
-          <span className="sr-only">, {label}{picked ? ", sélectionné" : ""}</span>
+          <span className="sr-only">, {label}{picked ? tr(", sélectionné") : ""}</span>
         </span>
       </div>
       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">{actions}</div>

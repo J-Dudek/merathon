@@ -5,9 +5,13 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App";
 import { initTheme } from "./lib/theme";
+import { language } from "./i18n";
+import { setBackendLanguage } from "./ipc/commands";
 
 // Avant le premier rendu : pas de flash du thème sombre quand le thème clair est choisi.
 initTheme();
+// Sans backend, comme dans un navigateur : les messages sont seulement ceux du frontend.
+setBackendLanguage(language).catch(() => {});
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

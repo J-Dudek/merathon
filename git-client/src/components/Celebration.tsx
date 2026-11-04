@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useCelebrationStore } from "../store/useCelebrationStore";
 import { kindEmojis, random, type Celebration as CelebrationData, type Effect, type Tier } from "../lib/milestones";
+import { tr } from "../i18n";
 
 /** Couleurs des confettis et feux d'artifice : décoratives, identiques dans les deux thèmes. */
 const PALETTE = ["#e94560", "#f6c445", "#4ade80", "#38bdf8", "#a78bfa", "#fb923c", "#f472b6"];
@@ -250,7 +251,7 @@ export function DevCelebrationButton() {
   return (
     <button
       onClick={preview}
-      title="Célébration au hasard (mode dev)"
+      title={tr("Célébration au hasard (mode dev)")}
       className="fixed bottom-3 left-3 z-[10001] px-2 py-1 rounded-md border border-dashed border-[var(--color-accent)]/60 bg-[var(--color-bg-elevated)]/90 text-[11px] opacity-60 hover:opacity-100"
     >
       🎉 dev
@@ -347,7 +348,7 @@ export function Celebration() {
       <div
         key={current.id}
         aria-hidden
-        title="Cliquer ou Échap pour fermer"
+        title={tr("Cliquer ou Échap pour fermer")}
         onClick={dismiss}
         className={`pointer-events-auto cursor-pointer absolute left-1/2 top-6 celebrate-banner overflow-hidden flex items-center gap-3 pl-4 pr-5 pt-3 pb-3.5 rounded-xl border bg-[var(--color-bg-elevated)]/95 shadow-2xl w-max max-w-[min(520px,90vw)] ${BANNER_BORDER[current.tier]}`}
       >

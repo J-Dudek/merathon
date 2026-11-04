@@ -6,6 +6,7 @@ import { prFreshness, seenKey, useSeenPrsStore, type SeenPr } from "../store/use
 import { useUiStore } from "../store/useUiStore";
 import { cachedMyPullRequests, fetchMyPullRequests, publishMyPullRequests } from "./myPullRequests";
 import type { ForgeAccount, MyPullRequests, PrSummary } from "../types/forge";
+import { tr, trn, COLON } from "../i18n";
 
 export type PrEventKind =
   | "opened" | "commits" | "comments" | "activity" | "ci_success" | "ci_failure" | "approved" | "changes_requested";
@@ -82,14 +83,14 @@ export function filterEvents(events: PrEvent[], settings: NotificationSettings):
 
 function kindLabel(kind: PrEventKind, prLabel: string): string {
   switch (kind) {
-    case "opened": return `nouvelle ${prLabel} à traiter`;
-    case "commits": return "nouveaux commits";
-    case "comments": return "nouveaux commentaires";
-    case "activity": return "nouvelle activité";
-    case "ci_success": return "CI passée";
-    case "ci_failure": return "CI en échec";
-    case "approved": return "approuvée";
-    case "changes_requested": return "modifications demandées";
+    case "opened": return tr("nouvelle {prLabel} à traiter", { prLabel });
+    case "commits": return tr("nouveaux commits");
+    case "comments": return tr("nouveaux commentaires");
+    case "activity": return tr("nouvelle activité");
+    case "ci_success": return tr("CI passée");
+    case "ci_failure": return tr("CI en échec");
+    case "approved": return tr("approuvée");
+    case "changes_requested": return tr("modifications demandées");
   }
 }
 
@@ -105,10 +106,10 @@ export function notificationText(events: PrEvent[], provider: ForgeAccount["prov
     const detail = kinds(e);
     return { title: `${prLabel} ${sign}${e.pr.number} · ${e.pr.title}`, body: `${detail[0].toUpperCase()}${detail.slice(1)} — ${e.pr.projectPath}` };
   }
-  const lines = events.slice(0, MAX_LINES).map((e) => `${sign}${e.pr.number} ${e.pr.title} : ${kinds(e)}`);
+  const lines = events.slice(0, MAX_LINES).map((e) => `${sign}${e.pr.number} ${e.pr.title}${COLON}${kinds(e)}`);
   const rest = events.length - MAX_LINES;
-  if (rest > 0) lines.push(`… et ${rest} autre${rest > 1 ? "s" : ""}`);
-  return { title: `${events.length} ${prLabel} mises à jour`, body: lines.join("\n") };
+  if (rest > 0) lines.push(trn(rest, "… et {n} autre", "… et {n} autres"));
+  return { title: tr("{length} {prLabel} mises à jour", { length: events.length, prLabel }), body: lines.join("\n") };
 }
 
 let permission: Promise<boolean> | null = null;
@@ -159,7 +160,7 @@ async function deliver(title: string, body: string, prs: NotifiedPr[]) {
 /** Envoie une notification système d'essai ; faux si elle n'est pas autorisée. */
 export async function sendTestNotification(): Promise<boolean> {
   if (!(await notificationsAllowed())) return false;
-  await notifyDesktop("Merathon", "Les notifications de l'activité des PR / MR fonctionnent.");
+  await notifyDesktop("Merathon", tr("Les notifications de l'activité des PR / MR fonctionnent."));
   return true;
 }
 

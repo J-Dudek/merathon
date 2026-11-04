@@ -1,18 +1,19 @@
 import { useEffect, useRef } from "react";
 import type { InteractiveStop, TimelineStep } from "../types/git";
 import { actionLabel } from "./InteractiveRebaseDialog";
+import { tr, COLON } from "../i18n";
 
-const STATUS_LABEL: Record<TimelineStep["status"], string> = { done: "fait", current: "en cours", todo: "à faire" };
+const STATUS_LABEL: Record<TimelineStep["status"], string> = { done: tr("fait"), current: tr("en cours"), todo: tr("à faire") };
 
 /** Ce qu'est devenue une étape : libellé court (le panneau est étroit) et précision éventuelle ; null si rien à signaler. */
 export function stepOutcome(step: TimelineStep, reason: InteractiveStop["reason"]): { label: string; detail?: string } | null {
-  if (step.status === "current") return reason === "conflict" ? { label: "conflit", detail: "à résoudre" } : { label: "à modifier" };
+  if (step.status === "current") return reason === "conflict" ? { label: tr("conflit"), detail: tr("à résoudre") } : { label: tr("à modifier") };
   if (step.status === "todo") return null;
-  if (step.action === "drop") return { label: "supprimé" };
-  if (step.skipped) return { label: "sauté", detail: "ses changements étaient déjà présents" };
-  if (step.action === "squash" || step.action === "fixup") return { label: "fusionné", detail: "dans le commit précédent" };
-  if (step.new_hash === step.hash) return { label: "inchangé" };
-  return step.new_hash ? { label: `→ ${step.new_hash.slice(0, 7)}`, detail: "nouveau hash" } : null;
+  if (step.action === "drop") return { label: tr("supprimé") };
+  if (step.skipped) return { label: tr("sauté"), detail: tr("ses changements étaient déjà présents") };
+  if (step.action === "squash" || step.action === "fixup") return { label: tr("fusionné"), detail: tr("dans le commit précédent") };
+  if (step.new_hash === step.hash) return { label: tr("inchangé") };
+  return step.new_hash ? { label: `→ ${step.new_hash.slice(0, 7)}`, detail: tr("nouveau hash") } : null;
 }
 
 const SUMMARY_TONE: Record<TimelineStep["status"], string> = {
@@ -37,7 +38,7 @@ export function RebaseTimeline({ stop }: { stop: InteractiveStop }) {
   }, [stop.hash, stop.reason]);
 
   return (
-    <ol aria-label="Plan du rebase, du plus ancien au plus récent" className="relative max-h-48 overflow-y-auto pr-1">
+    <ol aria-label={tr("Plan du rebase, du plus ancien au plus récent")} className="relative max-h-48 overflow-y-auto pr-1">
       <TimelineRow dot="bg-sky-200/50 border-sky-200/50" last={false}>
         <span className="text-sky-200/70">base</span>
         <span className="font-mono text-sky-200/70">{stop.onto}</span>
@@ -53,7 +54,7 @@ export function RebaseTimeline({ stop }: { stop: InteractiveStop }) {
             dot={DOT[step.status]}
             last={i === stop.timeline.length - 1}
           >
-            <span className="sr-only">{STATUS_LABEL[step.status]} :</span>
+            <span className="sr-only">{STATUS_LABEL[step.status]}{COLON.trimEnd()}</span>
             <span className={`shrink-0 w-[3.75rem] ${step.status === "todo" ? "text-sky-200/60" : "text-sky-100"}`}>{actionLabel(step.action)}</span>
             <span className="font-mono shrink-0 text-[var(--color-accent-text)]">{step.short_hash}</span>
             <span

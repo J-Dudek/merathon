@@ -98,7 +98,7 @@ pub(crate) fn checked_out_elsewhere(repo: &Repository, branch: &str) -> Result<O
 /// Erreur à renvoyer si la branche est extraite dans un autre worktree.
 pub(crate) fn ensure_not_checked_out_elsewhere(repo: &Repository, branch: &str) -> Result<(), GitError> {
     match checked_out_elsewhere(repo, branch)? {
-        Some(path) => Err(GitError::Conflict(format!("La branche {branch} est déjà extraite dans le worktree {path}"))),
+        Some(path) => Err(GitError::Conflict(tr!("La branche {branch} est déjà extraite dans le worktree {path}", "Branch {branch} is already checked out in worktree {path}"))),
         None => Ok(()),
     }
 }
@@ -123,10 +123,10 @@ fn unique_name(repo: &Repository, path: &Path) -> Result<String, GitError> {
 pub fn add_worktree(repo: &Repository, path: &str, branch: &str, create: bool) -> Result<(), GitError> {
     let target = Path::new(path);
     if !target.is_absolute() {
-        return Err(GitError::Conflict(format!("Indique un chemin absolu pour le worktree : {path}")));
+        return Err(GitError::Conflict(tr!("Indique un chemin absolu pour le worktree : {path}", "Enter an absolute path for the worktree: {path}")));
     }
     if target.exists() {
-        return Err(GitError::Conflict(format!("Le dossier {path} existe déjà : choisis un autre emplacement")));
+        return Err(GitError::Conflict(tr!("Le dossier {path} existe déjà : choisis un autre emplacement", "Folder {path} already exists: choose another location")));
     }
     if create {
         ensure_branch_name_free(repo, branch, None)?;
@@ -156,10 +156,10 @@ pub fn add_worktree(repo: &Repository, path: &str, branch: &str, create: bool) -
 pub fn remove_worktree(repo: &Repository, name: &str) -> Result<(), GitError> {
     let wt = repo.find_worktree(name)?;
     if !matches!(wt.is_locked()?, WorktreeLockStatus::Unlocked) {
-        return Err(GitError::Conflict(format!("Le worktree {name} est verrouillé : déverrouille-le avec git worktree unlock")));
+        return Err(GitError::Conflict(tr!("Le worktree {name} est verrouillé : déverrouille-le avec git worktree unlock", "Worktree {name} is locked: unlock it with git worktree unlock")));
     }
     if repo.workdir().is_some_and(|c| same_dir(c, wt.path())) {
-        return Err(GitError::Conflict("Impossible de supprimer le worktree affiché : ouvre d'abord un autre worktree".into()));
+        return Err(GitError::Conflict(tr!("Impossible de supprimer le worktree affiché : ouvre d'abord un autre worktree", "Cannot delete the displayed worktree: open another worktree first")));
     }
     wt.prune(Some(WorktreePruneOptions::new().valid(true).working_tree(true)))?;
     Ok(())

@@ -4,6 +4,7 @@ import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore } from "../store/useUiStore";
 import { getConflictContent, resolveConflict } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
+import { tr, trn } from "../i18n";
 
 export type Resolution = "ours" | "theirs" | "both";
 
@@ -72,8 +73,8 @@ export function resolveWith(content: string, choices: Resolution[]): string {
 }
 
 function resolveLabel(saving: boolean, hasConflicts: boolean): string {
-  if (saving) return "Résolution…";
-  return hasConflicts ? "Résoudre et indexer" : "Marquer comme résolu";
+  if (saving) return tr("Résolution…");
+  return hasConflicts ? tr("Résoudre et indexer") : tr("Marquer comme résolu");
 }
 
 export function ConflictViewer({ path }: { path: string }) {
@@ -106,7 +107,7 @@ export function ConflictViewer({ path }: { path: string }) {
     setSaving(true);
     try {
       await resolveConflict(repoPath, path, resolveWith(content, choices));
-      notify("success", `${path} résolu et indexé`);
+      notify("success", tr("{path} résolu et indexé", { path }));
       setCenter({ kind: "graph" });
       await refresh();
     } catch (e) {
@@ -120,7 +121,7 @@ export function ConflictViewer({ path }: { path: string }) {
     return <div className="p-3 text-xs text-red-400 break-words">{error}</div>;
   }
   if (content === null) {
-    return <div className="p-3 text-xs text-[var(--color-muted)]">Chargement du conflit…</div>;
+    return <div className="p-3 text-xs text-[var(--color-muted)]">{tr("Chargement du conflit…")}</div>;
   }
 
   return (
@@ -129,14 +130,14 @@ export function ConflictViewer({ path }: { path: string }) {
         <button
           className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
           onClick={() => setCenter({ kind: "graph" })}
-          title="Revenir au graphe (Échap)"
+          title={tr("Revenir au graphe (Échap)")}
         >
-          <ArrowLeft size={12} className="inline mr-1 -mt-0.5" />Graphe
+          <ArrowLeft size={12} className="inline mr-1 -mt-0.5" />{tr("Graphe")}
         </button>
-        <h2 className="text-[10px] font-bold uppercase tracking-widest text-red-400"><TriangleAlert size={11} className="inline mr-1 -mt-0.5" />Conflit</h2>
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-red-400"><TriangleAlert size={11} className="inline mr-1 -mt-0.5" />{tr("Conflit")}</h2>
         <span className="text-xs font-mono text-[var(--color-text)] truncate flex-1">{path}</span>
         <span className="text-[11px] text-[var(--color-muted)]">
-          {sections.length} bloc{sections.length > 1 ? "s" : ""} — choisis la version à garder
+          {trn(sections.length, "{n} bloc — choisis la version à garder", "{n} blocs — choisis la version à garder")}
         </span>
         <button
           className="text-xs px-3 py-1 rounded bg-green-800 hover:opacity-90 text-white disabled:opacity-40"
@@ -149,7 +150,7 @@ export function ConflictViewer({ path }: { path: string }) {
 
       {sections.length === 0 && (
         <p className="p-3 text-xs text-[var(--color-muted)]">
-          Aucun marqueur de conflit dans ce fichier (déjà édité, ou conflit de suppression). Tu peux le marquer comme résolu.
+          {tr("Aucun marqueur de conflit dans ce fichier (déjà édité, ou conflit de suppression). Tu peux le marquer comme résolu.")}
         </p>
       )}
 
@@ -163,7 +164,7 @@ export function ConflictViewer({ path }: { path: string }) {
             )}
             <div className="grid grid-cols-2 divide-x divide-overlay/10">
               <SidePanel
-                label="Actuel (HEAD)"
+                label={tr("Actuel (HEAD)")}
                 lines={section.ours}
                 chosen={choices[i]}
                 side="ours"
@@ -172,7 +173,7 @@ export function ConflictViewer({ path }: { path: string }) {
                 activeBg="bg-green-900/40"
               />
               <SidePanel
-                label="Entrant"
+                label={tr("Entrant")}
                 lines={section.theirs}
                 chosen={choices[i]}
                 side="theirs"
@@ -183,7 +184,7 @@ export function ConflictViewer({ path }: { path: string }) {
             </div>
             <div className="flex justify-center gap-2 p-1 bg-shade/20 border-t border-overlay/10">
               <ChoiceBtn active={choices[i] === "both"} onClick={() => setChoices((p) => p.map((v, j) => j === i ? "both" : v))}>
-                Garder les deux
+                {tr("Garder les deux")}
               </ChoiceBtn>
             </div>
           </div>
@@ -207,11 +208,11 @@ function SidePanel({ label, lines, chosen, side, onChoose, bg, activeBg }: {
       <button
         type="button"
         aria-pressed={active}
-        title={`Garder la version « ${label} »`}
+        title={tr("Garder la version « {label} »", { label })}
         className={`w-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60 ${active ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}`}
       >
         {active && <Check size={10} strokeWidth={3} />}
-        <span className="sr-only">Garder la version </span>
+        <span className="sr-only">{tr("Garder la version")}{" "}</span>
         {label}
       </button>
       <div className="px-2 py-1">

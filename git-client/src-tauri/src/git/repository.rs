@@ -52,7 +52,7 @@ pub fn trust_repo(path: &str) -> Result<(), GitError> {
         // Pas encore de ~/.gitconfig : on le crée.
         Err(_) => std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
             .map(|home| std::path::PathBuf::from(home).join(".gitconfig"))
-            .ok_or_else(|| GitError::Other("configuration Git globale introuvable".into()))?,
+            .ok_or_else(|| GitError::Other(tr!("configuration Git globale introuvable", "global Git configuration not found")))?,
     };
     add_safe_directory(&mut Config::open(&file)?, &safe_directory_entry(path))
 }
@@ -136,7 +136,7 @@ pub fn set_identity(repo: Option<&Repository>, name: &str, email: &str) -> Resul
 pub fn signature(repo: &Repository) -> Result<git2::Signature<'static>, GitError> {
     repo.signature().map_err(|_| {
         GitError::Other(
-            "Identité Git non configurée : renseigne ton nom et ton email dans l'onglet Comptes".into(),
+            tr!("Identité Git non configurée : renseigne ton nom et ton email dans l'onglet Comptes", "Git identity not configured: enter your name and email in the Accounts tab"),
         )
     })
 }

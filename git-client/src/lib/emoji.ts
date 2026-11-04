@@ -1,5 +1,6 @@
 import { emojiToName, gemoji, type Gemoji } from "gemoji";
 import { fold } from "./issueRefs";
+import { tr } from "../i18n";
 
 /** Emoji en cours de saisie : le « : » (à `start`) et ce qui le suit jusqu'au curseur. */
 export interface EmojiQuery {
@@ -56,15 +57,15 @@ export function searchEmojis(query: string, limit = Infinity): Gemoji[] {
 
 /** Catégories de gemoji, avec leur libellé et l'emoji de leur onglet. */
 export const EMOJI_CATEGORIES = [
-  { id: "Smileys & Emotion", label: "Visages", icon: "😀" },
-  { id: "People & Body", label: "Personnes", icon: "👋" },
-  { id: "Animals & Nature", label: "Animaux et nature", icon: "🌿" },
-  { id: "Food & Drink", label: "Nourriture", icon: "🍕" },
-  { id: "Travel & Places", label: "Voyages et lieux", icon: "🚗" },
-  { id: "Activities", label: "Activités", icon: "🎉" },
-  { id: "Objects", label: "Objets", icon: "💡" },
-  { id: "Symbols", label: "Symboles", icon: "✅" },
-  { id: "Flags", label: "Drapeaux", icon: "🏁" },
+  { id: "Smileys & Emotion", label: tr("Visages"), icon: "😀" },
+  { id: "People & Body", label: tr("Personnes"), icon: "👋" },
+  { id: "Animals & Nature", label: tr("Animaux et nature"), icon: "🌿" },
+  { id: "Food & Drink", label: tr("Nourriture"), icon: "🍕" },
+  { id: "Travel & Places", label: tr("Voyages et lieux"), icon: "🚗" },
+  { id: "Activities", label: tr("Activités"), icon: "🎉" },
+  { id: "Objects", label: tr("Objets"), icon: "💡" },
+  { id: "Symbols", label: tr("Symboles"), icon: "✅" },
+  { id: "Flags", label: tr("Drapeaux"), icon: "🏁" },
 ] as const;
 
 export function emojisOfCategory(id: string): Gemoji[] {

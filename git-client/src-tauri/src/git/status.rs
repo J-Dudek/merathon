@@ -82,7 +82,7 @@ fn status_to_file_status(path: String, s: Status) -> Vec<FileStatus> {
 
 pub fn stage_paths(repo: &Repository, paths: &[String]) -> Result<(), GitError> {
     validate_all(paths)?;
-    let workdir = repo.workdir().ok_or_else(|| GitError::Other("dépôt bare".into()))?;
+    let workdir = repo.workdir().ok_or_else(|| GitError::Other(tr!("dépôt bare", "bare repository")))?;
     // Fichiers LFS : `git add` applique le filtre et n'indexe que le pointeur.
     let (lfs_paths, paths): (Vec<String>, Vec<String>) = paths.iter().cloned().partition(|p| lfs::is_lfs_path(repo, p));
     if !lfs_paths.is_empty() {
@@ -164,7 +164,7 @@ pub fn unstage_all(repo: &Repository) -> Result<(), GitError> {
 /// Annule les modifications non indexées d'un fichier (supprime le fichier s'il est non suivi).
 pub fn discard_paths(repo: &Repository, paths: &[String]) -> Result<(), GitError> {
     validate_all(paths)?;
-    let workdir = repo.workdir().ok_or_else(|| GitError::Other("dépôt bare".into()))?;
+    let workdir = repo.workdir().ok_or_else(|| GitError::Other(tr!("dépôt bare", "bare repository")))?;
     let mut to_checkout = Vec::new();
     for p in paths {
         if is_submodule(repo, p) {
@@ -203,7 +203,7 @@ pub fn discard_paths(repo: &Repository, paths: &[String]) -> Result<(), GitError
 
 /// Ajoute des motifs au .gitignore racine (créé au besoin), sans dupliquer ceux déjà présents.
 pub fn ignore_patterns(repo: &Repository, patterns: &[String]) -> Result<(), GitError> {
-    let workdir = repo.workdir().ok_or_else(|| GitError::Other("dépôt bare".into()))?;
+    let workdir = repo.workdir().ok_or_else(|| GitError::Other(tr!("dépôt bare", "bare repository")))?;
     let file = checked_path(workdir, ".gitignore")?;
     let mut content = match std::fs::read_to_string(&file) {
         Ok(content) => content,
@@ -213,7 +213,7 @@ pub fn ignore_patterns(repo: &Repository, patterns: &[String]) -> Result<(), Git
     for pattern in patterns {
         let pattern = pattern.trim_start();
         if pattern.trim().is_empty() || pattern.contains(['\n', '\r', '\0']) {
-            return Err(GitError::Other(format!("Motif .gitignore invalide : {pattern:?}")));
+            return Err(GitError::Other(tr!("Motif .gitignore invalide : {pattern:?}", "Invalid .gitignore pattern: {pattern:?}")));
         }
         if content.lines().any(|l| l == pattern) {
             continue;

@@ -99,11 +99,11 @@ fn post_form(url: &str, form: &[(&str, &str)]) -> Result<Value, String> {
     let response = match response {
         Ok(r) => r,
         Err(ureq::Error::Status(_, r)) => r,
-        Err(e) => return Err(format!("Impossible de joindre {url} : {e}")),
+        Err(e) => return Err(tr!("Impossible de joindre {url} : {e}", "Could not reach {url}: {e}")),
     };
     response
         .into_json::<Value>()
-        .map_err(|e| format!("Réponse inattendue de {url} : {e}"))
+        .map_err(|e| tr!("Réponse inattendue de {url} : {e}", "Unexpected response from {url}: {e}"))
 }
 
 fn oauth_error(json: &Value) -> Option<String> {
@@ -111,8 +111,7 @@ fn oauth_error(json: &Value) -> Option<String> {
     let description = json.get("error_description").and_then(Value::as_str).unwrap_or(error);
     Some(match error {
         // GitHub répond "Not Found" pour un client_id inconnu.
-        "invalid_client" | "unauthorized_client" | "Not Found" | "device_flow_disabled" => format!(
-            "Application OAuth refusée ({description}). Vérifie l'identifiant client et que le device flow est activé."
+        "invalid_client" | "unauthorized_client" | "Not Found" | "device_flow_disabled" => tr!("Application OAuth refusée ({description}). Vérifie l'identifiant client et que le device flow est activé.", "OAuth application refused ({description}). Check the client ID and that the device flow is enabled."
         ),
         _ => description.to_string(),
     })
@@ -124,7 +123,7 @@ pub fn start(endpoints: &Endpoints, client_id: &str) -> Result<DeviceCode, Strin
     if let Some(err) = oauth_error(&json) {
         return Err(err);
     }
-    serde_json::from_value(json).map_err(|e| format!("Réponse de device flow invalide : {e}"))
+    serde_json::from_value(json).map_err(|e| tr!("Réponse de device flow invalide : {e}", "Invalid device flow response: {e}"))
 }
 
 pub fn parse_token_response(json: &Value, client_id: &str, token_url: &str, now: i64) -> PollOutcome {
@@ -140,9 +139,9 @@ pub fn parse_token_response(json: &Value, client_id: &str, token_url: &str, now:
     match json.get("error").and_then(Value::as_str) {
         Some("authorization_pending") => PollOutcome::Pending,
         Some("slow_down") => PollOutcome::SlowDown,
-        Some("expired_token") => PollOutcome::Failed("Le code a expiré : recommence la connexion".into()),
-        Some("access_denied") => PollOutcome::Failed("Connexion refusée dans le navigateur".into()),
-        _ => PollOutcome::Failed(oauth_error(json).unwrap_or_else(|| "Réponse OAuth inattendue".into())),
+        Some("expired_token") => PollOutcome::Failed(tr!("Le code a expiré : recommence la connexion", "The code has expired: start the sign-in again")),
+        Some("access_denied") => PollOutcome::Failed(tr!("Connexion refusée dans le navigateur", "Sign-in refused in the browser")),
+        _ => PollOutcome::Failed(oauth_error(json).unwrap_or_else(|| tr!("Réponse OAuth inattendue", "Unexpected OAuth response"))),
     }
 }
 
@@ -160,12 +159,12 @@ pub fn wait_for_token(
         let wake = Instant::now() + interval;
         while Instant::now() < wake {
             if cancel.load(Ordering::Relaxed) {
-                return Err("Connexion annulée".into());
+                return Err(tr!("Connexion annulée", "Sign-in cancelled"));
             }
             std::thread::sleep(Duration::from_millis(100));
         }
         if Instant::now() > deadline {
-            return Err("Le code a expiré : recommence la connexion".into());
+            return Err(tr!("Le code a expiré : recommence la connexion", "The code has expired: start the sign-in again"));
         }
         let json = post_form(
             &endpoints.token_url,
@@ -189,7 +188,7 @@ pub fn needs_refresh(token: &OAuthToken, now: i64) -> bool {
 }
 
 pub fn refresh(token: &OAuthToken) -> Result<OAuthToken, String> {
-    let refresh_token = token.refresh_token.as_deref().ok_or("Aucun refresh token")?;
+    let refresh_token = token.refresh_token.as_deref().ok_or(tr!("Aucun refresh token", "No refresh token"))?;
     let json = post_form(
         &token.token_url,
         &[("grant_type", "refresh_token"), ("refresh_token", refresh_token), ("client_id", &token.client_id)],
@@ -202,7 +201,7 @@ pub fn refresh(token: &OAuthToken) -> Result<OAuthToken, String> {
             }
             Ok(new)
         }
-        _ => Err(oauth_error(&json).unwrap_or_else(|| "Rafraîchissement du token refusé".into())),
+        _ => Err(oauth_error(&json).unwrap_or_else(|| tr!("Rafraîchissement du token refusé", "Token refresh refused"))),
     }
 }
 
@@ -215,7 +214,7 @@ pub fn fetch_username(provider: Provider, endpoints: &Endpoints, access_token: &
         .set("User-Agent", "Merathon")
         .timeout(Duration::from_secs(30))
         .call()
-        .map_err(|e| format!("Impossible de lire le profil : {e}"))?
+        .map_err(|e| tr!("Impossible de lire le profil : {e}", "Could not read the profile: {e}"))?
         .into_json()
         .map_err(|e| e.to_string())?;
     let field = match provider {
@@ -225,7 +224,7 @@ pub fn fetch_username(provider: Provider, endpoints: &Endpoints, access_token: &
     json.get(field)
         .and_then(Value::as_str)
         .map(str::to_string)
-        .ok_or_else(|| "Profil utilisateur illisible".into())
+        .ok_or_else(|| tr!("Profil utilisateur illisible", "Unreadable user profile"))
 }
 
 /// Drapeaux d'annulation des connexions en cours, par device_code.

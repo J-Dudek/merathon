@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp, Plus, Search, X } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { FileDiff, DiffLine } from "../types/git";
 import type { LineAction } from "../ipc/commands";
+import { tr, trn } from "../i18n";
 
 /** Actions d'indexation partielle disponibles selon le côté affiché. */
 export interface PartialStaging {
@@ -124,8 +125,8 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable }: 
           ref={searchRef}
           type="search"
           className="w-full bg-shade/30 border border-overlay/50 rounded pl-6 pr-2 py-0.5 text-[11px] text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/60 placeholder:text-[var(--color-muted)]"
-          placeholder="Rechercher dans le fichier (Ctrl+F)"
-          aria-label="Rechercher dans le fichier"
+          placeholder={tr("Rechercher dans le fichier (Ctrl+F)")}
+          aria-label={tr("Rechercher dans le fichier")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -143,12 +144,12 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable }: 
       {query && (
         <>
           <span role="status" className="text-[10px] text-[var(--color-muted)] tabular-nums shrink-0">
-            {matches.length ? `${active + 1}/${matches.length}` : "Aucun résultat"}
+            {matches.length ? `${active + 1}/${matches.length}` : tr("Aucun résultat")}
           </span>
-          <SearchBtn label="Occurrence précédente (Maj+Entrée)" disabled={!matches.length} onClick={() => step(-1)}>
+          <SearchBtn label={tr("Occurrence précédente (Maj+Entrée)")} disabled={!matches.length} onClick={() => step(-1)}>
             <ChevronUp size={12} />
           </SearchBtn>
-          <SearchBtn label="Occurrence suivante (Entrée)" disabled={!matches.length} onClick={() => step(1)}>
+          <SearchBtn label={tr("Occurrence suivante (Entrée)")} disabled={!matches.length} onClick={() => step(1)}>
             <ChevronDown size={12} />
           </SearchBtn>
         </>
@@ -157,16 +158,16 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable }: 
   );
 
   if (loading) {
-    return <div className="p-3 text-xs text-[var(--color-muted)]">Chargement…</div>;
+    return <div className="p-3 text-xs text-[var(--color-muted)]">{tr("Chargement…")}</div>;
   }
   if (!diff) {
-    return <div className="p-3 text-xs text-[var(--color-muted)] italic">Sélectionne un fichier</div>;
+    return <div className="p-3 text-xs text-[var(--color-muted)] italic">{tr("Sélectionne un fichier")}</div>;
   }
   if (diff.is_binary) {
-    return <div className="p-3 text-xs text-[var(--color-muted)] italic">Fichier binaire</div>;
+    return <div className="p-3 text-xs text-[var(--color-muted)] italic">{tr("Fichier binaire")}</div>;
   }
   if (diff.hunks.length === 0) {
-    return <div className="p-3 text-xs text-[var(--color-muted)] italic">Aucune différence</div>;
+    return <div className="p-3 text-xs text-[var(--color-muted)] italic">{tr("Aucune différence")}</div>;
   }
 
   async function apply(hunk: number, lines: number[] | null, action: LineAction) {
@@ -190,7 +191,7 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable }: 
         ref={scrollRef}
         tabIndex={0}
         role="region"
-        aria-label={`Différences de ${diff.path}`}
+        aria-label={tr("Différences de {path}", { path: diff.path })}
         className="flex-1 overflow-auto font-mono text-[11px] leading-5 select-text outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
       >
         {diff.hunks.map((hunk, i) => (
@@ -201,11 +202,11 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable }: 
                 <div className="flex gap-1 font-sans shrink-0">
                   {staging.side === "unstaged" ? (
                     <>
-                      <HunkBtn danger disabled={applying} onClick={() => apply(i, null, "discard")}>Annuler le bloc</HunkBtn>
-                      <HunkBtn disabled={applying} onClick={() => apply(i, null, "stage")}>Indexer le bloc</HunkBtn>
+                      <HunkBtn danger disabled={applying} onClick={() => apply(i, null, "discard")}>{tr("Annuler le bloc")}</HunkBtn>
+                      <HunkBtn disabled={applying} onClick={() => apply(i, null, "stage")}>{tr("Indexer le bloc")}</HunkBtn>
                     </>
                   ) : (
-                    <HunkBtn disabled={applying} onClick={() => apply(i, null, "unstage")}>Désindexer le bloc</HunkBtn>
+                    <HunkBtn disabled={applying} onClick={() => apply(i, null, "unstage")}>{tr("Désindexer le bloc")}</HunkBtn>
                   )}
                 </div>
               )}
@@ -244,21 +245,21 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable }: 
       {staging && selection && selectedCount > 0 && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--color-bg-elevated)] border border-overlay/15 shadow-xl text-xs">
           <span className="text-[var(--color-muted)]">
-            {selectedCount} ligne{selectedCount > 1 ? "s" : ""} sélectionnée{selectedCount > 1 ? "s" : ""}
+            {trn(selectedCount, "{n} ligne sélectionnée", "{n} lignes sélectionnées")}
           </span>
           {staging.side === "unstaged" ? (
             <>
-              <HunkBtn danger disabled={applying} onClick={() => apply(selection.hunk, [...selection.lines], "discard")}>Annuler</HunkBtn>
-              <HunkBtn disabled={applying} onClick={() => apply(selection.hunk, [...selection.lines], "stage")}>Indexer les lignes</HunkBtn>
+              <HunkBtn danger disabled={applying} onClick={() => apply(selection.hunk, [...selection.lines], "discard")}>{tr("Annuler")}</HunkBtn>
+              <HunkBtn disabled={applying} onClick={() => apply(selection.hunk, [...selection.lines], "stage")}>{tr("Indexer les lignes")}</HunkBtn>
             </>
           ) : (
-            <HunkBtn disabled={applying} onClick={() => apply(selection.hunk, [...selection.lines], "unstage")}>Désindexer les lignes</HunkBtn>
+            <HunkBtn disabled={applying} onClick={() => apply(selection.hunk, [...selection.lines], "unstage")}>{tr("Désindexer les lignes")}</HunkBtn>
           )}
           <button
             className="text-[var(--color-muted)] hover:text-[var(--color-text)]"
             onClick={() => setSelection(null)}
-            title="Annuler la sélection"
-            aria-label="Annuler la sélection"
+            title={tr("Annuler la sélection")}
+            aria-label={tr("Annuler la sélection")}
           >
             <X size={12} />
           </button>
@@ -342,7 +343,7 @@ function HunkBtn({ onClick, disabled, danger, children }: {
 
 /** En-têtes des colonnes, annoncés par les lecteurs d'écran (RGAA 5.6) ; ligne sans hauteur à l'écran. */
 function DiffHeader({ annotations }: { annotations: boolean }) {
-  const columns = ["Sélection", ...(annotations ? ["Commentaire"] : []), "Ancienne ligne", "Nouvelle ligne", "Contenu"];
+  const columns = [tr("Sélection"), ...(annotations ? [tr("Commentaire")] : []), tr("Ancienne ligne"), tr("Nouvelle ligne"), tr("Contenu")];
   return (
     <thead>
       <tr className="h-0">
@@ -380,7 +381,7 @@ const DiffLineRow = memo(function DiffLineRow({ line, hunk, index, selectable, s
       <tr
         className={`group ${selected ? "bg-sky-800/50" : bg} ${selectable ? "cursor-pointer hover:brightness-125" : ""}`}
         onClick={(e) => selectable && onToggle(hunk, index, line, e.shiftKey)}
-        title={selectable ? "Clic : sélectionner la ligne · Maj+clic : plage" : undefined}
+        title={selectable ? tr("Clic : sélectionner la ligne · Maj+clic : plage") : undefined}
       >
         <td className={`w-1.5 p-0 ${selected ? "bg-sky-400" : ""}`}>
           {/* Sélection au clavier : Espace (Maj+Espace pour une plage) ; le clic sur la ligne fait de même. */}
@@ -389,7 +390,7 @@ const DiffLineRow = memo(function DiffLineRow({ line, hunk, index, selectable, s
               type="button"
               role="checkbox"
               aria-checked={selected}
-              aria-label={`Sélectionner la ligne ${lineLabel(line)}`}
+              aria-label={tr("Sélectionner la ligne {lineLabel}", { lineLabel: lineLabel(line) })}
               className="block w-full h-5 cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-[var(--color-accent)]"
               onClick={(e) => {
                 e.stopPropagation();
@@ -403,8 +404,8 @@ const DiffLineRow = memo(function DiffLineRow({ line, hunk, index, selectable, s
             {onComment && (
               <button
                 className="w-4 h-4 leading-none rounded bg-[var(--color-accent-solid)] text-white font-sans font-bold opacity-0 group-hover:opacity-100 focus:opacity-100"
-                title="Commenter cette ligne"
-                aria-label={`Commenter la ligne ${lineLabel(line)}`}
+                title={tr("Commenter cette ligne")}
+                aria-label={tr("Commenter la ligne {lineLabel}", { lineLabel: lineLabel(line) })}
                 onClick={(e) => {
                   e.stopPropagation();
                   onComment(line);
@@ -423,7 +424,7 @@ const DiffLineRow = memo(function DiffLineRow({ line, hunk, index, selectable, s
         </td>
         <td className={`pl-2 pr-4 whitespace-pre ${text}`}>
           <span className="select-none mr-1 opacity-70" aria-hidden>{prefix}</span>
-          {line.kind !== "context" && <span className="sr-only">{line.kind === "added" ? "Ajoutée : " : "Supprimée : "}</span>}
+          {line.kind !== "context" && <span className="sr-only">{line.kind === "added" ? tr("Ajoutée : ") : tr("Supprimée : ")}</span>}
           <Highlighted content={line.content} highlights={highlights} current={current} length={queryLength} />
         </td>
       </tr>
@@ -440,8 +441,8 @@ const DiffLineRow = memo(function DiffLineRow({ line, hunk, index, selectable, s
 
 /** Ligne désignée par son numéro dans la version où elle existe. */
 function lineLabel(line: DiffLine): string {
-  if (line.kind === "removed") return `supprimée ${line.old_lineno}`;
-  return line.kind === "added" ? `ajoutée ${line.new_lineno}` : `${line.new_lineno}`;
+  if (line.kind === "removed") return tr("supprimée {old_lineno}", { old_lineno: line.old_lineno });
+  return line.kind === "added" ? tr("ajoutée {new_lineno}", { new_lineno: line.new_lineno }) : `${line.new_lineno}`;
 }
 
 function lineStyle(kind: DiffLine["kind"]) {

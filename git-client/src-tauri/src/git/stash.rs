@@ -24,7 +24,7 @@ pub fn stash_save(repo: &mut Repository, message: Option<&str>, include_untracke
     let flags = if include_untracked { StashFlags::INCLUDE_UNTRACKED } else { StashFlags::DEFAULT };
     repo.stash_save2(&sig, message.filter(|m| !m.trim().is_empty()), Some(flags))
         .map_err(|e| match e.code() {
-            git2::ErrorCode::NotFound => GitError::Other("Aucune modification à mettre de côté".into()),
+            git2::ErrorCode::NotFound => GitError::Other(tr!("Aucune modification à mettre de côté", "No changes to set aside")),
             _ => e.into(),
         })?;
     Ok(())

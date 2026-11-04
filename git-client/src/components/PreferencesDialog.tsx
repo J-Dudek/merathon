@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  Accessibility, Bell, BookOpen, Bug, Check, Copy, ExternalLink, FolderCog, FolderGit2, Info, Keyboard, Monitor, Moon, Palette, RefreshCw, RotateCcw, Scale, ScrollText,
+  Accessibility, Bell, BookOpen, Bug, Check, Copy, ExternalLink, FolderCog, FolderGit2, Info, Keyboard, Languages, Monitor, Moon, Palette, RefreshCw, RotateCcw, Scale, ScrollText,
   SquareTerminal, Sun, Trophy, type LucideIcon,
 } from "lucide-react";
 import { getTauriVersion, getVersion } from "@tauri-apps/api/app";
@@ -28,18 +28,18 @@ import {
   viewsAtFullScore, type Finding,
 } from "../lib/accessibility";
 import { appInfo, type AppInfo } from "../ipc/commands";
-import { plural } from "../lib/strings";
 import logo from "../assets/logo.webp";
+import { LANGUAGE_NAMES, LANGUAGES, tr, trn, locale, percent } from "../i18n";
 
 const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
-  { id: "appearance", label: "Apparence", icon: Palette },
+  { id: "appearance", label: tr("Apparence"), icon: Palette },
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
-  { id: "sync", label: "Synchronisation", icon: RefreshCw },
-  { id: "profiles", label: "Profils Git", icon: FolderCog },
-  { id: "shortcuts", label: "Raccourcis", icon: Keyboard },
-  { id: "activity", label: "Mon activité", icon: Trophy },
-  { id: "accessibility", label: "Accessibilité", icon: Accessibility },
-  { id: "about", label: "À propos", icon: Info },
+  { id: "sync", label: tr("Synchronisation"), icon: RefreshCw },
+  { id: "profiles", label: tr("Profils Git"), icon: FolderCog },
+  { id: "shortcuts", label: tr("Raccourcis"), icon: Keyboard },
+  { id: "activity", label: tr("Mon activité"), icon: Trophy },
+  { id: "accessibility", label: tr("Accessibilité"), icon: Accessibility },
+  { id: "about", label: tr("À propos"), icon: Info },
 ];
 
 /** Rubriques sans réglage : pas de bouton « Réinitialiser ». */
@@ -55,9 +55,9 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
   const sections = SECTIONS.filter((s) => s.id !== "activity" || hasRewards);
 
   return (
-    <Modal title="Préférences" onClose={onClose} width="w-[720px]">
+    <Modal title={tr("Préférences")} onClose={onClose} width="w-[720px]">
       <div className="flex h-[460px] max-h-[64vh] text-xs text-[var(--color-text)] max-[760px]:flex-col max-[760px]:h-auto max-[760px]:max-h-none">
-        <nav aria-label="Rubriques des préférences" className="w-48 shrink-0 p-2 border-r border-overlay/10 bg-shade/10 flex flex-col gap-0.5 max-[760px]:w-full max-[760px]:flex-row max-[760px]:flex-wrap max-[760px]:border-r-0 max-[760px]:border-b">
+        <nav aria-label={tr("Rubriques des préférences")} className="w-48 shrink-0 p-2 border-r border-overlay/10 bg-shade/10 flex flex-col gap-0.5 max-[760px]:w-full max-[760px]:flex-row max-[760px]:flex-wrap max-[760px]:border-r-0 max-[760px]:border-b">
           {sections.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -74,13 +74,13 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
               {id === "activity" && newRewards && (
                 <>
                   <span className="ml-auto h-2 w-2 rounded-full bg-[var(--color-accent)]" aria-hidden />
-                  <span className="sr-only">, nouvelles récompenses</span>
+                  <span className="sr-only">{tr(", nouvelles récompenses")}</span>
                 </>
               )}
             </button>
           ))}
           <p className="mt-auto px-2.5 pb-1 text-[10px] leading-relaxed text-[var(--color-muted)]">
-            Les modifications sont appliquées immédiatement à toutes les fenêtres.
+            {tr("Les modifications sont appliquées immédiatement à toutes les fenêtres.")}
           </p>
         </nav>
 
@@ -108,7 +108,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
               >
                 <RotateCcw size={13} strokeWidth={1.75} />
-                Réinitialiser
+                {tr("Réinitialiser")}
               </button>
             </div>
           )}
@@ -121,19 +121,20 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
 // ---------------------------------------------------------------- Apparence
 
 const DENSITIES: { value: Density; label: string }[] = [
-  { value: "compact", label: "Compacte" },
-  { value: "normal", label: "Normale" },
-  { value: "comfortable", label: "Aérée" },
+  { value: "compact", label: tr("Compacte") },
+  { value: "normal", label: tr("Normale") },
+  { value: "comfortable", label: tr("Aérée") },
 ];
 
 const THEMES: { value: ThemePreference; label: string; icon: LucideIcon }[] = [
-  { value: "system", label: "Système", icon: Monitor },
-  { value: "dark", label: "Sombre", icon: Moon },
-  { value: "light", label: "Clair", icon: Sun },
+  { value: "system", label: tr("Système"), icon: Monitor },
+  { value: "dark", label: tr("Sombre"), icon: Moon },
+  { value: "light", label: tr("Clair"), icon: Sun },
 ];
 
 function AppearanceSection() {
   const theme = useDisplayStore((s) => s.theme);
+  const language = useDisplayStore((s) => s.language);
   const zoom = useDisplayStore((s) => s.zoom);
   const density = useDisplayStore((s) => s.density);
   const update = useDisplayStore((s) => s.update);
@@ -141,9 +142,30 @@ function AppearanceSection() {
 
   return (
     <>
-      <SectionTitle title="Apparence" subtitle="Thème, taille et densité de l'interface." />
+      <SectionTitle title={tr("Apparence")} subtitle={tr("Langue, thème, taille et densité de l'interface.")} />
 
-      <Group title="Thème" description="« Système » suit le réglage clair / sombre du système, y compris quand il change.">
+      <Group title={tr("Langue")} description={tr("Changer de langue recharge la fenêtre.")}>
+        <div className="grid grid-cols-2 gap-2.5">
+          {LANGUAGES.map((value) => (
+            <button
+              key={value}
+              lang={value}
+              aria-pressed={language === value}
+              onClick={() => update({ language: value, languageChosen: true })}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                language === value
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 ring-1 ring-[var(--color-accent)]/40"
+                  : "border-overlay/10 hover:border-overlay/25 hover:bg-overlay/5"
+              }`}
+            >
+              <Languages size={15} strokeWidth={1.75} className={language === value ? "text-[var(--color-accent-text)]" : "text-[var(--color-muted)]"} />
+              <span className="font-medium">{LANGUAGE_NAMES[value]}</span>
+            </button>
+          ))}
+        </div>
+      </Group>
+
+      <Group title={tr("Thème")} description={tr("« Système » suit le réglage clair / sombre du système, y compris quand il change.")}>
         <div className="grid grid-cols-3 gap-2.5">
           {THEMES.map(({ value, label, icon: Icon }) => (
             <button
@@ -164,13 +186,13 @@ function AppearanceSection() {
       </Group>
 
       <Group
-        title="Taille de l'interface"
-        description="Agrandit ou réduit tout : textes, panneaux, graphe et terminal."
-        value={`${Math.round(zoom * 100)} %`}
+        title={tr("Taille de l'interface")}
+        description={tr("Agrandit ou réduit tout : textes, panneaux, graphe et terminal.")}
+        value={percent(Math.round(zoom * 100))}
       >
         <Slider
-          label="Taille de l'interface"
-          valueText={`${Math.round(zoom * 100)} %`}
+          label={tr("Taille de l'interface")}
+          valueText={percent(Math.round(zoom * 100))}
           min={0}
           max={ZOOM_STEPS.length - 1}
           value={index}
@@ -179,13 +201,13 @@ function AppearanceSection() {
           defaultIndex={ZOOM_STEPS.indexOf(defaultDisplay.zoom)}
         />
         <p className="mt-3 flex items-center gap-1.5 text-[10px] text-[var(--color-muted)]">
-          <Kbd keys="Ctrl+=" /> agrandir <span className="mx-1">·</span>
-          <Kbd keys="Ctrl+-" /> réduire <span className="mx-1">·</span>
-          <Kbd keys="Ctrl+0" /> 100 %
+          <Kbd keys="Ctrl+=" />{" "}{tr("agrandir")}{" "}<span className="mx-1">·</span>
+          <Kbd keys="Ctrl+-" />{" "}{tr("réduire")}{" "}<span className="mx-1">·</span>
+          <Kbd keys="Ctrl+0" /> {percent(100)}
         </p>
       </Group>
 
-      <Group title="Densité du graphe" description="Hauteur des lignes de l'historique des commits.">
+      <Group title={tr("Densité du graphe")} description={tr("Hauteur des lignes de l'historique des commits.")}>
         <div className="grid grid-cols-3 gap-2.5">
           {DENSITIES.map((d) => (
             <button
@@ -236,10 +258,10 @@ function TerminalSection() {
 
   return (
     <>
-      <SectionTitle title="Terminal" subtitle="Terminal intégré du panneau du bas." />
-      <Group title="Taille du texte" description="S'applique aussi aux terminaux déjà ouverts." value={`${fontSize} px`}>
+      <SectionTitle title="Terminal" subtitle={tr("Terminal intégré du panneau du bas.")} />
+      <Group title={tr("Taille du texte")} description={tr("S'applique aussi aux terminaux déjà ouverts.")} value={`${fontSize} px`}>
         <Slider
-          label="Taille du texte du terminal"
+          label={tr("Taille du texte du terminal")}
           valueText={`${fontSize} px`}
           min={TERMINAL_FONT_MIN}
           max={TERMINAL_FONT_MAX}
@@ -249,20 +271,20 @@ function TerminalSection() {
           defaultIndex={defaultDisplay.terminalFontSize - TERMINAL_FONT_MIN}
         />
       </Group>
-      <Group title="Aperçu">
+      <Group title={tr("Aperçu")}>
         <div
           className="rounded-lg border border-overlay/10 bg-[var(--color-bg-primary)] px-3 py-2.5 overflow-hidden"
           style={{ fontFamily: "ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace", fontSize, lineHeight: 1.35 }}
         >
           <div className="whitespace-nowrap">
-            <span className="text-green-400">j6n@merathon</span>:<span className="text-sky-400">~/projet</span>$ git status
+            <span className="text-green-400">j6n@merathon</span>:<span className="text-sky-400">{tr("~/projet")}</span>$ git status
           </div>
-          <div className="whitespace-nowrap text-[var(--color-text)]">Sur la branche main</div>
-          <div className="whitespace-nowrap text-red-400">	modifié :         src/App.tsx</div>
+          <div className="whitespace-nowrap text-[var(--color-text)]">{tr("Sur la branche main")}</div>
+          <div className="whitespace-nowrap text-red-400">{" "}{tr("modifié :         src/App.tsx")}</div>
         </div>
       </Group>
       <p className="text-[10px] text-[var(--color-muted)] flex items-center gap-1.5">
-        Dans le terminal : <Kbd keys="Ctrl+Maj+C" /> copier <span className="mx-1">·</span> <Kbd keys="Ctrl+Maj+V" /> coller
+        {tr("Dans le terminal :")}{" "}<Kbd keys="Ctrl+Maj+C" />{" "}{tr("copier")}{" "}<span className="mx-1">·</span> <Kbd keys="Ctrl+Maj+V" />{" "}{tr("coller")}
       </p>
     </>
   );
@@ -271,7 +293,7 @@ function TerminalSection() {
 // ---------------------------------------------------------------- Synchronisation
 
 function syncLabel(minutes: number): string {
-  if (minutes === 0) return "Désactivée";
+  if (minutes === 0) return tr("Désactivée");
   return minutes === 60 ? "1 h" : `${minutes} min`;
 }
 
@@ -289,14 +311,14 @@ function SyncSection() {
 
   return (
     <>
-      <SectionTitle title="Synchronisation" subtitle="Surveillance des dépôts ouverts dans les onglets." />
+      <SectionTitle title={tr("Synchronisation")} subtitle={tr("Surveillance des dépôts ouverts dans les onglets.")} />
       <Group
-        title="Intervalle"
-        description="Fetch de chaque dépôt ouvert et actualisation de ses PR / MR ; une notification résume les changements."
+        title={tr("Intervalle")}
+        description={tr("Fetch de chaque dépôt ouvert et actualisation de ses PR / MR ; une notification résume les changements.")}
         value={syncLabel(interval)}
       >
         <Slider
-          label="Intervalle de synchronisation"
+          label={tr("Intervalle de synchronisation")}
           valueText={syncLabel(interval)}
           min={0}
           max={SYNC_INTERVALS.length - 1}
@@ -312,7 +334,7 @@ function SyncSection() {
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/10 hover:bg-overlay/10 disabled:opacity-50"
       >
         <RefreshCw size={13} strokeWidth={1.75} className={syncing ? "animate-spin" : ""} />
-        {syncing ? "Synchronisation…" : "Synchroniser maintenant"}
+        {syncing ? tr("Synchronisation…") : tr("Synchroniser maintenant")}
       </button>
       <NotificationsGroup />
     </>
@@ -320,12 +342,12 @@ function SyncSection() {
 }
 
 const NOTIFICATION_KINDS: { key: Exclude<keyof NotificationSettings, "enabled">; label: string }[] = [
-  { key: "opened", label: "Nouvelle PR / MR à traiter (assignée ou relecture demandée)" },
-  { key: "commits", label: "Nouveaux commits (hors mes propres PR / MR)" },
-  { key: "comments", label: "Nouveaux commentaires" },
-  { key: "ci", label: "CI passée ou en échec" },
-  { key: "review", label: "Approbation ou modifications demandées" },
-  { key: "badge", label: "Pastille sur l'icône : nombre de PR / MR avec du nouveau, non consultées" },
+  { key: "opened", label: tr("Nouvelle PR / MR à traiter (assignée ou relecture demandée)") },
+  { key: "commits", label: tr("Nouveaux commits (hors mes propres PR / MR)") },
+  { key: "comments", label: tr("Nouveaux commentaires") },
+  { key: "ci", label: tr("CI passée ou en échec") },
+  { key: "review", label: tr("Approbation ou modifications demandées") },
+  { key: "badge", label: tr("Pastille sur l'icône : nombre de PR / MR avec du nouveau, non consultées") },
 ];
 
 function NotificationsGroup() {
@@ -336,9 +358,9 @@ function NotificationsGroup() {
 
   async function test() {
     try {
-      if (!(await sendTestNotification())) notify("error", "Les notifications système ne sont pas autorisées pour Merathon.");
+      if (!(await sendTestNotification())) notify("error", tr("Les notifications système ne sont pas autorisées pour Merathon."));
     } catch (e) {
-      notify("error", `Notification impossible : ${errorMessage(e)}`);
+      notify("error", tr("Notification impossible : {error}", { error: errorMessage(e) }));
     }
   }
 
@@ -346,13 +368,13 @@ function NotificationsGroup() {
     <section className="mt-6">
       <Group
         title="Notifications"
-        description="À chaque synchronisation, l'activité de mes PR / MR (tous projets) : notification système si Merathon est en arrière-plan, simple bandeau sinon."
+        description={tr("À chaque synchronisation, l'activité de mes PR / MR (tous projets) : notification système si Merathon est en arrière-plan, simple bandeau sinon.")}
       >
         <label className="flex items-center gap-2 mb-3 font-medium">
           <input type="checkbox" className="h-4 w-4" checked={settings.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
-          Activer les notifications
+          {tr("Activer les notifications")}
         </label>
-        <div role="group" aria-label="Notifier pour" className={`flex flex-col gap-2.5 pl-6 ${settings.enabled ? "" : "opacity-50"}`}>
+        <div role="group" aria-label={tr("Notifier pour")} className={`flex flex-col gap-2.5 pl-6 ${settings.enabled ? "" : "opacity-50"}`}>
           {NOTIFICATION_KINDS.map(({ key, label }) => (
             <label key={key} className="flex items-center gap-2">
               <input
@@ -372,7 +394,7 @@ function NotificationsGroup() {
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/10 hover:bg-overlay/10"
       >
         <Bell size={13} strokeWidth={1.75} />
-        Envoyer une notification d'essai
+        {tr("Envoyer une notification d'essai")}
       </button>
     </section>
   );
@@ -382,50 +404,50 @@ function NotificationsGroup() {
 
 const SHORTCUTS: { group: string; items: [string, string][] }[] = [
   {
-    group: "Général",
+    group: tr("Général"),
     items: [
-      ["Ouvrir un dépôt", "Ctrl+O"],
-      ["Préférences", "Ctrl+,"],
-      ["Rafraîchir le dépôt", "F5"],
-      ["Revenir au graphe", "Échap"],
+      [tr("Ouvrir un dépôt"), "Ctrl+O"],
+      [tr("Préférences"), "Ctrl+,"],
+      [tr("Rafraîchir le dépôt"), "F5"],
+      [tr("Revenir au graphe"), tr("Échap")],
     ],
   },
   {
-    group: "Navigation au clavier",
+    group: tr("Navigation au clavier"),
     items: [
-      ["Menu contextuel de l'élément actif", "Maj+F10"],
-      ["Graphe : commit précédent / suivant", "↑ / ↓"],
-      ["Graphe : premier / dernier commit", "Origine / Fin"],
-      ["Barre latérale : sélectionner", "Espace"],
-      ["Barre latérale : extraire, appliquer, ouvrir", "Entrée"],
-      ["Menu : choix précédent / suivant", "↑ / ↓"],
-      ["Sortir du terminal intégré", "Ctrl+Maj+J"],
+      [tr("Menu contextuel de l'élément actif"), "Maj+F10"],
+      [tr("Graphe : commit précédent / suivant"), "↑ / ↓"],
+      [tr("Graphe : premier / dernier commit"), "Origine / Fin"],
+      [tr("Barre latérale : sélectionner"), tr("Espace")],
+      [tr("Barre latérale : extraire, appliquer, ouvrir"), tr("Entrée")],
+      [tr("Menu : choix précédent / suivant"), "↑ / ↓"],
+      [tr("Sortir du terminal intégré"), "Ctrl+Maj+J"],
     ],
   },
   {
-    group: "Onglets et fenêtres",
+    group: tr("Onglets et fenêtres"),
     items: [
-      ["Nouvel onglet", "Ctrl+T"],
-      ["Fermer l'onglet", "Ctrl+W"],
-      ["Onglet suivant", "Ctrl+Tab"],
-      ["Onglet précédent", "Ctrl+Maj+Tab"],
-      ["Nouvelle fenêtre", "Ctrl+Maj+N"],
+      [tr("Nouvel onglet"), "Ctrl+T"],
+      [tr("Fermer l'onglet"), "Ctrl+W"],
+      [tr("Onglet suivant"), "Ctrl+Tab"],
+      [tr("Onglet précédent"), "Ctrl+Maj+Tab"],
+      [tr("Nouvelle fenêtre"), "Ctrl+Maj+N"],
     ],
   },
   {
-    group: "Affichage",
+    group: tr("Affichage"),
     items: [
-      ["Agrandir l'interface", "Ctrl+="],
-      ["Réduire l'interface", "Ctrl+-"],
-      ["Taille par défaut", "Ctrl+0"],
-      ["Afficher / masquer le panneau du bas", "Ctrl+J"],
+      [tr("Agrandir l'interface"), "Ctrl+="],
+      [tr("Réduire l'interface"), "Ctrl+-"],
+      [tr("Taille par défaut"), "Ctrl+0"],
+      [tr("Afficher / masquer le panneau du bas"), "Ctrl+J"],
     ],
   },
   {
     group: "Terminal",
     items: [
-      ["Copier la sélection", "Ctrl+Maj+C"],
-      ["Coller", "Ctrl+Maj+V"],
+      [tr("Copier la sélection"), "Ctrl+Maj+C"],
+      [tr("Coller"), "Ctrl+Maj+V"],
     ],
   },
 ];
@@ -433,7 +455,7 @@ const SHORTCUTS: { group: string; items: [string, string][] }[] = [
 function ShortcutsSection() {
   return (
     <>
-      <SectionTitle title="Raccourcis clavier" subtitle="Quand le terminal a le focus, les touches vont au shell, sauf Ctrl+Maj+C, Ctrl+Maj+V et Ctrl+Maj+J (sortir du terminal)." />
+      <SectionTitle title={tr("Raccourcis clavier")} subtitle={tr("Quand le terminal a le focus, les touches vont au shell, sauf Ctrl+Maj+C, Ctrl+Maj+V et Ctrl+Maj+J (sortir du terminal).")} />
       {SHORTCUTS.map(({ group, items }) => (
         <div key={group} className="mb-5">
           <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">{group}</h4>
@@ -454,11 +476,11 @@ function ShortcutsSection() {
 // ---------------------------------------------------------------- À propos
 
 const LINKS: { label: string; icon: LucideIcon; url: (version: string) => string }[] = [
-  { label: "Dépôt GitHub", icon: FolderGit2, url: () => REPO_URL },
-  { label: "Notes de cette version", icon: ScrollText, url: releaseUrl },
-  { label: "Journal des modifications", icon: BookOpen, url: () => `${REPO_URL}/blob/main/CHANGELOG.md` },
-  { label: "Signaler un bug", icon: Bug, url: () => `${REPO_URL}/issues/new/choose` },
-  { label: "Licence MIT", icon: Scale, url: () => `${REPO_URL}/blob/main/LICENSE` },
+  { label: tr("Dépôt GitHub"), icon: FolderGit2, url: () => REPO_URL },
+  { label: tr("Notes de cette version"), icon: ScrollText, url: releaseUrl },
+  { label: tr("Journal des modifications"), icon: BookOpen, url: () => `${REPO_URL}/blob/main/CHANGELOG.md` },
+  { label: tr("Signaler un bug"), icon: Bug, url: () => `${REPO_URL}/issues/new/choose` },
+  { label: tr("Licence MIT"), icon: Scale, url: () => `${REPO_URL}/blob/main/LICENSE` },
 ];
 
 function AboutSection() {
@@ -492,7 +514,7 @@ function AboutSection() {
 
   const rows: [string, string][] = [
     ["Version", version ? versionLabel(version, info) : "…"],
-    ["Système", info ? `${osLabel(info.os)} · ${info.arch}` : "…"],
+    [tr("Système"), info ? `${osLabel(info.os)} · ${info.arch}` : "…"],
     ["Tauri", tauri || "…"],
     ["libgit2", info?.libgit2 ?? "…"],
   ];
@@ -505,11 +527,11 @@ function AboutSection() {
           <h3 className="text-base font-semibold">
             Merathon {version && <span className="ml-1 font-mono text-xs font-normal text-[var(--color-muted)]">v{version}</span>}
           </h3>
-          <p className="mt-0.5 text-[var(--color-muted)]">Git Repository Manager — client Git graphique de bureau.</p>
+          <p className="mt-0.5 text-[var(--color-muted)]">{tr("Git Repository Manager — client Git graphique de bureau.")}</p>
         </div>
       </div>
 
-      <Group title="Version installée" description="À joindre à un rapport de bug.">
+      <Group title={tr("Version installée")} description={tr("À joindre à un rapport de bug.")}>
         <div className="rounded-lg border border-overlay/10 divide-y divide-overlay/5">
           {rows.map(([label, value]) => (
             <div key={label} className="flex items-center justify-between px-3 py-2">
@@ -525,7 +547,7 @@ function AboutSection() {
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/10 hover:bg-overlay/10 disabled:opacity-50"
           >
             <RefreshCw size={13} strokeWidth={1.75} className={checking ? "animate-spin" : ""} />
-            {checking ? "Vérification…" : "Rechercher des mises à jour"}
+            {checking ? tr("Vérification…") : tr("Rechercher des mises à jour")}
           </button>
           <button
             onClick={copy}
@@ -533,12 +555,12 @@ function AboutSection() {
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/10 hover:bg-overlay/10 disabled:opacity-50"
           >
             {copied ? <Check size={13} strokeWidth={1.75} /> : <Copy size={13} strokeWidth={1.75} />}
-            {copied ? "Copié" : "Copier les informations"}
+            {copied ? tr("Copié") : tr("Copier les informations")}
           </button>
         </div>
       </Group>
 
-      <Group title="Liens">
+      <Group title={tr("Liens")}>
         <div className="rounded-lg border border-overlay/10 divide-y divide-overlay/5">
           {LINKS.map(({ label, icon: Icon, url }) => (
             <button
@@ -554,15 +576,15 @@ function AboutSection() {
         </div>
       </Group>
 
-      <p className="text-[10px] text-[var(--color-muted)]">© 2026 Julien Dudek — distribué sous licence MIT.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">{tr("© 2026 Julien Dudek — distribué sous licence MIT.")}</p>
     </>
   );
 }
 
 // ---------------------------------------------------------------- Mon activité
 
-const KIND_LABELS: Record<MilestoneKind, string> = { commit: "Commits", branch: "Branches", pr: "PR / MR", merge: "Fusions" };
-const KIND_UNITS: Record<MilestoneKind, string> = { commit: "commits", branch: "branches", pr: "PR / MR", merge: "fusions" };
+const KIND_LABELS: Record<MilestoneKind, string> = { commit: "Commits", branch: "Branches", pr: "PR / MR", merge: tr("Fusions") };
+const KIND_UNITS: Record<MilestoneKind, string> = { commit: "commits", branch: "branches", pr: "PR / MR", merge: tr("fusions") };
 
 /** Couleur d'un badge selon l'ampleur du palier : accent, argent, or. */
 const BADGE_STYLES: Record<Tier, string> = {
@@ -575,7 +597,7 @@ const BADGE_STYLES: Record<Tier, string> = {
 const FOCUS_RING =
   "outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-elevated)]";
 
-const rewardDate = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" });
+const rewardDate = new Intl.DateTimeFormat(locale, { dateStyle: "long" });
 
 function ActivitySection() {
   const milestones = useCelebrationStore((s) => s.milestones);
@@ -586,7 +608,7 @@ function ActivitySection() {
 
   return (
     <>
-      <SectionTitle title="Mon activité" subtitle="Vos récompenses obtenues avec Merathon. Les prochaines restent une surprise." />
+      <SectionTitle title={tr("Mon activité")} subtitle={tr("Vos récompenses obtenues avec Merathon. Les prochaines restent une surprise.")} />
 
       <div className="mb-6 grid grid-cols-4 gap-2.5">
         {MILESTONE_KINDS.map((kind) => (
@@ -605,14 +627,14 @@ function ActivitySection() {
         const next = nextMilestone(kind, count);
         const rewards = milestones.rewards.filter((r) => r.kind === kind && !r.surprise).sort((a, b) => a.count - b.count);
         return (
-          <Group key={kind} title={KIND_LABELS[kind]} description={`Prochain palier : ${next} ${KIND_UNITS[kind]}`} value={`${count} / ${next}`}>
+          <Group key={kind} title={KIND_LABELS[kind]} description={tr("Prochain palier : {next} {value}", { next, value: KIND_UNITS[kind] })} value={`${count} / ${next}`}>
             <div
               role="progressbar"
-              aria-label={`${KIND_LABELS[kind]} : progression vers le prochain palier`}
+              aria-label={tr("{value} : progression vers le prochain palier", { value: KIND_LABELS[kind] })}
               aria-valuemin={0}
               aria-valuemax={next}
               aria-valuenow={count}
-              aria-valuetext={`${count} sur ${next}`}
+              aria-valuetext={tr("{count} sur {next}", { count, next })}
               className="mb-3 h-1.5 rounded-full bg-overlay/10 overflow-hidden"
             >
               <div className="h-full rounded-full bg-[var(--color-accent)]" style={{ width: `${Math.min(100, (count / next) * 100)}%` }} />
@@ -626,7 +648,7 @@ function ActivitySection() {
       })}
 
       {surprises.length > 0 && (
-        <Group title="Surprises" description="Hors palier, un commit sur 100 en moyenne déclenche une surprise.">
+        <Group title={tr("Surprises")} description={tr("Hors palier, un commit sur 100 en moyenne déclenche une surprise.")}>
           <div className="flex flex-wrap gap-2">
             {surprises.map((r) => <RewardBadge key={`${r.count}-${r.at}`} reward={r} isNew={r.at !== null && r.at > seenAt} />)}
           </div>
@@ -639,7 +661,7 @@ function ActivitySection() {
 /** Médaille d'une récompense obtenue ; la date et le libellé sont dans l'infobulle. */
 function RewardBadge({ reward, isNew }: { reward: Reward; isNew: boolean }) {
   const tier = reward.surprise ? 0 : milestoneTier(reward.kind, reward.count);
-  const date = reward.at === null ? "Date inconnue" : `Obtenu le ${rewardDate.format(reward.at)}`;
+  const date = reward.at === null ? tr("Date inconnue") : tr("Obtenu le {value}", { value: rewardDate.format(reward.at) });
   const label = `${rewardLabel(reward)}, ${date.toLowerCase()}${isNew ? ", nouveau" : ""}`;
   return (
     <Tooltip title={rewardLabel(reward)} lines={[date]}>
@@ -656,7 +678,7 @@ function RewardBadge({ reward, isNew }: { reward: Reward; isNew: boolean }) {
         <span className="text-[10px] font-semibold leading-tight tabular-nums">{reward.count}</span>
         {isNew && (
           <span className="absolute -top-2.5 -right-2.5 rounded-full bg-[var(--color-accent-solid)] px-1 text-[8px] font-bold uppercase leading-[14px] text-white">
-            nouveau
+            {tr("nouveau")}
           </span>
         )}
       </div>
@@ -667,11 +689,11 @@ function RewardBadge({ reward, isNew }: { reward: Reward; isNew: boolean }) {
 /** Prochaine médaille, cachée pour garder la surprise. */
 function LockedBadge() {
   return (
-    <Tooltip title="Prochaine récompense" lines={["Continuez pour la découvrir"]}>
+    <Tooltip title={tr("Prochaine récompense")} lines={[tr("Continuez pour la découvrir")]}>
       <div
         role="img"
         tabIndex={0}
-        aria-label="Prochaine récompense, à découvrir"
+        aria-label={tr("Prochaine récompense, à découvrir")}
         className={`flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-overlay/20 text-[var(--color-muted)] ${FOCUS_RING}`}
       >
         <span className="celebrate-emoji text-sm opacity-60">🔒</span>
@@ -682,7 +704,7 @@ function LockedBadge() {
 
 // ---------------------------------------------------------------- Accessibilité
 
-const auditDate = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(new Date(`${AUDIT.date}T12:00:00`));
+const auditDate = new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(new Date(`${AUDIT.date}T12:00:00`));
 
 function AccessibilitySection() {
   const [copied, setCopied] = useState(false);
@@ -697,17 +719,17 @@ function AccessibilitySection() {
   const grid = AUDIT.rgaaGrid;
   const tiles: [string, string, string][] = [
     [
-      "Conformité RGAA",
-      rate === null ? "Non conforme" : formatPercent(rate),
-      rate === null ? `${plural(grid.NT, "critère")} à vérifier avec Orca` : status,
+      tr("Conformité RGAA"),
+      rate === null ? tr("Non conforme") : formatPercent(rate),
+      rate === null ? tr("{count} à vérifier avec Orca", { count: trn(grid.NT, "{n} critère", "{n} critères") }) : status,
     ],
-    ["Critères conformes", `${grid.C} / ${grid.C + grid.NC + grid.NT}`, `${grid.NA} non applicables`],
-    ["Score Lighthouse", formatPercent(scoreAfter()), `${viewsAtFullScore()} vues sur ${EVALUATED_VIEWS.length * 2} à 100 %`],
+    [tr("Critères conformes"), `${grid.C} / ${grid.C + grid.NC + grid.NT}`, tr("{NA} non applicables", { NA: grid.NA })],
+    [tr("Score Lighthouse"), formatPercent(scoreAfter()), tr("{viewsAtFullScore} vues sur {value} à 100 %", { viewsAtFullScore: viewsAtFullScore(), value: EVALUATED_VIEWS.length * 2 })],
   ];
 
   return (
     <>
-      <SectionTitle title="Accessibilité" subtitle="Compte rendu de l'évaluation et déclaration d'accessibilité de Merathon." />
+      <SectionTitle title={tr("Accessibilité")} subtitle={tr("Compte rendu de l'évaluation et déclaration d'accessibilité de Merathon.")} />
 
       <div className="mb-6 grid grid-cols-3 gap-2.5 max-[760px]:grid-cols-1">
         {tiles.map(([label, value, hint]) => (
@@ -719,18 +741,18 @@ function AccessibilitySection() {
         ))}
       </div>
 
-      <Group title="Méthode" description={`Évaluation du ${auditDate}, référence : ${AUDIT.standard}.`}>
+      <Group title={tr("Méthode")} description={tr("Évaluation du {auditDate}, référence : {standard}.", { auditDate, standard: AUDIT.standard })}>
         <BulletList items={AUDIT.tools} />
         <p className="mt-2 text-[11px] text-[var(--color-muted)]">{AUDIT.environment}</p>
       </Group>
 
       <Group
-        title="Grille d'audit RGAA"
-        description="Statut et constat de chacun des 106 critères, et protocole de test avec le lecteur d'écran Orca."
-        value={grid.NT ? `${grid.NT} à tester` : "complète"}
+        title={tr("Grille d'audit RGAA")}
+        description={tr("Statut et constat de chacun des 106 critères, et protocole de test avec le lecteur d'écran Orca.")}
+        value={grid.NT ? tr("{NT} à tester", { NT: grid.NT }) : tr("complète")}
       >
         <div className="mb-3 grid grid-cols-4 gap-2 text-center max-[760px]:grid-cols-2">
-          {([["C", "Conformes"], ["NC", "Non conformes"], ["NA", "Non applicables"], ["NT", "Non testés"]] as const).map(([key, label]) => (
+          {([["C", tr("Conformes")], ["NC", tr("Non conformes")], ["NA", tr("Non applicables")], ["NT", tr("Non testés")]] as const).map(([key, label]) => (
             <div key={key} className="rounded-md border border-overlay/10 px-2 py-1.5">
               <p className="text-base font-semibold tabular-nums">{AUDIT.rgaaGrid[key]}</p>
               <p className="text-[10px] text-[var(--color-muted)]">{label}</p>
@@ -743,71 +765,71 @@ function AccessibilitySection() {
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/15 hover:bg-overlay/5"
           >
             <ExternalLink size={13} strokeWidth={1.75} />
-            Grille RGAA
+            {tr("Grille RGAA")}
           </button>
           <button
             onClick={() => void openUrl(ORCA_PROTOCOL_URL)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/15 hover:bg-overlay/5"
           >
             <ExternalLink size={13} strokeWidth={1.75} />
-            Protocole de test Orca
+            {tr("Protocole de test Orca")}
           </button>
         </div>
       </Group>
 
-      <Group title="Corrections apportées" value={String(AUDIT.fixes.length)}>
+      <Group title={tr("Corrections apportées")} value={String(AUDIT.fixes.length)}>
         <FindingList items={AUDIT.fixes} />
       </Group>
 
-      <Group title="Non-conformités connues" description="Relevées dans le code ou par les tests manuels." value={String(AUDIT.nonCompliant.length)}>
+      <Group title={tr("Non-conformités connues")} description={tr("Relevées dans le code ou par les tests manuels.")} value={String(AUDIT.nonCompliant.length)}>
         {AUDIT.nonCompliant.length ? (
           <FindingList items={AUDIT.nonCompliant} />
         ) : (
-          <p className="text-[11px] text-[var(--color-muted)]">Aucune à ce jour : toutes celles relevées ont été corrigées (voir ci-dessus).</p>
+          <p className="text-[11px] text-[var(--color-muted)]">{tr("Aucune à ce jour : toutes celles relevées ont été corrigées (voir ci-dessus).")}</p>
         )}
       </Group>
 
-      <Group title="Vérifications manuelles">
+      <Group title={tr("Vérifications manuelles")}>
         <BulletList items={AUDIT.manualChecks} />
       </Group>
 
-      <Group title="Non évalué">
+      <Group title={tr("Non évalué")}>
         <BulletList items={AUDIT.notEvaluated} />
       </Group>
 
-      <Group title="Vues évaluées" description="Score Lighthouse de chaque vue, en thème sombre puis en thème clair." value={String(EVALUATED_VIEWS.length)}>
+      <Group title={tr("Vues évaluées")} description={tr("Score Lighthouse de chaque vue, en thème sombre puis en thème clair.")} value={String(EVALUATED_VIEWS.length)}>
         <ul className="grid grid-cols-2 gap-x-4 gap-y-1">
           {EVALUATED_VIEWS.map((view) => (
             <li key={view.name} className="flex items-center justify-between gap-2 text-[11px]">
               <span className="truncate" title={view.name}>{view.name}</span>
               <span className="shrink-0 font-mono text-[10px] text-[var(--color-muted)]">
                 <span aria-hidden>{view.dark} · {view.light}</span>
-                <span className="sr-only">{view.dark} % en thème sombre, {view.light} % en thème clair</span>
+                <span className="sr-only">{tr("{dark} % en thème sombre, {light} % en thème clair", { dark: view.dark, light: view.light })}</span>
               </span>
             </li>
           ))}
         </ul>
       </Group>
 
-      <Group title="Déclaration d'accessibilité" description="Sur le modèle de déclaration du RGAA 4.1.2.">
+      <Group title={tr("Déclaration d'accessibilité")} description={tr("Sur le modèle de déclaration du RGAA 4.1.2.")}>
         <div className="mb-3 flex flex-wrap gap-2">
           <button
             onClick={() => void copy()}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/15 hover:bg-overlay/5"
           >
             {copied ? <Check size={13} strokeWidth={1.75} /> : <Copy size={13} strokeWidth={1.75} />}
-            {copied ? "Copiée" : "Copier en Markdown"}
+            {copied ? tr("Copiée") : tr("Copier en Markdown")}
           </button>
-          <span role="status" className="sr-only">{copied ? "Déclaration copiée dans le presse-papiers" : ""}</span>
+          <span role="status" className="sr-only">{copied ? tr("Déclaration copiée dans le presse-papiers") : ""}</span>
           <button
             onClick={() => void openUrl(ISSUES_URL)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/15 hover:bg-overlay/5"
           >
             <ExternalLink size={13} strokeWidth={1.75} />
-            Signaler un problème d'accessibilité
+            {tr("Signaler un problème d'accessibilité")}
           </button>
         </div>
-        <article aria-label="Déclaration d'accessibilité" className="rounded-lg border border-overlay/10 bg-overlay/[0.03] px-4 py-3 leading-relaxed">
+        <article aria-label={tr("Déclaration d'accessibilité")} className="rounded-lg border border-overlay/10 bg-overlay/[0.03] px-4 py-3 leading-relaxed">
           {declaration().map((block) => (
             <section key={block.heading} className="mb-3 last:mb-0">
               <h5 className="mb-1 font-semibold">{block.heading}</h5>

@@ -199,7 +199,7 @@ pub fn rebase_todo(repo: &Repository, base: &str) -> Result<Vec<TodoCommit>, Git
     let head = repo.head()?.peel_to_commit()?;
     let base = repo.revparse_single(base)?.peel_to_commit()?;
     if head.id() != base.id() && !repo.graph_descendant_of(head.id(), base.id())? {
-        return Err(GitError::Other("Le commit choisi n'est pas un ancêtre de HEAD".into()));
+        return Err(GitError::Other(tr!("Le commit choisi n'est pas un ancêtre de HEAD", "The chosen commit is not an ancestor of HEAD")));
     }
 
     let mut walk = repo.revwalk()?;
@@ -239,14 +239,14 @@ fn workdir_is_clean(repo: &Repository) -> Result<bool, GitError> {
 
 fn ensure_can_start(repo: &Repository) -> Result<(), GitError> {
     if load_state(repo).is_some() {
-        return Err(GitError::Other("Un rebase interactif est déjà en cours : continue-le ou annule-le".into()));
+        return Err(GitError::Other(tr!("Un rebase interactif est déjà en cours : continue-le ou annule-le", "An interactive rebase is already in progress: continue or cancel it")));
     }
     if repo.state() != RepositoryState::Clean {
-        return Err(GitError::Other("Une opération (merge, rebase…) est déjà en cours".into()));
+        return Err(GitError::Other(tr!("Une opération (merge, rebase…) est déjà en cours", "An operation (merge, rebase…) is already in progress")));
     }
     if !workdir_is_clean(repo)? {
         return Err(GitError::Other(
-            "Des modifications ne sont pas commitées : commite-les ou mets-les de côté (stash) avant le rebase interactif".into(),
+            tr!("Des modifications ne sont pas commitées : commite-les ou mets-les de côté (stash) avant le rebase interactif", "Some changes are not committed: commit or stash them before the interactive rebase"),
         ));
     }
     Ok(())
@@ -262,22 +262,21 @@ fn validate(todo: &[TodoCommit], steps: &[RebaseStep], mode: RebaseMode) -> Resu
     let mut seen = HashSet::new();
     for step in steps {
         let Some(commit) = by_hash.get(step.hash.as_str()) else {
-            return Err(err(format!("Étape invalide pour le commit {}", short(&step.hash))));
+            return Err(err(tr!("Étape invalide pour le commit {}", "Invalid step for commit {}", short(&step.hash))));
         };
         if !seen.insert(step.hash.as_str()) {
-            return Err(err(format!("Le commit {} apparaît deux fois", short(&step.hash))));
+            return Err(err(tr!("Le commit {} apparaît deux fois", "Commit {} appears twice", short(&step.hash))));
         }
         if commit.is_merge && mode == RebaseMode::Linear {
-            return Err(err(format!(
-                "{} est un merge : en mode linéaire les merges sont aplatis, choisis « Préserver les merges » pour le garder",
+            return Err(err(tr!("{} est un merge : en mode linéaire les merges sont aplatis, choisis « Préserver les merges » pour le garder", "{} is a merge: in linear mode merges are flattened, choose \"Preserve merges\" to keep it",
                 short(&step.hash)
             )));
         }
         if commit.is_merge && matches!(step.action, RebaseAction::Squash | RebaseAction::Fixup) {
-            return Err(err(format!("{} : un merge ne peut pas être fusionné dans un autre commit", short(&step.hash))));
+            return Err(err(tr!("{} : un merge ne peut pas être fusionné dans un autre commit", "{}: a merge cannot be squashed into another commit", short(&step.hash))));
         }
         if step.action == RebaseAction::Reword && step.message.as_deref().is_none_or(|m| m.trim().is_empty()) {
-            return Err(err(format!("{} : nouveau message manquant", short(&step.hash))));
+            return Err(err(tr!("{} : nouveau message manquant", "{}: new message missing", short(&step.hash))));
         }
     }
 
@@ -286,8 +285,7 @@ fn validate(todo: &[TodoCommit], steps: &[RebaseStep], mode: RebaseMode) -> Resu
         RebaseMode::Linear => {
             if let Some(first) = kept.first() {
                 if matches!(first.action, RebaseAction::Squash | RebaseAction::Fixup) {
-                    return Err(err(format!(
-                        "{} : squash / fixup impossible sur le premier commit (il n'y a pas de commit précédent)",
+                    return Err(err(tr!("{} : squash / fixup impossible sur le premier commit (il n'y a pas de commit précédent)", "{}: squash / fixup not possible on the first commit (there is no previous commit)",
                         short(&first.hash)
                     )));
                 }
@@ -297,7 +295,7 @@ fn validate(todo: &[TodoCommit], steps: &[RebaseStep], mode: RebaseMode) -> Resu
             // L'ordre est celui de l'historique : on ne peut que choisir les actions.
             let position: HashMap<&str, usize> = todo.iter().enumerate().map(|(i, c)| (c.hash.as_str(), i)).collect();
             if steps.windows(2).any(|w| position[w[0].hash.as_str()] > position[w[1].hash.as_str()]) {
-                return Err(err("En préservant les merges, l'ordre des commits ne peut pas changer".into()));
+                return Err(err(tr!("En préservant les merges, l'ordre des commits ne peut pas changer", "When preserving merges, the order of commits cannot change")));
             }
             let dropped: HashSet<&str> = steps
                 .iter()
@@ -306,8 +304,7 @@ fn validate(todo: &[TodoCommit], steps: &[RebaseStep], mode: RebaseMode) -> Resu
                 .chain(todo.iter().map(|c| c.hash.as_str()).filter(|h| !seen.contains(h)))
                 .collect();
             if let Some(root) = todo.iter().find(|c| c.parents.is_empty() && dropped.contains(c.hash.as_str())) {
-                return Err(err(format!(
-                    "{} est un commit racine (historique fusionné sans ancêtre commun) : en préservant les merges, il ne peut pas être supprimé",
+                return Err(err(tr!("{} est un commit racine (historique fusionné sans ancêtre commun) : en préservant les merges, il ne peut pas être supprimé", "{} is a root commit (history merged without a common ancestor): when preserving merges, it cannot be deleted",
                     short(&root.hash)
                 )));
             }
@@ -321,8 +318,7 @@ fn validate(todo: &[TodoCommit], steps: &[RebaseStep], mode: RebaseMode) -> Resu
                         && todo.iter().filter(|c| c.parents.contains(&p.hash)).count() == 1
                 });
                 if !ok {
-                    return Err(err(format!(
-                        "{} : en préservant les merges, un squash / fixup doit suivre directement un commit ordinaire conservé de la même branche",
+                    return Err(err(tr!("{} : en préservant les merges, un squash / fixup doit suivre directement un commit ordinaire conservé de la même branche", "{}: when preserving merges, a squash / fixup must directly follow a kept ordinary commit of the same branch",
                         short(&step.hash)
                     )));
                 }
@@ -447,7 +443,7 @@ fn replay_in_memory(repo: &Repository, original: &Commit, planned: &Planned) -> 
         Replay::MergeAsDiff => Ok(repo.cherrypick_commit(original, &planned.onto, 1, None)?),
         Replay::Remerge => {
             if planned.parents.len() != 2 {
-                return Err(err(format!("{} : les merges à plus de deux parents ne sont pas pris en charge", short(&original.id().to_string()))));
+                return Err(err(tr!("{} : les merges à plus de deux parents ne sont pas pris en charge", "{}: merges with more than two parents are not supported", short(&original.id().to_string()))));
             }
             Ok(repo.merge_commits(&planned.parents[0], &planned.parents[1], None)?)
         }
@@ -469,8 +465,7 @@ fn replay_in_workdir(repo: &Repository, original: &Commit, planned: &Planned) ->
             Some(name) => repo.set_head(name)?,
             None => repo.set_head_detached(previous.id())?,
         }
-        Err(err(format!(
-            "Impossible de présenter le conflit de {} dans la copie de travail ({e}) : un fichier non suivi serait probablement écrasé, déplace-le puis réessaie",
+        Err(err(tr!("Impossible de présenter le conflit de {} dans la copie de travail ({e}) : un fichier non suivi serait probablement écrasé, déplace-le puis réessaie", "Could not show the conflict of {} in the working copy ({e}): an untracked file would probably be overwritten, move it then try again",
             short(&original.id().to_string())
         )))
     })
@@ -739,15 +734,15 @@ fn finish(repo: &Repository, state: &SavedRebase) -> Result<(), GitError> {
 
 /// Reprend un rebase interactif arrêté (conflits résolus, ou commit modifié).
 pub fn continue_interactive(repo: &Repository) -> Result<InteractiveOutcome, GitError> {
-    let mut state = load_state(repo).ok_or_else(|| err("Aucun rebase interactif en cours".into()))?;
-    let (index, reason) = state.stopped.ok_or_else(|| err("Le rebase n'est pas arrêté".into()))?;
+    let mut state = load_state(repo).ok_or_else(|| err(tr!("Aucun rebase interactif en cours", "No interactive rebase in progress")))?;
+    let (index, reason) = state.stopped.ok_or_else(|| err(tr!("Le rebase n'est pas arrêté", "The rebase is not stopped")))?;
     let step = state.steps[index].clone();
     let original = repo.find_commit(Oid::from_str(&step.hash)?)?;
 
     match reason {
         StopReason::Conflict => {
             if !conflicted_paths(repo)?.is_empty() {
-                return Err(GitError::Conflict("Résous tous les conflits avant de continuer".into()));
+                return Err(GitError::Conflict(tr!("Résous tous les conflits avant de continuer", "Resolve all conflicts before continuing")));
             }
             let planned = plan_step(repo, &state, &step, &original)?;
             let in_progress = matches!(
@@ -791,7 +786,7 @@ pub fn continue_interactive(repo: &Repository) -> Result<InteractiveOutcome, Git
         StopReason::Edit => {
             if !workdir_is_clean(repo)? {
                 return Err(err(
-                    "Des modifications ne sont pas commitées : commite-les (ou amend) avant de continuer".into(),
+                    tr!("Des modifications ne sont pas commitées : commite-les (ou amend) avant de continuer", "Some changes are not committed: commit them (or amend) before continuing"),
                 ));
             }
             // Le commit a pu être modifié (amend) ou complété : on repart de HEAD.
@@ -808,7 +803,7 @@ pub fn continue_interactive(repo: &Repository) -> Result<InteractiveOutcome, Git
 
 /// Abandonne le rebase interactif et restaure la branche et la copie de travail d'origine.
 pub fn abort_interactive(repo: &Repository) -> Result<(), GitError> {
-    let state = load_state(repo).ok_or_else(|| err("Aucun rebase interactif en cours".into()))?;
+    let state = load_state(repo).ok_or_else(|| err(tr!("Aucun rebase interactif en cours", "No interactive rebase in progress")))?;
     let orig = repo.find_commit(Oid::from_str(&state.orig_head)?)?;
     repo.cleanup_state()?;
     match &state.branch_ref {

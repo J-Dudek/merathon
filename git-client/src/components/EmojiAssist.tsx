@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Clock, Smile } from "lucide-react";
 import { caretPosition } from "../lib/caret";
 import { EMOJI_CATEGORIES, emojiQueryAt, emojisOfCategory, insertEmoji, recentEmojis, rememberEmoji, searchEmojis, type EmojiQuery } from "../lib/emoji";
+import { tr } from "../i18n";
 
 const MAX_SUGGESTIONS = 8;
 const SUGGESTIONS_WIDTH = 280;
@@ -90,7 +91,7 @@ function EmojiPicker({ style, onPick, onClose }: { style: CSSProperties; onPick:
       ref={box}
       style={style}
       role="dialog"
-      aria-label="Choisir un emoji"
+      aria-label={tr("Choisir un emoji")}
       className="flex flex-col rounded-lg border border-overlay/10 bg-[var(--color-bg-elevated)] shadow-2xl"
       onKeyDown={onKeyDown}
       onClick={(e) => e.stopPropagation()}
@@ -100,12 +101,12 @@ function EmojiPicker({ style, onPick, onClose }: { style: CSSProperties; onPick:
         ref={search}
         type="text"
         role="combobox"
-        aria-label="Rechercher un emoji"
+        aria-label={tr("Rechercher un emoji")}
         aria-expanded="true"
         aria-controls={listId}
         aria-activedescendant={shown ? `${listId}-${current}` : undefined}
         className="m-2 mb-1 px-2 py-1 rounded bg-shade/30 border border-overlay/50 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/60 placeholder:text-[var(--color-muted)]"
-        placeholder="Rechercher (fusée, heart, bug…)"
+        placeholder={tr("Rechercher (fusée, heart, bug…)")}
         value={text}
         onChange={(e) => {
           setText(e.target.value);
@@ -113,7 +114,7 @@ function EmojiPicker({ style, onPick, onClose }: { style: CSSProperties; onPick:
         }}
       />
       <div className="flex gap-0.5 px-2 pb-1 border-b border-overlay/10">
-        <button type="button" className={tabClass(!query && tab === RECENT)} aria-label="Récents" aria-pressed={!query && tab === RECENT} title="Récents" onClick={() => selectTab(RECENT)}>
+        <button type="button" className={tabClass(!query && tab === RECENT)} aria-label={tr("Récents")} aria-pressed={!query && tab === RECENT} title={tr("Récents")} onClick={() => selectTab(RECENT)}>
           <Clock size={14} className="text-[var(--color-muted)]" aria-hidden="true" />
         </button>
         {EMOJI_CATEGORIES.map((c) => (
@@ -139,7 +140,7 @@ function EmojiPicker({ style, onPick, onClose }: { style: CSSProperties; onPick:
             {e.emoji}
           </button>
         ))}
-        {emojis.length === 0 && <p className="col-span-8 p-2 text-xs text-center text-[var(--color-muted)]">Aucun emoji trouvé</p>}
+        {emojis.length === 0 && <p className="col-span-8 p-2 text-xs text-center text-[var(--color-muted)]">{tr("Aucun emoji trouvé")}</p>}
       </div>
       <p className="px-2 py-1 border-t border-overlay/10 text-[10px] text-[var(--color-muted)] truncate" aria-live="polite">
         {shown ? `:${shown.names[0]}: · ${shown.description}` : " "}
@@ -254,10 +255,10 @@ export function useEmojiAssist(ref: RefObject<HTMLTextAreaElement | HTMLInputEle
     <>
       <button
         type="button"
-        aria-label="Insérer un emoji"
+        aria-label={tr("Insérer un emoji")}
         aria-haspopup="dialog"
         aria-expanded={!!pickerStyle}
-        title="Insérer un emoji (ou taper « : » suivi d'un mot)"
+        title={tr("Insérer un emoji (ou taper « : » suivi d'un mot)")}
         className="absolute top-1 right-3 w-5 h-5 flex items-center justify-center rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
         // Le champ garde son focus et sa sélection : l'emoji s'insère au curseur. Le sélecteur ouvert ne voit pas ce clic comme extérieur.
         onMouseDown={(e) => {
@@ -299,7 +300,7 @@ export function useEmojiAssist(ref: RefObject<HTMLTextAreaElement | HTMLInputEle
               </li>
             ))}
           </ul>
-          <p className="px-2 py-1 border-t border-overlay/10 text-[10px] text-[var(--color-muted)]">Entrée ou Tab : insérer · Échap : fermer</p>
+          <p className="px-2 py-1 border-t border-overlay/10 text-[10px] text-[var(--color-muted)]">{tr("Entrée ou Tab : insérer · Échap : fermer")}</p>
         </div>,
         document.body,
       )}

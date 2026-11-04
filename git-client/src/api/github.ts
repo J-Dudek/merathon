@@ -5,6 +5,7 @@ import type {
 } from "../types/forge";
 import { PR_PAGE_SIZE } from "../types/forge";
 import { errorMessage } from "../lib/actions";
+import { tr } from "../i18n";
 
 /** GET sur l'API du compte (chemin relatif). La requête et le token sont gérés côté Rust. */
 export type ApiGet = <T>(path: string) => Promise<T>;
@@ -14,8 +15,8 @@ export type ApiSend = <T>(method: "POST" | "PUT" | "PATCH", path: string, body: 
 /** Requête GraphQL sur l'instance du compte ; renvoie le champ `data`. */
 export type ApiGraphql = <T>(query: string, variables: Record<string, unknown>) => Promise<T>;
 
-const noSend: ApiSend = () => Promise.reject(new Error("Écriture non disponible"));
-const noGraphql: ApiGraphql = () => Promise.reject(new Error("GraphQL non disponible"));
+const noSend: ApiSend = () => Promise.reject(new Error(tr("Écriture non disponible")));
+const noGraphql: ApiGraphql = () => Promise.reject(new Error(tr("GraphQL non disponible")));
 
 const seg = (value: string) => encodeURIComponent(value);
 
@@ -170,13 +171,13 @@ const OPEN_REVIEWS_QUERY = `query($owner: String!, $repo: String!) {
 
 /** Explication de `mergeable_state` (https://docs.github.com/rest/pulls/pulls). */
 const MERGE_STATES: Record<string, string> = {
-  clean: "Prête à merger",
-  has_hooks: "Prête à merger",
-  unstable: "Mergeable, mais des checks non obligatoires échouent",
-  blocked: "Bloquée : relectures ou checks obligatoires manquants",
-  behind: "En retard sur la branche cible : à mettre à jour",
-  dirty: "Conflits avec la branche cible",
-  draft: "Brouillon : à passer en « prête » sur GitHub avant le merge",
+  clean: tr("Prête à merger"),
+  has_hooks: tr("Prête à merger"),
+  unstable: tr("Mergeable, mais des checks non obligatoires échouent"),
+  blocked: tr("Bloquée : relectures ou checks obligatoires manquants"),
+  behind: tr("En retard sur la branche cible : à mettre à jour"),
+  dirty: tr("Conflits avec la branche cible"),
+  draft: tr("Brouillon : à passer en « prête » sur GitHub avant le merge"),
 };
 
 export class GitHubClient {
@@ -353,7 +354,7 @@ export class GitHubClient {
 
   /** Une approbation GitHub ne se retire pas (seul un admin peut la rejeter). */
   async review(owner: string, repo: string, number: number, event: ReviewEvent, body: string): Promise<void> {
-    if (event === "unapprove") throw new Error("GitHub ne permet pas de retirer sa propre approbation");
+    if (event === "unapprove") throw new Error(tr("GitHub ne permet pas de retirer sa propre approbation"));
     await this.send("POST", `/repos/${seg(owner)}/${seg(repo)}/pulls/${number}/reviews`, {
       event: event === "approve" ? "APPROVE" : "REQUEST_CHANGES",
       body,
@@ -411,10 +412,10 @@ export class GitHubClient {
       { owner, repo, number, ...logins },
     );
     const pull = data.repository?.pullRequest;
-    if (!pull) throw new Error(`Pull request #${number} introuvable`);
+    if (!pull) throw new Error(tr("Pull request #{number} introuvable", { number }));
     const userIds = reviewers.map((login, i) => {
       const id = data[`u${i}`]?.id;
-      if (!id) throw new Error(`Utilisateur GitHub introuvable : ${login}`);
+      if (!id) throw new Error(tr("Utilisateur GitHub introuvable : {login}", { login }));
       return id;
     });
     const teamIds = pull.reviewRequests.nodes.flatMap((n) => (n.requestedReviewer?.id ? [n.requestedReviewer.id] : []));
@@ -429,7 +430,7 @@ export class GitHubClient {
   /** Brouillon ↔ prête : uniquement disponible en GraphQL. */
   async setDraft(owner: string, repo: string, number: number, draft: boolean): Promise<void> {
     const raw = await this.get<RawPullRequest>(`/repos/${seg(owner)}/${seg(repo)}/pulls/${number}`);
-    if (!raw.node_id) throw new Error("Identifiant GraphQL de la pull request introuvable");
+    if (!raw.node_id) throw new Error(tr("Identifiant GraphQL de la pull request introuvable"));
     const mutation = draft ? "convertPullRequestToDraft" : "markPullRequestReadyForReview";
     await this.graphql(`mutation($id: ID!) { ${mutation}(input: { pullRequestId: $id }) { pullRequest { isDraft } } }`, { id: raw.node_id });
   }
@@ -583,7 +584,7 @@ export class GitHubClient {
     if (input.reviewers.length) {
       await this.send("POST", `${base}/pulls/${raw.number}/requested_reviewers`, {
         reviewers: input.reviewers.map((u) => u.username),
-      }).catch((e) => warnings.push(`relecteurs : ${errorMessage(e)}`));
+      }).catch((e) => warnings.push(tr("relecteurs : {error}", { error: errorMessage(e) })));
     }
     if (input.assignees.length || input.labels.length || input.milestone) {
       const patch: Record<string, unknown> = {};
@@ -591,7 +592,7 @@ export class GitHubClient {
       if (input.labels.length) patch.labels = input.labels;
       if (input.milestone) patch.milestone = input.milestone.id;
       await this.send("PATCH", `${base}/issues/${raw.number}`, patch)
-        .catch((e) => warnings.push(`assignés / labels / jalon : ${errorMessage(e)}`));
+        .catch((e) => warnings.push(tr("assignés / labels / jalon : {error}", { error: errorMessage(e) })));
     }
     return { pr: parsePR(raw), warnings };
   }
@@ -704,11 +705,11 @@ const REVIEW_VERDICTS: Partial<Record<RawReview["state"], ForgeComment["review"]
 
 function describeMergeState(pr: ForgePR, raw: RawPullRequest, settings: RawRepoSettings): string {
   const mergeState = raw.mergeable_state ?? "unknown";
-  if (pr.state === "merged") return "Déjà mergée";
-  if (pr.state === "closed") return "Fermée";
-  if (settings.permissions?.push === false) return "Droits insuffisants pour merger";
-  if (raw.mergeable == null || mergeState === "unknown") return "Vérification de la mergeabilité en cours…";
-  return MERGE_STATES[mergeState] ?? `Merge impossible (${mergeState})`;
+  if (pr.state === "merged") return tr("Déjà mergée");
+  if (pr.state === "closed") return tr("Fermée");
+  if (settings.permissions?.push === false) return tr("Droits insuffisants pour merger");
+  if (raw.mergeable == null || mergeState === "unknown") return tr("Vérification de la mergeabilité en cours…");
+  return MERGE_STATES[mergeState] ?? tr("Merge impossible ({mergeState})", { mergeState });
 }
 
 function parseCheckRun(run: RawCheckRun): ForgeCheck {

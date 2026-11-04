@@ -4,14 +4,15 @@ import { useRepoStore } from "../store/useRepoStore";
 import { getCommitDetails } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
 import type { CommitDetails as Details, CommitFile, CommitInfo } from "../types/git";
+import { tr, trn, locale, COLON } from "../i18n";
 
 const STATUS_LETTER: Record<CommitFile["status"], { letter: string; label: string; color: string }> = {
-  added: { letter: "A", label: "ajouté", color: "text-green-400" },
-  modified: { letter: "M", label: "modifié", color: "text-yellow-400" },
-  deleted: { letter: "D", label: "supprimé", color: "text-red-400" },
-  renamed: { letter: "R", label: "renommé", color: "text-sky-400" },
-  copied: { letter: "C", label: "copié", color: "text-sky-400" },
-  typechange: { letter: "T", label: "type changé", color: "text-purple-400" },
+  added: { letter: "A", label: tr("ajouté"), color: "text-green-400" },
+  modified: { letter: "M", label: tr("modifié"), color: "text-yellow-400" },
+  deleted: { letter: "D", label: tr("supprimé"), color: "text-red-400" },
+  renamed: { letter: "R", label: tr("renommé"), color: "text-sky-400" },
+  copied: { letter: "C", label: tr("copié"), color: "text-sky-400" },
+  typechange: { letter: "T", label: tr("type changé"), color: "text-purple-400" },
 };
 
 /** Lignes ajoutées et supprimées : « +2 −1 » à l'écran, en toutes lettres pour les technologies d'assistance. */
@@ -23,7 +24,7 @@ export function LineCounts({ add, del, all = false }: { add: number; del: number
         {(all || del > 0) && <span className="text-red-300 ml-1">−{del}</span>}
       </span>
       <span className="sr-only">
-        {[(all || add > 0) && `${add} ligne${add > 1 ? "s" : ""} ajoutée${add > 1 ? "s" : ""}`, (all || del > 0) && `${del} supprimée${del > 1 ? "s" : ""}`]
+        {[(all || add > 0) && trn(add, "{n} ligne ajoutée", "{n} lignes ajoutées"), (all || del > 0) && trn(del, "{n} supprimée", "{n} supprimées")]
           .filter(Boolean)
           .join(", ")}
       </span>
@@ -32,7 +33,7 @@ export function LineCounts({ add, del, all = false }: { add: number; del: number
 }
 
 function formatDate(seconds: number) {
-  return new Date(seconds * 1000).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" });
+  return new Date(seconds * 1000).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
 }
 
 export function CommitDetails({ commit }: { commit: CommitInfo }) {
@@ -68,16 +69,16 @@ export function CommitDetails({ commit }: { commit: CommitInfo }) {
         <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Commit</h2>
         <button
           className="font-mono text-[11px] text-[var(--color-accent-text)] hover:underline"
-          title="Copier le hash complet"
-          aria-label={`${commit.short_hash}, copier le hash complet`}
+          title={tr("Copier le hash complet")}
+          aria-label={tr("{short_hash}, copier le hash complet", { short_hash: commit.short_hash })}
           onClick={() => navigator.clipboard.writeText(commit.hash)}
         >
           {commit.short_hash}
         </button>
         <button
           className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs"
-          title="Fermer et revenir aux modifications en cours"
-          aria-label="Fermer et revenir aux modifications en cours"
+          title={tr("Fermer et revenir aux modifications en cours")}
+          aria-label={tr("Fermer et revenir aux modifications en cours")}
           onClick={() => {
             setSelectedCommit(null);
             if (center.kind === "diff" && center.source.type === "commit") setCenter({ kind: "graph" });
@@ -88,7 +89,7 @@ export function CommitDetails({ commit }: { commit: CommitInfo }) {
       </div>
 
       {error && <p className="p-3 text-xs text-red-400 break-words">{error}</p>}
-      {!details && !error && <p className="p-3 text-xs text-[var(--color-muted)]">Chargement…</p>}
+      {!details && !error && <p className="p-3 text-xs text-[var(--color-muted)]">{tr("Chargement…")}</p>}
 
       {details && (
         <div className="flex-1 overflow-y-auto">
@@ -100,15 +101,15 @@ export function CommitDetails({ commit }: { commit: CommitInfo }) {
               <span>
                 <span className="text-[var(--color-text)]">{details.author}</span> &lt;{details.email}&gt;
               </span>
-              <span>Écrit le {formatDate(details.author_time)}</span>
+              <span>{tr("Écrit le {formatDate}", { formatDate: formatDate(details.author_time) })}</span>
               {(details.committer !== details.author || details.commit_time !== details.author_time) && (
-                <span>Commité par {details.committer} le {formatDate(details.commit_time)}</span>
+                <span>{tr("Commité par {committer} le {formatDate}", { committer: details.committer, formatDate: formatDate(details.commit_time) })}</span>
               )}
             </div>
 
             {details.parents.length > 0 && (
               <div className="flex items-center gap-1 flex-wrap text-[11px] text-[var(--color-muted)]">
-                {details.parents.length > 1 ? "Parents" : "Parent"} :
+                {details.parents.length > 1 ? "Parents" : "Parent"}{COLON.trimEnd()}
                 {details.parents.map((p) => {
                   const parent = commits.find((c) => c.hash === p);
                   return (
@@ -116,7 +117,7 @@ export function CommitDetails({ commit }: { commit: CommitInfo }) {
                       key={p}
                       className="font-mono text-[var(--color-accent-text)] hover:underline disabled:no-underline disabled:text-[var(--color-muted)]"
                       disabled={!parent}
-                      aria-label={`${p.slice(0, 7)}, afficher le commit parent`}
+                      aria-label={tr("{p}, afficher le commit parent", { p: p.slice(0, 7) })}
                       onClick={() => parent && setSelectedCommit(parent)}
                     >
                       {p.slice(0, 7)}
@@ -128,10 +129,10 @@ export function CommitDetails({ commit }: { commit: CommitInfo }) {
           </div>
 
           <h3 className="px-3 pt-2 pb-1 flex items-center text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">
-            {details.files.length} fichier{details.files.length > 1 ? "s" : ""}
+            {trn(details.files.length, "{n} fichier", "{n} fichiers")}
             {totals && (
               <span className="ml-auto font-mono normal-case tracking-normal font-normal">
-                <span className="sr-only"> : </span>
+                <span className="sr-only">{COLON}</span>
                 <LineCounts add={totals.add} del={totals.del} all />
               </span>
             )}
@@ -165,7 +166,7 @@ export function CommitFileRow({ file, selected, onClick }: { file: CommitFile; s
       <span className="flex-1 truncate text-left text-[11px] font-mono text-[var(--color-text)]" dir="rtl">
         <bdi>{file.path}</bdi>
       </span>
-      <span className="sr-only">, {label}{file.old_path ? ` (ancien chemin : ${file.old_path})` : ""}, </span>
+      <span className="sr-only">, {label}{file.old_path ? tr(" (ancien chemin : {old_path})", { old_path: file.old_path }) : ""}, </span>
       <span className="text-[10px] font-mono shrink-0">
         <LineCounts add={file.additions} del={file.deletions} />
       </span>

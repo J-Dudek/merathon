@@ -4,6 +4,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useUiStore } from "../store/useUiStore";
 import { Button, Modal, inputClass } from "./Modal";
 import { fieldLabel } from "../lib/fieldLabel";
+import { tr } from "../i18n";
 
 /** Rend la boîte de dialogue demandée via `useUiStore.ask()`. */
 export function Dialog() {
@@ -88,7 +89,7 @@ export function Dialog() {
           </label>
         )}
         <div className="flex justify-end gap-2 pt-1">
-          <Button onClick={() => closeDialog(null)}>Annuler</Button>
+          <Button onClick={() => closeDialog(null)}>{tr("Annuler")}</Button>
           <Button type="submit" variant={dialog.danger ? "danger" : "primary"} disabled={!canConfirm}>
             {dialog.confirmLabel ?? "OK"}
           </Button>

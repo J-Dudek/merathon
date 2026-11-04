@@ -68,7 +68,7 @@ pub fn update_submodules(repo: &Repository, names: &[String], creds: CredsLookup
         let mut opts = SubmoduleUpdateOptions::new();
         opts.fetch(fetch);
         sm.update(true, Some(&mut opts))
-            .map_err(|e| GitError::Other(format!("Sous-module « {name} » : {}", e.message())))?;
+            .map_err(|e| GitError::Other(tr!("Sous-module « {name} » : {}", "Submodule \"{name}\": {}", e.message())))?;
 
         if let Ok(sub_repo) = sm.open() {
             update_submodules(&sub_repo, &[], creds)?;

@@ -1,3 +1,5 @@
+import { tr } from "../i18n";
+
 /**
  * Équivalent en ligne de commande des opérations git de l'application, pour le journal.
  * Les opérations passent par libgit2 : ces lignes décrivent ce qui est fait, elles ne sont pas exécutées telles quelles.
@@ -41,12 +43,12 @@ const COMMANDS: Record<string, (a: Args) => string> = {
   ignore_patterns: (a) => `printf '%s\\n' ${(Array.isArray(a.patterns) ? a.patterns : []).map(quote).join(" ")} >> .gitignore`,
   apply_lines: (a) => {
     const flags: Record<string, string> = { stage: "--cached", unstage: "--cached --reverse", discard: "--reverse" };
-    const part = a.lines ? "lignes choisies" : "bloc";
-    return `git apply ${flags[String(a.action)] ?? ""} (${part} de ${quote(a.filePath)})`;
+    const part = a.lines ? tr("lignes choisies") : tr("bloc");
+    return tr("git apply {value} ({part} de {quote})", { value: flags[String(a.action)] ?? "", part, quote: quote(a.filePath) });
   },
   create_commit: (a) => `git commit ${a.amend ? "--amend " : ""}-m ${quote(firstLine(a.message))}`,
   reword_head: (a) => `git commit --amend --only -m ${quote(firstLine(a.message))}`,
-  resolve_conflict: (a) => `git add ${quote(a.filePath)}  # conflit résolu`,
+  resolve_conflict: (a) => tr("git add {quote}  # conflit résolu", { quote: quote(a.filePath) }),
 
   stash_save: (a) => join("git stash push", a.includeUntracked && "-u", a.message && `-m ${quote(a.message)}`),
   stash_apply: (a) => `git stash ${a.pop ? "pop" : "apply"} stash@{${a.index}}`,
@@ -89,7 +91,7 @@ const COMMANDS: Record<string, (a: Args) => string> = {
     const [remote, ...rest] = String(a.name).split("/");
     return `git push ${quote(remote)} --delete ${quote(rest.join("/"))}`;
   },
-  rebase_pull_request: (a) => `git rebase ${quote(a.onto)} ${quote(a.branch)}  # en mémoire, copie de travail intacte`,
+  rebase_pull_request: (a) => tr("git rebase {quote} {quote2}  # en mémoire, copie de travail intacte", { quote: quote(a.onto), quote2: quote(a.branch) }),
   force_push_pull_request: (a) =>
     `git push --force-with-lease=${quote(a.branch)}:${short(a.expected)} ${quote(a.remote)} ${quote(a.branch)}`,
   push_tag: (a) => `git push ${quote(a.remote)} ${quote(a.tag)}`,

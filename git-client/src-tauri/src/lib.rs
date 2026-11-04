@@ -1,5 +1,7 @@
 use tauri::Manager;
 
+#[macro_use]
+mod i18n;
 mod accounts;
 mod commands;
 mod forge;
@@ -24,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
+            i18n::set_language,
             commands::open_new_window,
             notifications::notify_desktop,
             notifications::close_desktop_notification,

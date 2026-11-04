@@ -74,7 +74,7 @@ pub fn home_dir() -> Result<PathBuf, GitError> {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
-        .ok_or_else(|| GitError::Other("Dossier personnel introuvable".into()))
+        .ok_or_else(|| GitError::Other(tr!("Dossier personnel introuvable", "Home folder not found")))
 }
 
 fn invalid(message: impl Into<String>) -> GitError {
@@ -272,36 +272,36 @@ fn unique_id(home: &Path, label: &str) -> String {
 /// Le dossier est écrit dans une condition : ni motif (il changerait de sens), ni caractère qui casserait la ligne.
 fn validate(home: &Path, input: &ProfileInput, others: &[GitProfile]) -> Result<PathBuf, GitError> {
     if input.label.trim().is_empty() {
-        return Err(invalid("Donne un nom au profil"));
+        return Err(invalid(tr!("Donne un nom au profil", "Give the profile a name")));
     }
     if input.user_name.trim().is_empty() || input.user_name.contains(['\n', '\r']) {
-        return Err(invalid("Indique le nom à utiliser dans les commits"));
+        return Err(invalid(tr!("Indique le nom à utiliser dans les commits", "Enter the name to use in commits")));
     }
     let email = input.user_email.trim();
     if !email.contains('@') || email.contains(['\n', '\r', ' ']) {
-        return Err(invalid("Indique une adresse e-mail valide"));
+        return Err(invalid(tr!("Indique une adresse e-mail valide", "Enter a valid email address")));
     }
     let requested = without_verbatim_prefix(&input.dir);
     if requested.contains(['*', '?', '[', '"', '\n', '\r']) {
-        return Err(invalid(format!("Ce nom de dossier n'est pas utilisable dans une règle Git : {}", input.dir)));
+        return Err(invalid(tr!("Ce nom de dossier n'est pas utilisable dans une règle Git : {}", "This folder name cannot be used in a Git rule: {}", input.dir)));
     }
-    let dir = canonical(Path::new(&requested)).filter(|d| d.is_dir()).ok_or_else(|| invalid(format!("Dossier introuvable : {}", input.dir)))?;
+    let dir = canonical(Path::new(&requested)).filter(|d| d.is_dir()).ok_or_else(|| invalid(tr!("Dossier introuvable : {}", "Folder not found: {}", input.dir)))?;
     if dir.parent().is_none() || canonical(home).is_some_and(|h| h == dir) {
-        return Err(invalid("Choisis un dossier de projets : le dossier personnel entier couvrirait tous tes dépôts"));
+        return Err(invalid(tr!("Choisis un dossier de projets : le dossier personnel entier couvrirait tous tes dépôts", "Choose a projects folder: the entire home folder would cover all your repositories")));
     }
     for other in others {
         let Some(other_dir) = resolve_existing(Path::new(&other.dir)) else { continue };
         if other_dir == dir {
-            return Err(invalid(format!("Le profil « {} » couvre déjà ce dossier", other.label)));
+            return Err(invalid(tr!("Le profil « {} » couvre déjà ce dossier", "Profile \"{}\" already covers this folder", other.label)));
         }
         if other_dir.starts_with(&dir) || dir.starts_with(&other_dir) {
-            return Err(invalid(format!("Ce dossier chevauche celui du profil « {} » ({})", other.label, other.dir)));
+            return Err(invalid(tr!("Ce dossier chevauche celui du profil « {} » ({})", "This folder overlaps that of profile \"{}\" ({})", other.label, other.dir)));
         }
     }
     if let Some(key) = &input.ssh_key {
         let key = ssh_key_path(key)?;
         if !Path::new(&key).is_file() {
-            return Err(invalid(format!("Clé SSH introuvable : {key}")));
+            return Err(invalid(tr!("Clé SSH introuvable : {key}", "SSH key not found: {key}")));
         }
     }
     Ok(dir)
@@ -312,7 +312,7 @@ fn validate(home: &Path, input: &ProfileInput, others: &[GitProfile]) -> Result<
 fn ssh_key_path(key: &str) -> Result<String, GitError> {
     let path = slashes(Path::new(&without_verbatim_prefix(key)));
     if path.contains(['"', '$', '`', '\\', '\n', '\r']) {
-        return Err(invalid(format!("Chemin de clé SSH non utilisable : {key}")));
+        return Err(invalid(tr!("Chemin de clé SSH non utilisable : {key}", "SSH key path not usable: {key}")));
     }
     Ok(path)
 }
@@ -356,7 +356,7 @@ pub fn save_profile(home: &Path, input: &ProfileInput) -> Result<GitProfile, Git
     let profiles = list_profiles(home)?.profiles;
     if let Some(id) = &input.id {
         if !valid_id(id) || !profile_file(home, id).exists() {
-            return Err(invalid(format!("Profil introuvable : {id}")));
+            return Err(invalid(tr!("Profil introuvable : {id}", "Profile not found: {id}")));
         }
     }
     let others: Vec<GitProfile> = profiles.iter().filter(|p| Some(&p.id) != input.id.as_ref() || !p.managed).cloned().collect();
@@ -384,12 +384,12 @@ pub fn save_profile(home: &Path, input: &ProfileInput) -> Result<GitProfile, Git
         }
     }
     global.set_str(&format!("includeIf.{condition}.path"), &target)?;
-    read_profile(&condition, &target, home).ok_or_else(|| GitError::Other("Profil enregistré mais illisible".into()))
+    read_profile(&condition, &target, home).ok_or_else(|| GitError::Other(tr!("Profil enregistré mais illisible", "Profile saved but unreadable")))
 }
 
 pub fn delete_profile(home: &Path, id: &str) -> Result<(), GitError> {
     if !valid_id(id) {
-        return Err(invalid(format!("Profil introuvable : {id}")));
+        return Err(invalid(tr!("Profil introuvable : {id}", "Profile not found: {id}")));
     }
     let file = profile_file(home, id);
     backup_global(home)?;

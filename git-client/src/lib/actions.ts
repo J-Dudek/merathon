@@ -1,6 +1,7 @@
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore } from "../store/useUiStore";
 import type { InteractiveOutcome, MergeResult } from "../types/git";
+import { tr, trn } from "../i18n";
 
 export function errorMessage(e: unknown): string {
   if (typeof e === "string") return e;
@@ -58,7 +59,7 @@ export function reportMerge(result: MergeResult | undefined, successLabel: strin
   } else {
     const n = result.conflicted_files.length;
     useRepoStore.getState().setSelectedCommit(null);
-    ui.notify("info", `Opération interrompue : ${n} fichier${n > 1 ? "s" : ""} en conflit à résoudre dans le panneau de droite`);
+    ui.notify("info", trn(n, "Opération interrompue : {n} fichier en conflit à résoudre dans le panneau de droite", "Opération interrompue : {n} fichiers en conflit à résoudre dans le panneau de droite"));
   }
 }
 
@@ -68,14 +69,14 @@ export function reportInteractive(outcome: InteractiveOutcome | undefined) {
   const ui = useUiStore.getState();
   const stop = outcome.stopped;
   if (!stop) {
-    ui.notify("success", "Rebase interactif terminé (ancienne position : ORIG_HEAD)");
+    ui.notify("success", tr("Rebase interactif terminé (ancienne position : ORIG_HEAD)"));
     return;
   }
   useRepoStore.getState().setSelectedCommit(null);
   ui.notify(
     "info",
     stop.reason === "conflict"
-      ? `Rebase interactif en pause : conflit en appliquant ${stop.short_hash} « ${stop.summary} ». Résous-le puis clique sur Continuer.`
-      : `Rebase interactif en pause sur ${stop.short_hash} « ${stop.summary} » : modifie-le puis clique sur Continuer.`,
+      ? tr("Rebase interactif en pause : conflit en appliquant {short_hash} « {summary} ». Résous-le puis clique sur Continuer.", { short_hash: stop.short_hash, summary: stop.summary })
+      : tr("Rebase interactif en pause sur {short_hash} « {summary} » : modifie-le puis clique sur Continuer.", { short_hash: stop.short_hash, summary: stop.summary }),
   );
 }

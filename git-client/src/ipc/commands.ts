@@ -8,6 +8,7 @@ import { describeCommand } from "../lib/journal";
 import { useJournalStore } from "../store/useJournalStore";
 import { milestoneForCommand } from "../lib/milestones";
 import { useCelebrationStore } from "../store/useCelebrationStore";
+import { tr } from "../i18n";
 
 function errorText(e: unknown): string {
   if (typeof e === "string") return e;
@@ -24,7 +25,7 @@ async function invoke<T>(cmd: string, args?: InvokeArgs): Promise<T> {
   try {
     const result = await tauriInvoke<T>(cmd, args);
     const conflicts = (result as { conflicted_files?: string[] } | null)?.conflicted_files;
-    if (conflicts?.length) journal.finish(id, "warning", `Conflits : ${conflicts.join(", ")}`);
+    if (conflicts?.length) journal.finish(id, "warning", tr("Conflits : {list}", { list: conflicts.join(", ") }));
     else {
       journal.finish(id, "success");
       const milestone = milestoneForCommand(cmd, args);
@@ -283,3 +284,6 @@ export const terminalOpen = (cwd: string, cols: number, rows: number, onEvent: (
 export const terminalWrite = (id: number, data: string) => invoke<void>("terminal_write", { id, data });
 export const terminalResize = (id: number, cols: number, rows: number) => invoke<void>("terminal_resize", { id, cols, rows });
 export const terminalClose = (id: number) => invoke<void>("terminal_close", { id });
+
+/** Langue des messages d'erreur du backend. */
+export const setBackendLanguage = (language: string) => tauriInvoke<void>("set_language", { language });

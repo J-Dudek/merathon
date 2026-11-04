@@ -11,6 +11,7 @@ import type { GitProfile } from "../types/git";
 import { Button, Modal, inputClass } from "./Modal";
 import { trimEndChars } from "../lib/strings";
 import { fieldLabel } from "../lib/fieldLabel";
+import { tr } from "../i18n";
 
 function repoNameFromUrl(url: string): string {
   return trimEndChars(url.trim()).split(/[/:]/).pop()?.replace(/\.git$/, "") || "repo";
@@ -85,7 +86,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
     try {
       const warning = await cloneRepository(url.trim(), target);
       await openRepoAt(target);
-      notify(warning ? "info" : "success", warning ?? `Dépôt cloné dans ${target}`);
+      notify(warning ? "info" : "success", warning ?? tr("Dépôt cloné dans {target}", { target }));
       onClose();
     } catch (e) {
       notify("error", errorMessage(e));
@@ -95,15 +96,15 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal title="Cloner un dépôt" onClose={() => !cloning && onClose()} width="w-[560px]">
+    <Modal title={tr("Cloner un dépôt")} onClose={() => !cloning && onClose()} width="w-[560px]">
       <div className="p-4 flex flex-col gap-3">
         {accounts.length > 0 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Depuis un compte</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">{tr("Depuis un compte")}</span>
               <select
                 className={`${inputClass} w-auto! shrink-0`}
-                {...fieldLabel("Compte depuis lequel cloner")}
+                {...fieldLabel(tr("Compte depuis lequel cloner"))}
                 value={accountId ?? ""}
                 onChange={(e) => setAccountId(e.target.value)}
               >
@@ -111,10 +112,10 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
                   <option key={a.id} value={a.id}>{a.label}</option>
                 ))}
               </select>
-              <input className={inputClass} placeholder="Filtrer…" {...fieldLabel("Filtrer les dépôts du compte")} value={filter} onChange={(e) => setFilter(e.target.value)} />
+              <input className={inputClass} placeholder={tr("Filtrer…")} {...fieldLabel(tr("Filtrer les dépôts du compte"))} value={filter} onChange={(e) => setFilter(e.target.value)} />
             </div>
             <div className="h-44 overflow-y-auto border border-overlay/10 rounded">
-              {reposLoading && <p className="p-2 text-xs text-[var(--color-muted)]">Chargement…</p>}
+              {reposLoading && <p className="p-2 text-xs text-[var(--color-muted)]">{tr("Chargement…")}</p>}
               {reposError && <p className="p-2 text-xs text-red-400 break-words">{reposError}</p>}
               {!reposLoading && !reposError && visibleRepos.map((r) => (
                 <button
@@ -126,12 +127,12 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
                   }`}
                 >
                   <span className="font-mono text-[var(--color-text)] truncate">{r.fullName}</span>
-                  {r.private && <span className="text-[9px] px-1 rounded border border-overlay/20 text-[var(--color-muted)]">privé</span>}
+                  {r.private && <span className="text-[9px] px-1 rounded border border-overlay/20 text-[var(--color-muted)]">{tr("privé")}</span>}
                   <span className="ml-auto text-[10px] text-[var(--color-muted)] truncate max-w-[45%]">{r.description}</span>
                 </button>
               ))}
               {!reposLoading && !reposError && visibleRepos.length === 0 && (
-                <p className="p-2 text-xs text-[var(--color-muted)] italic">Aucun dépôt</p>
+                <p className="p-2 text-xs text-[var(--color-muted)] italic">{tr("Aucun dépôt")}</p>
               )}
             </div>
           </div>
@@ -142,7 +143,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
           <input
             autoFocus
             className={inputClass}
-            placeholder="https://github.com/owner/repo.git ou git@gitlab.com:group/repo.git"
+            placeholder={tr("https://github.com/owner/repo.git ou git@gitlab.com:group/repo.git")}
             required
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -151,14 +152,14 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
 
         <div className="flex gap-2 items-end">
           <label className="flex flex-col gap-1 flex-1 min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Dossier parent</span>
-            <input className={inputClass} readOnly required placeholder="Choisir…" value={parentDir} onClick={chooseDir} />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">{tr("Dossier parent")}</span>
+            <input className={inputClass} readOnly required placeholder={tr("Choisir…")} value={parentDir} onClick={chooseDir} />
           </label>
-          <Button onClick={chooseDir}>Parcourir</Button>
+          <Button onClick={chooseDir}>{tr("Parcourir")}</Button>
         </div>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">Nom du dossier</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]">{tr("Nom du dossier")}</span>
           <input
             className={inputClass}
             required
@@ -172,20 +173,19 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
 
         {targetProfile && (
           <p className="text-[11px] text-[var(--color-text)]">
-            Profil « {targetProfile.label} » : commits signés {targetProfile.user_email ?? "selon ce profil"}
-            {targetProfile.ssh_key ? `, clé ${targetProfile.ssh_key}` : ""}.
+            {tr("Profil « {label} » : commits signés", { label: targetProfile.label })}{" "}{targetProfile.user_email ?? tr("selon ce profil")}
+            {targetProfile.ssh_key ? tr(", clé {ssh_key}", { ssh_key: targetProfile.ssh_key }) : ""}.
           </p>
         )}
 
         <p className="text-[10px] text-[var(--color-muted)]">
-          Les identifiants du compte correspondant à l'hôte de l'URL sont utilisés automatiquement (HTTPS),
-          sinon l'agent SSH ou tes clés ~/.ssh.
+          {tr("Les identifiants du compte correspondant à l'hôte de l'URL sont utilisés automatiquement (HTTPS), sinon l'agent SSH ou tes clés ~/.ssh.")}
         </p>
 
         <div className="flex justify-end gap-2">
-          <Button onClick={onClose} disabled={cloning}>Annuler</Button>
+          <Button onClick={onClose} disabled={cloning}>{tr("Annuler")}</Button>
           <Button variant="primary" onClick={handleClone} disabled={cloning || !url.trim() || !parentDir || !name.trim()}>
-            {cloning ? "Clonage…" : "Cloner"}
+            {cloning ? tr("Clonage…") : tr("Cloner")}
           </Button>
         </div>
       </div>

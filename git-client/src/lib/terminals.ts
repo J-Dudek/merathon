@@ -8,6 +8,7 @@ import { useUiStore } from "../store/useUiStore";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { errorMessage } from "./actions";
 import { themeColor, useThemeStore } from "./theme";
+import { tr, COLON } from "../i18n";
 
 /**
  * Terminaux intégrés, un par onglet de dépôt. Ils vivent hors de React : changer d'onglet ou
@@ -78,7 +79,7 @@ function onEvent(s: Session, generation: number, event: TerminalEvent) {
   s.exited = true;
   s.ptyId = null;
   const code = event.code !== null ? ` (code ${event.code})` : "";
-  s.term.write(`\r\n\x1b[90m[Shell terminé${code} — Entrée pour relancer]\x1b[0m\r\n`);
+  s.term.write(tr("\r\n\u001b[90m[Shell terminé{code} — Entrée pour relancer]\u001b[0m\r\n", { code }));
   if (s.awaitingRefresh) refreshLater(s);
 }
 
@@ -95,7 +96,7 @@ function start(s: Session) {
       s.exited = true;
       console.error("Terminal :", e);
       s.term.write(`\x1b[31m${errorMessage(e)}\x1b[0m\r\n`);
-      useUiStore.getState().notify("error", `Terminal : ${errorMessage(e)}`);
+      useUiStore.getState().notify("error", `Terminal${COLON}${errorMessage(e)}`);
     })
     .finally(() => {
       if (generation === s.generation) s.starting = false;
@@ -103,7 +104,7 @@ function start(s: Session) {
 }
 
 export const LEAVE_TERMINAL_SHORTCUT = "Ctrl+Maj+J";
-export const LEAVE_TERMINAL_HINT = `${LEAVE_TERMINAL_SHORTCUT} pour en sortir`;
+export const LEAVE_TERMINAL_HINT = tr("{LEAVE_TERMINAL_SHORTCUT} pour en sortir", { LEAVE_TERMINAL_SHORTCUT });
 
 /** Rend le focus à l'onglet « Terminal » du panneau du bas, d'où la tabulation reprend dans l'application. */
 export function leaveTerminal(): void {

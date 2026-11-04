@@ -3,7 +3,7 @@ import { TriangleAlert } from "lucide-react";
 import { Modal, inputClass } from "./Modal";
 import { filterMemo, GIT_MEMO, type MemoEntry } from "../lib/gitMemo";
 import { fieldLabel } from "../lib/fieldLabel";
-import { plural } from "../lib/strings";
+import { tr, trn } from "../i18n";
 
 /** Mémo des opérations git : à quoi elles servent, un cas d'usage, et comment les faire dans l'application. */
 export function GitMemoDialog({ onClose }: { onClose: () => void }) {
@@ -15,13 +15,13 @@ export function GitMemoDialog({ onClose }: { onClose: () => void }) {
   const found = groups.reduce((n, g) => n + g.entries.length, 0);
 
   return (
-    <Modal title="Mémo Git" onClose={onClose} width="w-[860px]" height="h-[76vh]" resizeKey="git-memo">
+    <Modal title={tr("Mémo Git")} onClose={onClose} width="w-[860px]" height="h-[76vh]" resizeKey="git-memo">
       <div className="flex h-full text-xs text-[var(--color-text)] max-[760px]:flex-col max-[760px]:h-auto">
-        <nav aria-label="Rubriques du mémo" className="w-48 shrink-0 max-[760px]:w-full max-[760px]:flex-row max-[760px]:flex-wrap max-[760px]:overflow-visible p-2 border-r border-overlay/10 bg-shade/10 flex flex-col gap-0.5 overflow-y-auto">
+        <nav aria-label={tr("Rubriques du mémo")} className="w-48 shrink-0 max-[760px]:w-full max-[760px]:flex-row max-[760px]:flex-wrap max-[760px]:overflow-visible p-2 border-r border-overlay/10 bg-shade/10 flex flex-col gap-0.5 overflow-y-auto">
           <input
             className={`${inputClass} mb-1.5`}
-            placeholder="Rechercher…"
-            {...fieldLabel("Rechercher dans le mémo Git")}
+            placeholder={tr("Rechercher…")}
+            {...fieldLabel(tr("Rechercher dans le mémo Git"))}
             value={query}
             autoFocus
             onChange={(e) => setQuery(e.target.value)}
@@ -44,7 +44,7 @@ export function GitMemoDialog({ onClose }: { onClose: () => void }) {
               >
                 {label}
                 <span className="text-[10px] opacity-60" aria-hidden>{entries.length}</span>
-                <span className="sr-only">, {entries.length} fiche{entries.length > 1 ? "s" : ""}</span>
+                <span className="sr-only">, {trn(entries.length, "{n} fiche", "{n} fiches")}</span>
               </button>
             );
           })}
@@ -54,13 +54,13 @@ export function GitMemoDialog({ onClose }: { onClose: () => void }) {
         <div
           tabIndex={0}
           role="region"
-          aria-label="Fiches du mémo"
+          aria-label={tr("Fiches du mémo")}
           className="flex-1 min-w-0 overflow-y-auto px-6 py-5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
         >
           <p role="status" className="sr-only">
-            {searching && `${plural(found, "fiche")} trouvée${found > 1 ? "s" : ""}`}
+            {searching && trn(found, "{n} fiche trouvée", "{n} fiches trouvées")}
           </p>
-          {groups.length === 0 && <p className="text-[var(--color-muted)] italic">Aucune opération ne correspond à « {query.trim()} ».</p>}
+          {groups.length === 0 && <p className="text-[var(--color-muted)] italic">{tr("Aucune opération ne correspond à « {value} ».", { value: query.trim() })}</p>}
           {groups.map((group) => (
             <section key={group.id} className="mb-6 last:mb-0">
               <h3 className="mb-3 text-base font-semibold">{group.label}</h3>
@@ -84,10 +84,10 @@ function MemoCard({ entry }: { entry: MemoEntry }) {
       </div>
       <p className="mt-1.5 leading-relaxed">{entry.summary}</p>
 
-      <MemoLabel>Cas d'usage</MemoLabel>
+      <MemoLabel>{tr("Cas d'usage")}</MemoLabel>
       <p className="leading-relaxed text-[var(--color-muted)]">{entry.example}</p>
 
-      <MemoLabel>Dans Merathon</MemoLabel>
+      <MemoLabel>{tr("Dans Merathon")}</MemoLabel>
       <ol className="list-decimal pl-4 space-y-0.5 leading-relaxed">
         {entry.steps.map((step) => <li key={step}>{step}</li>)}
       </ol>
@@ -95,7 +95,7 @@ function MemoCard({ entry }: { entry: MemoEntry }) {
       {entry.warning && (
         <p className="mt-2.5 flex items-start gap-1.5 rounded border border-amber-400/30 bg-amber-500/10 px-2 py-1.5 leading-relaxed text-amber-300">
           <TriangleAlert size={13} strokeWidth={1.75} className="mt-0.5 shrink-0" />
-          <span><span className="sr-only">Attention : </span>{entry.warning}</span>
+          <span><span className="sr-only">{tr("Attention :")}{" "}</span>{entry.warning}</span>
         </p>
       )}
     </article>

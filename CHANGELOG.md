@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.13.2](https://github.com/J-Dudek/merathon/compare/v2.13.1...v2.13.2) (2026-11-04)
+
+### Autres changements
+
+- feat! : ajout de l'anglais, sélection de la langue à l'installation ou la mise à jour. puis paramètrable dans le menu de config. (6399c0c)
+
 ## [2.13.1](https://github.com/J-Dudek/merathon/compare/v2.13.0...v2.13.1) (2026-11-04)
 
 ### Autres changements

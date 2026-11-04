@@ -107,18 +107,18 @@ pub fn open(
     on_event: Channel<TerminalEvent>,
 ) -> Result<u32, String> {
     if !Path::new(cwd).is_dir() {
-        return Err(format!("Dossier introuvable : {cwd}"));
+        return Err(tr!("Dossier introuvable : {cwd}", "Folder not found: {cwd}"));
     }
     let pair = native_pty_system()
         .openpty(PtySize { rows: rows.max(1), cols: cols.max(1), pixel_width: 0, pixel_height: 0 })
-        .map_err(|e| format!("Impossible de créer le terminal : {e}"))?;
+        .map_err(|e| tr!("Impossible de créer le terminal : {e}", "Could not create the terminal: {e}"))?;
 
     // Shell par défaut de l'utilisateur ($SHELL / compte sous Unix, cmd.exe sous Windows).
     let mut cmd = CommandBuilder::new_default_prog();
     cmd.cwd(cwd);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-    let child = pair.slave.spawn_command(cmd).map_err(|e| format!("Impossible de lancer le shell : {e}"))?;
+    let child = pair.slave.spawn_command(cmd).map_err(|e| tr!("Impossible de lancer le shell : {e}", "Could not start the shell: {e}"))?;
     drop(pair.slave);
 
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
@@ -158,7 +158,7 @@ pub fn open(
 pub fn write(app: &AppHandle, id: u32, data: &str) -> Result<(), String> {
     let state = app.state::<Terminals>();
     let mut sessions = state.sessions.lock().unwrap();
-    let session = sessions.get_mut(&id).ok_or("Terminal fermé")?;
+    let session = sessions.get_mut(&id).ok_or(tr!("Terminal fermé", "Terminal closed"))?;
     session.writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
     session.writer.flush().map_err(|e| e.to_string())
 }
@@ -166,7 +166,7 @@ pub fn write(app: &AppHandle, id: u32, data: &str) -> Result<(), String> {
 pub fn resize(app: &AppHandle, id: u32, cols: u16, rows: u16) -> Result<(), String> {
     let state = app.state::<Terminals>();
     let sessions = state.sessions.lock().unwrap();
-    let session = sessions.get(&id).ok_or("Terminal fermé")?;
+    let session = sessions.get(&id).ok_or(tr!("Terminal fermé", "Terminal closed"))?;
     session
         .master
         .resize(PtySize { rows: rows.max(1), cols: cols.max(1), pixel_width: 0, pixel_height: 0 })

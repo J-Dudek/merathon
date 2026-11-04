@@ -1,7 +1,7 @@
 {
   "name": "merathon",
   "private": true,
-  "version": "2.13.1",
+  "version": "2.13.2",
   "description": "Merathon — Git Repository Manager : client Git graphique de bureau",
   "author": "Julien Dudek",
   "license": "MIT",
@@ -12,7 +12,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run check:i18n && tsc && vite build",
+    "check:i18n": "node scripts/check-i18n.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "lint": "eslint --max-warnings 0 .",
