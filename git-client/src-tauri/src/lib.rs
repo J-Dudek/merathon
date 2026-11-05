@@ -4,6 +4,7 @@ use tauri::Manager;
 mod i18n;
 mod accounts;
 mod commands;
+mod debug_log;
 mod forge;
 mod http;
 mod notifications;
@@ -17,6 +18,10 @@ mod window;
 pub fn run() {
     #[cfg(target_os = "linux")]
     configure_wsl_environment();
+
+    if let Err(e) = git::configure_network_timeouts() {
+        eprintln!("Délais réseau de libgit2 non appliqués : {e}");
+    }
 
     tauri::Builder::default()
         .manage(terminal::Terminals::default())
@@ -133,6 +138,7 @@ pub fn run() {
             commands::oauth_complete,
             commands::oauth_cancel,
             commands::app_info,
+            debug_log::set_debug_logging,
             commands::open_devtools,
             commands::terminal_open,
             commands::terminal_write,

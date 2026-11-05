@@ -19,6 +19,8 @@ export interface DisplaySettings {
   languageChosen: boolean;
   /** Notifications de l'activité des PR / MR à traiter ou ouvertes par moi (relevée à chaque synchronisation). */
   notifications: NotificationSettings;
+  /** Mode débug (À propos) : collecte les logs et affiche l'onglet « Logs » du panneau du bas. */
+  debugMode: boolean;
 }
 
 /** Interrupteur général, puis un réglage par type d'événement. */
@@ -48,7 +50,7 @@ export const SYNC_INTERVALS = [0, 1, 2, 5, 10, 15, 30, 60];
 export const defaultNotifications: NotificationSettings = { enabled: true, opened: true, commits: true, comments: true, ci: true, review: true, badge: true };
 
 export const defaultDisplay: DisplaySettings = {
-  zoom: 1, terminalFontSize: 12, density: "normal", syncInterval: 5, theme: "system", language: "fr", languageChosen: false, notifications: defaultNotifications,
+  zoom: 1, terminalFontSize: 12, density: "normal", syncInterval: 5, theme: "system", language: "fr", languageChosen: false, notifications: defaultNotifications, debugMode: false,
 };
 
 const KEY = "merathon.display";
@@ -73,6 +75,7 @@ export function sanitize(raw: unknown): DisplaySettings {
     language: LANGUAGES.includes(r.language as Language) ? r.language! : defaultDisplay.language,
     languageChosen: r.languageChosen === true,
     notifications: sanitizeNotifications(r.notifications),
+    debugMode: r.debugMode === true,
   };
 }
 
@@ -106,8 +109,8 @@ export const useDisplayStore = create<DisplayStore>((set, get) => {
     set(next);
   }
   const current = (): DisplaySettings => {
-    const { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications } = get();
-    return { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications };
+    const { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications, debugMode } = get();
+    return { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications, debugMode };
   };
   return {
     ...load(),

@@ -1,6 +1,34 @@
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
-use git2::{Cred, CredentialType, RemoteCallbacks};
+use git2::{Cred, CredentialType, ProxyOptions, RemoteCallbacks};
+
+/// Proxy résolu comme le fait git : `remote.<nom>.proxy`, `http.proxy`, puis variables d'environnement.
+/// Limite de libgit2 : seules les connexions HTTPS passent par le proxy, ni `http://` ni SSH.
+pub fn proxy_options<'a>() -> ProxyOptions<'a> {
+    let mut proxy = ProxyOptions::new();
+    proxy.auto();
+    proxy
+}
+
+/// Délai maximal pour établir une connexion au serveur.
+const CONNECT_TIMEOUT_MS: i32 = 30_000;
+/// Délai maximal sans aucune donnée échangée : une connexion muette finit en erreur au lieu de bloquer indéfiniment.
+const READ_TIMEOUT_MS: i32 = 120_000;
+
+/// Réglage global de libgit2, à appliquer au démarrage (par défaut, il n'attend jamais de limite).
+/// Limite sous Windows : HTTP et HTTPS passent par WinHTTP, qui ignore ces réglages ; seul SSH en profite.
+pub fn configure_network_timeouts() -> Result<(), git2::Error> {
+    set_network_timeouts(CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS)
+}
+
+pub(super) fn set_network_timeouts(connect_ms: i32, read_ms: i32) -> Result<(), git2::Error> {
+    // SAFETY : libgit2 lit ces entiers à chaque connexion ; ils sont écrits au démarrage, avant toute opération réseau.
+    unsafe {
+        git2::opts::set_server_connect_timeout_in_milliseconds(connect_ms)?;
+        git2::opts::set_server_timeout_in_milliseconds(read_ms)?;
+    }
+    Ok(())
+}
 
 /// Identifiants HTTPS issus d'un compte enregistré, utilisables uniquement pour son hôte.
 #[derive(Clone)]
@@ -97,6 +125,9 @@ pub fn remote_callbacks<'a>(creds: Option<Credentials>, location: &Path) -> Remo
             return Err(git2::Error::from_str(&tr!("Authentification refusée pour {url} : ajoute un compte avec un token valide pour cet hôte, ou configure une clé SSH", "Authentication refused for {url}: add an account with a valid token for this host, or set up an SSH key"
             )));
         };
+
+        // Avant l'essai : un gestionnaire d'identifiants ou un agent SSH qui ne répond pas reste visible. Jamais de secret ici.
+        crate::debug_log::debug(|| format!("auth: trying {candidate:?} for {url}"));
 
         match candidate {
             Candidate::Token => {

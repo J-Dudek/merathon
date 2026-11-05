@@ -8,6 +8,8 @@ import { describeCommand } from "../lib/journal";
 import { useJournalStore } from "../store/useJournalStore";
 import { milestoneForCommand } from "../lib/milestones";
 import { useCelebrationStore } from "../store/useCelebrationStore";
+import { debugLog } from "../store/useDebugLogStore";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { tr } from "../i18n";
 
 function errorText(e: unknown): string {
@@ -15,15 +17,38 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** Appelées à chaque frappe ou redimensionnement : elles noieraient les logs. */
+const NOT_LOGGED = new Set(["terminal_write", "terminal_resize"]);
+
+/**
+ * Appel au backend, inscrit aux logs en mode débug : son début (une commande bloquée reste visible), sa durée et son issue.
+ * Seuls le nom de la commande et le dépôt sont inscrits : les autres arguments peuvent contenir des données personnelles ou des secrets.
+ */
+async function loggedInvoke<T>(cmd: string, args?: InvokeArgs): Promise<T> {
+  if (!useDisplayStore.getState().debugMode || NOT_LOGGED.has(cmd)) return tauriInvoke<T>(cmd, args);
+  const path = (args as { path?: unknown } | undefined)?.path;
+  const label = typeof path === "string" ? `${cmd} ${path}` : cmd;
+  debugLog("debug", `${label}: start`);
+  const started = Date.now();
+  try {
+    const result = await tauriInvoke<T>(cmd, args);
+    debugLog("debug", `${label}: done in ${Date.now() - started} ms`);
+    return result;
+  } catch (e) {
+    debugLog("error", `${label}: failed after ${Date.now() - started} ms: ${errorText(e)}`);
+    throw e;
+  }
+}
+
 /** Appel au backend ; les opérations qui modifient un dépôt sont inscrites au journal. */
 async function invoke<T>(cmd: string, args?: InvokeArgs): Promise<T> {
   const command = describeCommand(cmd, args);
-  if (!command) return tauriInvoke<T>(cmd, args);
+  if (!command) return loggedInvoke<T>(cmd, args);
   const journal = useJournalStore.getState();
   const path = (args as { path?: unknown } | undefined)?.path;
   const id = journal.start(typeof path === "string" ? path : null, command);
   try {
-    const result = await tauriInvoke<T>(cmd, args);
+    const result = await loggedInvoke<T>(cmd, args);
     const conflicts = (result as { conflicted_files?: string[] } | null)?.conflicted_files;
     if (conflicts?.length) journal.finish(id, "warning", tr("Conflits : {list}", { list: conflicts.join(", ") }));
     else {
@@ -267,6 +292,8 @@ export interface AppInfo {
 
 /** Environnement d'exécution : système, architecture et version de libgit2 embarquée. */
 export const appInfo = () => invoke<AppInfo>("app_info");
+/** Hors logs : c'est la commande qui les active. */
+export const setDebugLogging = (enabled: boolean) => tauriInvoke<void>("set_debug_logging", { enabled });
 
 /** Outils de développement (sans effet dans les builds de release). */
 export const openDevtools = () => invoke<void>("open_devtools");

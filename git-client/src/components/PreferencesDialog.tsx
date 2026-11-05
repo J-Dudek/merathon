@@ -487,6 +487,8 @@ function AboutSection() {
   const [version, setVersion] = useState("");
   const [tauri, setTauri] = useState("");
   const [info, setInfo] = useState<AppInfo | null>(null);
+  const debugMode = useDisplayStore((s) => s.debugMode);
+  const updateDisplay = useDisplayStore((s) => s.update);
   const [checking, setChecking] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -558,6 +560,24 @@ function AboutSection() {
             {copied ? tr("Copié") : tr("Copier les informations")}
           </button>
         </div>
+      </Group>
+
+      <Group
+        title={tr("Mode débug")}
+        description={tr("Affiche un onglet « Logs » dans le panneau du bas d'un dépôt ouvert : commandes lancées, durées, erreurs. Les logs restent en mémoire et sont effacés à la désactivation ou à la fermeture.")}
+      >
+        <label className="flex items-center gap-2 font-medium">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={debugMode}
+            onChange={(e) => {
+              updateDisplay({ debugMode: e.target.checked });
+              if (e.target.checked) useUiStore.getState().setPanel({ open: true, tab: "logs" });
+            }}
+          />
+          {tr("Activer le mode débug")}
+        </label>
       </Group>
 
       <Group title={tr("Liens")}>

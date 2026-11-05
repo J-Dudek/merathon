@@ -32,10 +32,10 @@ export interface DialogResult {
   checked: boolean;
 }
 
-/** Panneau repliable sous le graphe (terminal / journal). */
+/** Panneau repliable sous le graphe (terminal / journal / logs du mode débug). */
 export interface BottomPanelState {
   open: boolean;
-  tab: "terminal" | "journal";
+  tab: "terminal" | "journal" | "logs";
   /** Hauteur en pixels quand il est déplié. */
   height: number;
 }

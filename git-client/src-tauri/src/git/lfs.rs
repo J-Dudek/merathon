@@ -261,7 +261,7 @@ pub fn lfs_pull(repo: &Repository, creds: Option<&Credentials>) -> Result<(), Gi
     let dir = workdir(repo)?;
     let mut cmd = git(&dir, creds);
     cmd.args(["lfs", "pull"]);
-    run(cmd)?;
+    crate::debug_log::timed("git lfs pull", || run(cmd))?;
     refresh_index(&dir);
     Ok(())
 }

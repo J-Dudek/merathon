@@ -1,10 +1,13 @@
-import { Check, ChevronDown, ChevronUp, Ellipsis, Eraser, RotateCw, TriangleAlert, X, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, Ellipsis, Eraser, RotateCw, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRepoStore } from "../store/useRepoStore";
 import { useTabsStore } from "../store/useTabsStore";
 import { useUiStore, type BottomPanelState } from "../store/useUiStore";
 import { useJournalStore, type JournalEntry } from "../store/useJournalStore";
+import { useDebugLogStore, type DebugLevel } from "../store/useDebugLogStore";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { errorMessage } from "../lib/actions";
+import { logLine } from "../lib/debugLog";
 import { attachTerminal, LEAVE_TERMINAL_HINT, restartTerminal } from "../lib/terminals";
 import { resizeKeyDelta } from "../lib/resizeKeys";
 import { tr, trn, locale, COLON } from "../i18n";
@@ -22,15 +25,25 @@ export function BottomPanel() {
   const [seenErrors, setSeenErrors] = useState(errorCount);
   const [onlyRepo, setOnlyRepo] = useState(true);
   const clear = useJournalStore((s) => s.clear);
+  const debugMode = useDisplayStore((s) => s.debugMode);
+  const clearLogs = useDebugLogStore((s) => s.clear);
+  // Onglet mémorisé alors que le mode débug était actif : il n'existe plus une fois désactivé.
+  const tab = panel.tab === "logs" && !debugMode ? "terminal" : panel.tab;
 
-  const journalVisible = panel.open && panel.tab === "journal";
+  const journalVisible = panel.open && tab === "journal";
+  const logsVisible = panel.open && tab === "logs";
   useEffect(() => {
     if (journalVisible) setSeenErrors(errorCount);
   }, [journalVisible, errorCount]);
   const newErrors = Math.max(0, errorCount - seenErrors);
 
-  function select(tab: BottomPanelState["tab"]) {
-    setPanel(panel.open && panel.tab === tab ? { open: false } : { open: true, tab });
+  function select(target: BottomPanelState["tab"]) {
+    setPanel(panel.open && tab === target ? { open: false } : { open: true, tab: target });
+  }
+
+  function copyLogs() {
+    const text = useDebugLogStore.getState().entries.map(logLine).join("\n");
+    navigator.clipboard.writeText(text).catch((e) => useUiStore.getState().notify("error", errorMessage(e)));
   }
 
   // Redimensionnement en tirant la bordure haute.
@@ -81,7 +94,7 @@ export function BottomPanel() {
         )}
         <PanelTab
           name="terminal"
-          active={panel.open && panel.tab === "terminal"}
+          active={panel.open && tab === "terminal"}
           onClick={() => select("terminal")}
           title={`Terminal (${LEAVE_TERMINAL_HINT})`}
         >
@@ -96,9 +109,20 @@ export function BottomPanel() {
             </span>
           )}
         </PanelTab>
+        {debugMode && (
+          <PanelTab name="logs" active={logsVisible} onClick={() => select("logs")}>
+            Logs
+          </PanelTab>
+        )}
 
         <div className="ml-auto flex items-center gap-1 pr-2">
-          {panel.open && panel.tab === "terminal" && (
+          {logsVisible && (
+            <>
+              <HeaderBtn onClick={copyLogs} title={tr("Copier les logs")}><Copy size={13} className="mx-auto" /></HeaderBtn>
+              <HeaderBtn onClick={clearLogs} title={tr("Effacer les logs")}><Eraser size={13} className="mx-auto" /></HeaderBtn>
+            </>
+          )}
+          {panel.open && tab === "terminal" && (
             <HeaderBtn onClick={() => restartTerminal(tabId)} title={tr("Relancer le shell")}><RotateCw size={13} className="mx-auto" /></HeaderBtn>
           )}
           {journalVisible && (
@@ -122,11 +146,9 @@ export function BottomPanel() {
 
       {panel.open && (
         <div className="flex-1 min-h-0 bg-[var(--color-bg-primary)]">
-          {panel.tab === "terminal" ? (
-            <TerminalView key={`${tabId}:${repoPath}`} tabId={tabId} path={repoPath} />
-          ) : (
-            <JournalView repo={onlyRepo ? repoPath : null} />
-          )}
+          {tab === "terminal" && <TerminalView key={`${tabId}:${repoPath}`} tabId={tabId} path={repoPath} />}
+          {tab === "journal" && <JournalView repo={onlyRepo ? repoPath : null} />}
+          {tab === "logs" && <LogsView />}
         </div>
       )}
     </div>
@@ -162,6 +184,42 @@ function formatTime(ms: number) {
 
 function formatDuration(ms: number) {
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+}
+
+const LOG_COLORS: Record<DebugLevel, string> = {
+  debug: "text-[var(--color-muted)]",
+  info: "text-[var(--color-text)]",
+  warn: "text-yellow-400",
+  error: "text-red-400",
+};
+
+function LogsView() {
+  const entries = useDebugLogStore((s) => s.entries);
+  const ref = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, [entries]);
+
+  return (
+    <div
+      ref={ref}
+      tabIndex={0}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+      }}
+      className="h-full overflow-auto px-3 py-1 font-mono text-[11px] leading-5 select-text whitespace-pre-wrap break-words"
+    >
+      {entries.length === 0 ? (
+        <p className="text-[var(--color-muted)] italic font-sans text-xs py-2">{tr("Aucun log pour l'instant.")}</p>
+      ) : (
+        entries.map((e) => <div key={e.id} className={LOG_COLORS[e.level]}>{logLine(e)}</div>)
+      )}
+    </div>
+  );
 }
 
 function JournalView({ repo }: { repo: string | null }) {

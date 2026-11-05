@@ -1,6 +1,6 @@
 use git2::{FetchOptions, Repository, SubmoduleIgnore, SubmoduleStatus, SubmoduleUpdateOptions};
 use serde::Serialize;
-use super::auth::remote_callbacks;
+use super::auth::{proxy_options, remote_callbacks};
 use super::error::GitError;
 use super::remote::CredsLookup;
 
@@ -64,7 +64,7 @@ pub fn update_submodules(repo: &Repository, names: &[String], creds: CredsLookup
             .unwrap_or_default();
 
         let mut fetch = FetchOptions::new();
-        fetch.remote_callbacks(remote_callbacks(creds(&url), repo.path()));
+        fetch.remote_callbacks(remote_callbacks(creds(&url), repo.path())).proxy_options(proxy_options());
         let mut opts = SubmoduleUpdateOptions::new();
         opts.fetch(fetch);
         sm.update(true, Some(&mut opts))

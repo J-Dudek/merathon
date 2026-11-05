@@ -26,7 +26,7 @@ const LETTER = /\p{L}/u;
 
 const ALLOWED = new Set([
   // Termes identiques dans les deux langues
-  "Email", "OAuth", "Options", "Terminal", "URL", "Commit", "commits", "Emojis", "merge", "CI", "CI ·", "px", "Notifications", "Checkout", "Labels", "Fetch",
+  "Email", "Logs", "OAuth", "Options", "Terminal", "URL", "Commit", "commits", "Emojis", "merge", "CI", "CI ·", "px", "Notifications", "Checkout", "Labels", "Fetch",
   "draft", "base", "Tags", "Worktrees", "LFS", "Stashes", "Remote", "solo", "(ed25519)", "Pull", "Push", "Stash", "Pop", "WIP",
   // Noms propres et commandes
   "Merathon", "Merathon — Git Repository Manager", "j6n@merathon", "$ git status", "v", "🎉 dev",

@@ -14,7 +14,7 @@ describe("stepZoom", () => {
 describe("sanitize", () => {
   it("keeps valid settings and repairs invalid ones", () => {
     expect(sanitize({ zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light" })).toEqual({
-      zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light", language: "fr", languageChosen: false, notifications: defaultNotifications,
+      zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light", language: "fr", languageChosen: false, notifications: defaultNotifications, debugMode: false,
     });
     expect(sanitize({ zoom: 9, terminalFontSize: 100, density: "énorme", syncInterval: 7, theme: "rose" })).toEqual({
       ...defaultDisplay, terminalFontSize: 24,

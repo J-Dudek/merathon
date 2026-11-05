@@ -33,6 +33,7 @@ import { errorMessage } from "./lib/actions";
 import { chooseAndInitRepo, chooseAndOpenRepo, openRepoAt } from "./lib/repoActions";
 import { checkForUpdatesOnStartup } from "./lib/updater";
 import { startAutoSync } from "./lib/autoSync";
+import { startDebugLogging } from "./lib/debugLog";
 import { useIconBadge } from "./lib/iconBadge";
 import { openDevtools } from "./ipc/commands";
 import { resizeKeyDelta } from "./lib/resizeKeys";
@@ -45,6 +46,7 @@ export default function App() {
   const [showClone, setShowClone] = useState(false);
   const zoom = useDisplayStore((s) => s.zoom);
   const syncInterval = useDisplayStore((s) => s.syncInterval);
+  const debugMode = useDisplayStore((s) => s.debugMode);
   const repoPath = useRepoStore((s) => s.repoPath);
   const center = useRepoStore((s) => s.center);
   const selectedCommit = useRepoStore((s) => s.selectedCommit);
@@ -89,6 +91,9 @@ export default function App() {
   // Fetch et PR de chaque dépôt ouvert à intervalle régulier (Préférences) : les changements sont notifiés.
   useEffect(() => startAutoSync(syncInterval), [syncInterval]);
 
+  // Mode débug (Préférences > À propos) : logs de l'interface et du backend, jusque dans l'onglet « Logs ».
+  useEffect(() => (debugMode ? startDebugLogging() : undefined), [debugMode]);
+
   // Nombre de PR / MR avec du nouveau sur l'icône de l'application (Dock, barre des tâches, lanceur).
   useIconBadge();
 
@@ -111,11 +116,12 @@ export default function App() {
     if (getCurrentWindow().label === "main") return persistTabSession(!repo);
   }, []);
 
-  // Les fichiers ont pu changer dans un éditeur externe : on rafraîchit au retour sur la fenêtre.
+  // Les fichiers ont pu changer dans un éditeur externe : on rafraîchit au retour sur la fenêtre,
+  // même pendant une opération réseau, qui peut durer longtemps ou ne jamais se terminer.
   useEffect(() => {
     if (!repoPath) return;
     const onFocus = () => {
-      if (!useUiStore.getState().busy) refresh().catch(() => {});
+      refresh().catch(() => {});
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);

@@ -165,7 +165,12 @@ export function useBranchMenus() {
       entries.push(...branchActions(b));
     } else if (b.upstream) {
       entries.push(
-        { label: "Pull", action: async () => reportMerge(await runGit(() => pull(path, false), { busy: tr("Pull…") }), tr("Pull terminé")) },
+        {
+          label: "Pull",
+          // Comme le bouton de la barre d'outils : pas de second pull tant qu'une opération réseau est en cours.
+          disabled: !!useUiStore.getState().busy,
+          action: async () => reportMerge(await runGit(() => pull(path, false), { busy: tr("Pull…") }), tr("Pull terminé")),
+        },
       );
     }
     entries.push(

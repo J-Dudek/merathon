@@ -65,7 +65,7 @@ function refreshLater(s: Session) {
   s.refreshTimer = setTimeout(() => {
     s.awaitingRefresh = false;
     const repo = useRepoStore.getState();
-    if (repo.repoPath === s.path && !useUiStore.getState().busy) repo.refresh().catch(() => {});
+    if (repo.repoPath === s.path) repo.refresh().catch(() => {});
   }, QUIET_MS);
 }
 

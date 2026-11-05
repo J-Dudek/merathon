@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use git2::{build::RepoBuilder, AutotagOption, BranchType, FetchOptions, FetchPrune, PushOptions, Repository};
 use serde::Serialize;
-use super::auth::{remote_callbacks, Credentials};
+use super::auth::{proxy_options, remote_callbacks, Credentials};
 use super::error::GitError;
 use super::merge::{merge_annotated, MergeResult};
 use super::ops::rebase_onto;
@@ -22,7 +22,7 @@ pub fn init_repo(path: &str) -> Result<(), GitError> {
 
 pub fn clone_repo(url: &str, path: &str, creds: CredsLookup) -> Result<(), GitError> {
     let mut fetch_opts = FetchOptions::new();
-    fetch_opts.remote_callbacks(remote_callbacks(creds(url), std::path::Path::new(path)));
+    fetch_opts.remote_callbacks(remote_callbacks(creds(url), std::path::Path::new(path))).proxy_options(proxy_options());
 
     RepoBuilder::new()
         .fetch_options(fetch_opts)
@@ -58,9 +58,10 @@ pub fn fetch(repo: &Repository, remote_name: &str, creds: CredsLookup) -> Result
     let mut fetch_opts = FetchOptions::new();
     fetch_opts
         .remote_callbacks(remote_callbacks(creds(&url), repo.path()))
+        .proxy_options(proxy_options())
         .prune(FetchPrune::On)
         .download_tags(AutotagOption::All);
-    remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None)?;
+    crate::debug_log::timed(format!("fetch {remote_name} ({url})"), || remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None))?;
     Ok(())
 }
 
@@ -85,8 +86,8 @@ fn push_refspecs(repo: &Repository, remote_name: &str, refspecs: &[String], cred
     });
 
     let mut opts = PushOptions::new();
-    opts.remote_callbacks(callbacks);
-    remote.push(refspecs, Some(&mut opts))?;
+    opts.remote_callbacks(callbacks).proxy_options(proxy_options());
+    crate::debug_log::timed(format!("push {remote_name} ({url})"), || remote.push(refspecs, Some(&mut opts)))?;
     drop(opts);
 
     let rejected = rejected.into_inner();
@@ -185,11 +186,13 @@ pub fn pull(repo: &Repository, rebase: bool, creds: CredsLookup) -> Result<Merge
     let annotated = repo.reference_to_annotated_commit(upstream.get())?;
     let (analysis, _) = repo.merge_analysis(&[&annotated])?;
 
-    if rebase && !analysis.is_up_to_date() && !analysis.is_fast_forward() {
-        let result = rebase_onto(repo, &upstream_name)?;
-        return Ok(MergeResult { conflicted_files: result.conflicted_files, success: result.success });
-    }
-    merge_annotated(repo, &annotated, &upstream_name)
+    crate::debug_log::timed(format!("pull: integrate {upstream_name}"), || {
+        if rebase && !analysis.is_up_to_date() && !analysis.is_fast_forward() {
+            let result = rebase_onto(repo, &upstream_name)?;
+            return Ok(MergeResult { conflicted_files: result.conflicted_files, success: result.success });
+        }
+        merge_annotated(repo, &annotated, &upstream_name)
+    })
 }
 
 #[cfg(test)]
@@ -357,6 +360,66 @@ mod tests {
         add_remote(&work, "upstream", "https://example.com/x.git").unwrap();
         remove_remote(&work, "upstream").unwrap();
         assert_eq!(list_remotes(&work).unwrap().len(), 1);
+    }
+
+    /// Serveur qui accepte les connexions sans jamais répondre.
+    fn silent_server() -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let mut open = Vec::new();
+            for stream in listener.incoming() {
+                open.push(stream);
+            }
+        });
+        port
+    }
+
+    #[test]
+    fn silent_server_ends_in_an_error_instead_of_blocking() {
+        crate::git::auth::set_network_timeouts(2_000, 2_000).unwrap();
+        let port = silent_server();
+        // Sous Windows, HTTP et HTTPS passent par WinHTTP, qui ignore les délais de libgit2
+        // (lecture infinie, connexion 60 s en dur dans transports/winhttp.c) : seul SSH les respecte.
+        let schemes: &[&str] = if cfg!(windows) { &["ssh"] } else { &["http", "https", "ssh"] };
+        for &scheme in schemes {
+            let (done, result) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let dir = TempDir::new().unwrap();
+                let repo = Repository::init(dir.path()).unwrap();
+                repo.remote("origin", &format!("{scheme}://git@127.0.0.1:{port}/x.git")).unwrap();
+                done.send(fetch(&repo, "origin", &no_creds).map_err(|e| e.to_string())).unwrap();
+            });
+            let outcome = result.recv_timeout(std::time::Duration::from_secs(20));
+            let outcome = outcome.unwrap_or_else(|_| panic!("{scheme} : fetch toujours bloqué après 20 s"));
+            assert!(outcome.is_err(), "{scheme} : une erreur était attendue");
+        }
+    }
+
+    #[test]
+    fn fetch_goes_through_the_configured_proxy() {
+        use std::io::{Read, Write};
+        let proxy = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = proxy.local_addr().unwrap().port();
+        let (done, received) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let (mut stream, _) = proxy.accept().unwrap();
+            let mut buffer = [0u8; 1024];
+            let n = stream.read(&mut buffer).unwrap();
+            stream.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+            done.send(String::from_utf8_lossy(&buffer[..n]).to_string()).unwrap();
+        });
+
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        repo.config().unwrap().set_str("http.proxy", &format!("http://127.0.0.1:{port}")).unwrap();
+        // L'hôte n'existe pas : seul le proxy peut recevoir la requête.
+        repo.remote("origin", "https://merathon.invalid/x.git").unwrap();
+        let outcome = fetch(&repo, "origin", &no_creds).map_err(|e| e.to_string());
+        assert!(outcome.is_err());
+        let request = received.recv_timeout(std::time::Duration::from_secs(5));
+        let request = request.unwrap_or_else(|_| panic!("le proxy n'a reçu aucune requête : {outcome:?}"));
+        assert!(request.contains("merathon.invalid"), "{request}");
     }
 
     /// Vérifie que le transport HTTPS est bien compilé (réseau requis : `cargo test -- --ignored`).

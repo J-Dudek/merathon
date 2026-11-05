@@ -7,7 +7,7 @@
 use std::cell::{Cell, RefCell};
 use git2::{build::CheckoutBuilder, BranchType, ErrorCode, Oid, PushOptions, RebaseOptions, Repository};
 use serde::Serialize;
-use super::auth::remote_callbacks;
+use super::auth::{proxy_options, remote_callbacks};
 use super::error::GitError;
 use super::remote::CredsLookup;
 use super::repository::signature;
@@ -180,7 +180,7 @@ pub fn force_push_pull_request(
         Ok(())
     });
     let mut opts = PushOptions::new();
-    opts.remote_callbacks(callbacks);
+    opts.remote_callbacks(callbacks).proxy_options(proxy_options());
     let pushed = remote.push(&[format!("+{source}:{target}")], Some(&mut opts));
     drop(opts);
 

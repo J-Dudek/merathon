@@ -2,6 +2,16 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.15.0](https://github.com/J-Dudek/merathon/compare/v2.14.0...v2.15.0) (2026-11-05)
+
+### Nouveautés
+
+- mode débug avec un onglet Logs dans le panneau du bas (bc85763)
+
+### Corrections
+
+- un pull bloqué n'empêche plus de voir les changements sur le disque (1be0db5)
+
 ## [2.14.0](https://github.com/J-Dudek/merathon/compare/v2.13.2...v2.14.0) (2026-11-04)
 
 ### Nouveautés

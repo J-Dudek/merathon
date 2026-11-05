@@ -96,6 +96,9 @@ export type RepoState = Omit<RepoStore, "recentRepos" | {
 /** Incrémenté à chaque changement de dépôt affiché : une ouverture en cours devenue obsolète est abandonnée. */
 let generation = 0;
 
+/** Numéro de la dernière lecture lancée : le résultat d'une lecture plus ancienne, devenu périmé, est ignoré. */
+let lastRefresh = 0;
+
 export const emptyRepo: RepoState = {
   repoPath: null,
   info: null,
@@ -138,6 +141,7 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
   refresh: async () => {
     const path = get().repoPath;
     if (!path) return;
+    const current = ++lastRefresh;
     const [info, commits, branches, tags, stashes, remotes, submodules, worktrees, identity, lfs, status] = await Promise.all([
       getRepoInfo(path),
       getCommits(path),
@@ -152,6 +156,7 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
       getStatus(path),
     ]);
     if (get().repoPath !== path) return; // un autre dépôt a été ouvert entre-temps
+    if (current !== lastRefresh) return; // une lecture plus récente (ex. à la fin d'un pull) fait foi
     const selected = get().selectedCommit;
     set({
       info, commits, branches, tags, stashes, remotes, submodules, worktrees, identity, lfs, status,
