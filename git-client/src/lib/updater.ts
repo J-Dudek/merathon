@@ -1,9 +1,13 @@
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getVersion } from "@tauri-apps/api/app";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { latestRelease, type LatestRelease } from "../ipc/commands";
 import { useUiStore, type DialogSection } from "../store/useUiStore";
 import { errorMessage } from "./actions";
 import { tr, percent } from "../i18n";
+import { hasDesktopFeatures, isAndroid } from "./platform";
 
 /** Libellé de progression du téléchargement (pourcentage connu seulement si le serveur annonce la taille). */
 export function downloadLabel(received: number, total: number): string {
@@ -100,6 +104,9 @@ function stripLinks(text: string): string {
  * `manual` : demandé par l'utilisateur, qui est alors aussi prévenu quand l'appli est à jour ou en cas d'erreur.
  */
 export async function checkForUpdates(manual = false) {
+  if (isAndroid()) return checkAndroidUpdate(manual);
+  // Sur iOS, le store gère les mises à jour : le plugin n'existe pas.
+  if (!hasDesktopFeatures()) return;
   const ui = useUiStore.getState();
   let update;
   try {
@@ -137,6 +144,43 @@ export async function checkForUpdates(manual = false) {
     ui.notify("error", tr("Échec de la mise à jour : {error}", { error: errorMessage(e) }));
   } finally {
     ui.setBusy(null);
+  }
+}
+
+/**
+ * Android : l'APK est distribué hors store, sans plugin de mise à jour. Merathon lit la dernière release publique et
+ * propose d'en télécharger l'APK dans le navigateur ; Android l'installe ensuite par-dessus, données conservées.
+ */
+async function checkAndroidUpdate(manual: boolean) {
+  const ui = useUiStore.getState();
+  let latest: LatestRelease;
+  let current: string;
+  try {
+    [latest, current] = await Promise.all([latestRelease(), getVersion()]);
+  } catch (e) {
+    if (manual) ui.notify("error", tr("Impossible de vérifier les mises à jour : {error}", { error: errorMessage(e) }));
+    return;
+  }
+  if (compareVersions(latest.version, current) <= 0) {
+    if (manual) ui.notify("success", tr("Merathon est à jour"));
+    return;
+  }
+  // Release sans APK (publiée pour le bureau seulement) : rien à installer sur le téléphone.
+  if (!latest.apkUrl) {
+    if (manual) ui.notify("info", tr("Merathon {version} est sorti, mais sans APK Android pour l'instant.", { version: latest.version }));
+    return;
+  }
+  const answer = await ui.ask({
+    title: tr("Merathon {version} est disponible", { version: latest.version }),
+    message: tr("Version installée : {currentVersion}. L'APK se télécharge dans le navigateur ; ouvre-le ensuite pour l'installer par-dessus (comptes et dépôts conservés).", { currentVersion: current }),
+    sections: releaseNoteSections(latest.notes, current),
+    confirmLabel: tr("Télécharger"),
+  });
+  if (!answer) return;
+  try {
+    await openUrl(latest.apkUrl);
+  } catch (e) {
+    ui.notify("error", tr("Ouverture du navigateur impossible : {error}", { error: errorMessage(e) }));
   }
 }
 

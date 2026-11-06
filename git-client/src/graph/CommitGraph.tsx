@@ -5,6 +5,7 @@ import { MIN_GRAPH_WIDTH, useUiStore, confirmAction } from "../store/useUiStore"
 import { computeGraphLayout } from "./layout";
 import { filterCommits } from "../search/filterCommits";
 import { GraphCanvas, H_PADDING, LANE_WIDTH } from "./GraphCanvas";
+import { isMobile } from "../lib/platform";
 import { ROW_HEIGHTS, useDisplayStore } from "../store/useDisplayStore";
 import { ContextMenu, useContextMenu, type MenuEntry } from "../components/ContextMenu";
 import {
@@ -30,6 +31,7 @@ const OVERSCAN = 10;
 
 export function CommitGraph() {
   const commits = useRepoStore((s) => s.commits);
+  const loaded = useRepoStore((s) => s.loaded);
   const status = useRepoStore((s) => s.status);
   const info = useRepoStore((s) => s.info);
   const searchQuery = useRepoStore((s) => s.searchQuery);
@@ -307,7 +309,10 @@ export function CommitGraph() {
   // Largeur de toutes les voies, bornée par celle choisie avec la poignée : les voies au-delà sont coupées.
   const fullGraphWidth = H_PADDING * 2 + layout.laneCount * LANE_WIDTH + INFO_OFFSET;
   const graphWidthLimit = useUiStore((s) => s.graphWidth);
-  const graphWidth = graphWidthLimit === null ? fullGraphWidth : Math.min(fullGraphWidth, graphWidthLimit);
+  // Mobile : les voies ne prennent qu'environ un tiers de la largeur, pour laisser lire les messages.
+  const defaultLimit = isMobile() ? Math.max(MIN_GRAPH_WIDTH, Math.round(size.width * 0.35)) : null;
+  const effectiveLimit = graphWidthLimit ?? defaultLimit;
+  const graphWidth = effectiveLimit === null ? fullGraphWidth : Math.min(fullGraphWidth, effectiveLimit);
   const graphTruncated = graphWidth < fullGraphWidth;
 
   // Fait défiler jusqu'au commit sélectionné (ex. clic sur une branche dans la barre latérale).
@@ -444,7 +449,7 @@ export function CommitGraph() {
       <div className="flex flex-col h-full">
         {wipRow}
         <div className="flex-1 flex items-center justify-center text-[var(--color-muted)] text-sm">
-          {tr("Aucun commit pour l'instant — indexe des fichiers et crée le premier commit")}
+          {loaded ? tr("Aucun commit pour l'instant — indexe des fichiers et crée le premier commit") : tr("Chargement…")}
         </div>
       </div>
     );
@@ -646,7 +651,7 @@ function CommitRow({
       aria-selected={isSelected}
       aria-posinset={row + 1}
       aria-setsize={count}
-      className={`absolute flex items-center gap-3 px-2 cursor-pointer transition-colors duration-100 ${
+      className={`@container absolute flex items-center gap-3 px-2 cursor-pointer transition-colors duration-100 ${
         isSelected ? "bg-overlay/10" : "hover:bg-overlay/5"
       }`}
       style={{
@@ -678,10 +683,11 @@ function CommitRow({
         {commit.parents.length > 1 && <span className="sr-only">{tr("Commit de fusion :")}{" "}</span>}
         {commit.message}
       </span>
-      {/* Fenêtre étroite : auteur, hash et date restent lus par les lecteurs d'écran et affichés dans le détail du commit. */}
-      <span className="text-[11px] text-[var(--color-muted)] shrink-0 max-w-32 truncate max-[760px]:sr-only">{commit.author}</span>
-      <span className="text-[11px] text-[var(--color-muted)] shrink-0 font-mono max-[760px]:sr-only">{commit.short_hash}</span>
-      <span className="text-[11px] text-[var(--color-muted)] shrink-0 w-24 text-right max-[760px]:sr-only">{date}</span>
+      {/* Ligne étroite (fenêtre étroite, tablette en portrait) : auteur, hash et date restent lus par les lecteurs
+          d'écran et affichés dans le détail du commit. */}
+      <span className="text-[11px] text-[var(--color-muted)] shrink-0 max-w-32 truncate max-[760px]:sr-only @max-[32rem]:sr-only">{commit.author}</span>
+      <span className="text-[11px] text-[var(--color-muted)] shrink-0 font-mono max-[760px]:sr-only @max-[32rem]:sr-only">{commit.short_hash}</span>
+      <span className="text-[11px] text-[var(--color-muted)] shrink-0 w-24 text-right max-[760px]:sr-only @max-[32rem]:sr-only">{date}</span>
     </div>
   );
 }

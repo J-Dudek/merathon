@@ -1,7 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { EmojiInput, EmojiTextarea } from "./EmojiAssist";
+import { EmojiInput, EmojiTextarea, loadEmojiData } from "./EmojiAssist";
+
+// Données chargées à la demande dans l'application (au repos après le démarrage) : ici, une fois pour toutes.
+beforeAll(async () => {
+  await loadEmojiData();
+});
 import { IssueRefTextarea } from "./IssueRefTextarea";
 
 function Harness({ initial = "", onKeyDown, single }: { initial?: string; onKeyDown?: () => void; single?: boolean }) {

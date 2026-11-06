@@ -29,6 +29,14 @@ fn describe_git(e: &git2::Error) -> String {
     if message.contains("HEAD of a linked repository") || message.ends_with("is already checked out") {
         return tr!("Cette branche est extraite dans un autre worktree ({message})", "This branch is checked out in another worktree ({message})");
     }
+    #[cfg(target_os = "android")]
+    if message.contains("hostkey") {
+        // Avec une clé d'appareil, le SSH est possible : il manque seulement la validation de l'hôte (ou sa clé a changé).
+        if crate::android_keystore::signer().is_some() {
+            return tr!("Hôte SSH pas encore validé, ou dont la clé a changé : valide-le avec Comptes > Configurer SSH…, ou utilise l'URL HTTPS du dépôt", "SSH host not validated yet, or its key changed: validate it with Accounts > Set up SSH…, or use the repository's HTTPS URL");
+        }
+        return crate::android_keystore::unusable_key_message(crate::android_keystore::state());
+    }
     let hint = match e.code() {
         ErrorCode::Auth => Some(tr!("Authentification refusée par le dépôt distant : vérifie ta clé SSH, ton token ou ton gestionnaire d'identifiants", "Authentication refused by the remote repository: check your SSH key, your token or your credential manager")),
         ErrorCode::Certificate => Some(tr!("Certificat du serveur non reconnu : vérifie l'URL du dépôt distant ou la configuration du proxy", "Server certificate not recognized: check the remote repository URL or the proxy configuration")),
@@ -47,6 +55,8 @@ fn describe_git(e: &git2::Error) -> String {
         ErrorCode::Owner => Some(tr!("Le dépôt appartient à un autre utilisateur", "The repository belongs to another user")),
         _ => match e.class() {
             ErrorClass::Net | ErrorClass::Http => Some(tr!("Impossible de joindre le dépôt distant : vérifie ta connexion et l'URL du remote", "Could not reach the remote repository: check your connection and the remote URL")),
+            // libssh2 classe le délai dépassé en SSH, sans code Timeout : c'est le réseau, pas la clé.
+            ErrorClass::Ssh if message.to_ascii_lowercase().contains("timed out") => Some(tr!("Le serveur SSH ne répond pas (délai dépassé) : vérifie ta connexion et que le serveur est joignable", "The SSH server is not responding (timed out): check your connection and that the server is reachable")),
             ErrorClass::Ssh => Some(tr!("Échec de la connexion SSH : vérifie ta clé et l'accès au serveur", "SSH connection failed: check your key and access to the server")),
             _ => None,
         },
@@ -84,6 +94,12 @@ mod tests {
         );
         let network = git2::Error::new(ErrorCode::GenericError, ErrorClass::Net, "failed to resolve address for github.com");
         assert!(GitError::from(network).to_string().starts_with("Impossible de joindre le dépôt distant"));
+        // Port muet : libssh2 signale le délai en classe SSH ; ce n'est pas la clé qu'il faut vérifier.
+        let mute = git2::Error::new(ErrorCode::GenericError, ErrorClass::Ssh, "failed to start SSH session: Timed out waiting on socket");
+        let text = GitError::from(mute).to_string();
+        assert!(text.starts_with("Le serveur SSH ne répond pas (délai dépassé)") && !text.contains("ta clé"), "{text}");
+        let refused = git2::Error::new(ErrorCode::Auth, ErrorClass::Ssh, "Failed to authenticate SSH session");
+        assert!(GitError::from(refused).to_string().contains("vérifie ta clé SSH"));
     }
 
     #[test]

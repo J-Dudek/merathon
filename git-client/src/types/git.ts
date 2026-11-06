@@ -241,6 +241,15 @@ export interface SshSetupInfo {
   /** Chemin de la clé à créer ; null si `id_ed25519` existe déjà : rien n'est jamais écrasé. */
   new_key_path: string | null;
   machine: string;
+  /** Android : pourquoi aucune clé n'est proposée (pas de verrouillage d'écran, clé invalidée…). */
+  problem?: string;
+}
+
+/** Clé SSH de l'appareil (Android Keystore). */
+export interface DeviceKeyStatus {
+  state: "absent" | "ready" | "invalidated" | "insecure";
+  key: SshKeyInfo | null;
+  message: string | null;
 }
 
 export type SshHostStatus = { state: "known" } | { state: "unknown"; fingerprint: string; published: boolean };

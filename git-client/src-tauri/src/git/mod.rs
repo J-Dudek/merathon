@@ -15,6 +15,7 @@ mod interactive;
 mod pr_rebase;
 mod submodule;
 mod worktree;
+mod files;
 mod profiles;
 pub mod lfs;
 
@@ -45,6 +46,8 @@ pub use pr_rebase::{
 };
 pub use submodule::{list_submodules, update_submodules, SubmoduleInfo};
 pub use worktree::{list_worktrees, add_worktree, remove_worktree, WorktreeInfo};
+pub use files::{list_files, read_file, write_file, delete_file};
+#[cfg(not(target_os = "android"))]
 pub(crate) use profiles::is_plain_file_name;
 pub use profiles::{home_dir, list_profiles, save_profile, delete_profile, identity_status, clear_local_identity, GitProfile, ProfileInput, ProfilesInfo, IdentityStatus};
 pub use patch::{apply_lines, LineAction};

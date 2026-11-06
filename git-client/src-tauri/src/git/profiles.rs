@@ -439,6 +439,7 @@ pub fn clear_local_identity(repo: &Repository) -> Result<(), GitError> {
 }
 
 /// Un chemin ne doit pas pouvoir sortir de son dossier : utilisé pour les noms de clés reçus de l'interface.
+#[cfg_attr(target_os = "android", allow(dead_code))] // Noms de fichiers de clés SSH : bureau seulement.
 pub(crate) fn is_plain_file_name(name: &str) -> bool {
     let mut parts = Path::new(name).components();
     matches!((parts.next(), parts.next()), (Some(Component::Normal(_)), None)) && !name.contains(['/', '\\'])

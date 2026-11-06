@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Maximize2, Minimize2, X } from "lucide-react";
+import { isMobile } from "../lib/platform";
 import { tr } from "../i18n";
 
 interface Props {
@@ -50,7 +51,10 @@ function saveSize(key: string, size: ModalSize) {
   }
 }
 
-export function Modal({ title, onClose, children, width = "w-[420px]", height = "", resizeKey }: Props) {
+export function Modal({ title, onClose, children, width = "w-[420px]", height = "", resizeKey: requestedResizeKey }: Props) {
+  const mobile = isMobile();
+  // Mobile : ni poignée ni agrandissement, la fenêtre occupe déjà presque tout l'écran.
+  const resizeKey = mobile ? undefined : requestedResizeKey;
   const titleId = useId();
   const [size, setSize] = useState(() => loadSize(resizeKey));
   const boxRef = useRef<HTMLDivElement>(null);
@@ -111,7 +115,9 @@ export function Modal({ title, onClose, children, width = "w-[420px]", height = 
     handle.addEventListener("pointercancel", onUp);
   }
 
-  let boxClass = `${width} ${height} max-w-[92vw] max-h-[76vh]`;
+  let boxClass = mobile
+    ? `${width} ${height} max-w-[calc(100vw-16px)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-16px)]`
+    : `${width} ${height} max-w-[92vw] max-h-[76vh]`;
   let boxStyle: React.CSSProperties | undefined;
   if (size.maximized) {
     boxClass = "";
@@ -124,9 +130,12 @@ export function Modal({ title, onClose, children, width = "w-[420px]", height = 
     };
   }
 
+  let overlayPosition = sized ? "items-center" : "items-start pt-[12vh]";
+  if (mobile) overlayPosition = "items-start pt-[calc(env(safe-area-inset-top)+8px)]";
+
   return createPortal(
     <div
-      className={`fixed inset-0 z-[10000] flex justify-center bg-black/50 ${sized ? "items-center" : "items-start pt-[12vh]"}`}
+      className={`fixed inset-0 z-[10000] flex justify-center bg-black/50 ${overlayPosition}`}
       onMouseDown={(e) => {
         backdropDown.current = e.target === e.currentTarget;
       }}

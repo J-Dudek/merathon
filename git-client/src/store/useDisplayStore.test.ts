@@ -14,7 +14,7 @@ describe("stepZoom", () => {
 describe("sanitize", () => {
   it("keeps valid settings and repairs invalid ones", () => {
     expect(sanitize({ zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light" })).toEqual({
-      zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light", language: "fr", languageChosen: false, notifications: defaultNotifications, debugMode: false,
+      zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light", language: "fr", languageChosen: false, notifications: defaultNotifications, backgroundInterval: 30, debugMode: false, experimentalSsh: false,
     });
     expect(sanitize({ zoom: 9, terminalFontSize: 100, density: "énorme", syncInterval: 7, theme: "rose" })).toEqual({
       ...defaultDisplay, terminalFontSize: 24,
@@ -30,6 +30,19 @@ describe("sanitize", () => {
   it("asks for the language when settings saved by an older version have no choice", () => {
     expect(sanitize({ zoom: 1.25, theme: "dark" }).languageChosen).toBe(false);
     expect(sanitize({ language: "en", languageChosen: true })).toMatchObject({ language: "en", languageChosen: true });
+  });
+
+  it("ne vérifie les PR en arrière-plan (Android) que sur demande, à un intervalle proposé", () => {
+    expect(sanitize({}).notifications.background).toBe(false);
+    expect(sanitize({ notifications: { background: true } }).notifications.background).toBe(true);
+    expect(sanitize({ backgroundInterval: 60 }).backgroundInterval).toBe(60);
+    expect(sanitize({ backgroundInterval: 5 }).backgroundInterval).toBe(30);
+  });
+
+  it("n'active le SSH expérimental d'Android que sur demande explicite", () => {
+    expect(sanitize({}).experimentalSsh).toBe(false);
+    expect(sanitize({ experimentalSsh: "oui" }).experimentalSsh).toBe(false);
+    expect(sanitize({ experimentalSsh: true }).experimentalSsh).toBe(true);
   });
 
   it("complète les réglages de notification incomplets ou invalides", () => {

@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "mobile",
+  "description": "Mobile : quitter l'application avec le bouton retour, une fois revenu à l'écran principal",
+  "windows": ["main"],
+  "permissions": ["core:app:allow-exit"],
+  "platforms": ["android", "iOS"]
+}

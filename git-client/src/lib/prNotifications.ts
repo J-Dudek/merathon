@@ -1,11 +1,12 @@
 import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
-import { closeDesktopNotification, notifyDesktop } from "../ipc/commands";
+import { closeDesktopNotification, notifyDesktop, prWatchSnapshot, prWatchState, type PrWatchSnapshot } from "../ipc/commands";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useDisplayStore, type NotificationSettings } from "../store/useDisplayStore";
 import { prFreshness, seenKey, useSeenPrsStore, type SeenPr } from "../store/useSeenPrsStore";
 import { useUiStore } from "../store/useUiStore";
 import { cachedMyPullRequests, fetchMyPullRequests, publishMyPullRequests } from "./myPullRequests";
 import type { ForgeAccount, MyPullRequests, PrSummary } from "../types/forge";
+import { isAndroid } from "./platform";
 import { tr, trn, COLON } from "../i18n";
 
 export type PrEventKind =
@@ -17,7 +18,7 @@ export interface PrEvent {
 }
 
 /** Réglage des préférences qui active chaque type d'événement. */
-const SETTING: Record<PrEventKind, Exclude<keyof NotificationSettings, "enabled" | "badge">> = {
+const SETTING: Record<PrEventKind, Exclude<keyof NotificationSettings, "enabled" | "badge" | "background">> = {
   opened: "opened",
   commits: "commits",
   comments: "comments",
@@ -115,7 +116,7 @@ export function notificationText(events: PrEvent[], provider: ForgeAccount["prov
 let permission: Promise<boolean> | null = null;
 
 /** Autorisation d'afficher des notifications système, demandée une seule fois par session. */
-function notificationsAllowed(): Promise<boolean> {
+export function notificationsAllowed(): Promise<boolean> {
   permission ??= (async () => (await isPermissionGranted()) || (await requestPermission()) === "granted")().catch(() => false);
   return permission;
 }
@@ -126,8 +127,15 @@ export interface NotifiedPr {
   pr: PrSummary;
 }
 
-/** Notifications système encore affichées (Linux) : retirées quand toutes leurs PR ont été consultées. */
+/** Notifications système encore affichées (Linux, ou tâche Android) : retirées quand toutes leurs PR ont été consultées. */
 const shown: { id: number; prs: NotifiedPr[] }[] = [];
+
+function closeRead(seen: Record<string, SeenPr>) {
+  for (const id of readNotifications(shown, seen)) {
+    shown.splice(shown.findIndex((n) => n.id === id), 1);
+    closeDesktopNotification(id).catch((e) => console.warn("Notification non retirée :", e));
+  }
+}
 
 /** Notifications dont toutes les PR ont été consultées depuis (dans l'état notifié ou plus récent). */
 export function readNotifications(list: { id: number; prs: NotifiedPr[] }[], seen: Record<string, SeenPr>): number[] {
@@ -136,12 +144,26 @@ export function readNotifications(list: { id: number; prs: NotifiedPr[] }[], see
 
 // Le dock d'Ubuntu affiche sur l'icône le nombre de notifications de l'appli encore dans la liste de GNOME :
 // une notification sur une PR qu'on vient de consulter y est retirée, sinon le compteur laisse croire à du nouveau.
-useSeenPrsStore.subscribe(({ seen }) => {
-  for (const id of readNotifications(shown, seen)) {
-    shown.splice(shown.findIndex((n) => n.id === id), 1);
-    closeDesktopNotification(id).catch((e) => console.warn("Notification non retirée :", e));
+useSeenPrsStore.subscribe(({ seen }) => closeRead(seen));
+
+/** Vérification en arrière-plan d'Android active : ses listes et ses notifications sont partagées avec elle. */
+function backgroundWatch(): boolean {
+  const { enabled, background } = useDisplayStore.getState().notifications;
+  return isAndroid() && enabled && background;
+}
+
+/**
+ * Android : reprend les notifications affichées par la tâche d'arrière-plan pendant que l'application était fermée,
+ * pour les retirer comme les autres une fois leurs PR consultées (et tout de suite si c'est déjà fait).
+ */
+export async function restoreBackgroundNotifications() {
+  if (!isAndroid()) return;
+  const { shown: fromTask } = await prWatchState();
+  for (const n of fromTask) {
+    if (!shown.some((s) => s.id === n.id)) shown.push(n);
   }
-});
+  closeRead(useSeenPrsStore.getState().seen);
+}
 
 /** Notification système si la fenêtre est en arrière-plan (ou réduite), simple toast sinon. */
 async function deliver(title: string, body: string, prs: NotifiedPr[]) {
@@ -186,11 +208,19 @@ function readSnapshots(): Record<string, Snapshot> {
 function writeSnapshot(accountId: string, data: MyPullRequests) {
   const accounts = new Set(useAccountsStore.getState().accounts.map((a) => a.id));
   const kept = Object.fromEntries(Object.entries(readSnapshots()).filter(([id]) => accounts.has(id)));
+  const at = Date.now();
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...kept, [accountId]: { at: Date.now(), data } }));
+    localStorage.setItem(KEY, JSON.stringify({ ...kept, [accountId]: { at, data } }));
   } catch {
     // stockage indisponible : la prochaine synchronisation repartira de zéro
   }
+  // Référence de la prochaine vérification en arrière-plan : elle ne signalera que ce qui change ensuite.
+  if (backgroundWatch()) prWatchSnapshot(accountId, { at, data }).catch((e) => console.warn("Liste non transmise à la tâche :", e));
+}
+
+/** Liste de comparaison : celle de la tâche d'arrière-plan si elle est plus récente (ce qu'elle a notifié ne l'est plus). */
+export function comparisonBase(local: Snapshot | undefined, task: PrWatchSnapshot | undefined): Snapshot | undefined {
+  return task && (!local || task.at > local.at) ? task : local;
 }
 
 /** Reprend les dernières listes connues des comptes pas encore chargés : pastille et onglet Comptes à jour dès le démarrage. */
@@ -208,12 +238,16 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /** Recharge « mes PR » d'un compte et notifie ce qui a changé depuis la dernière liste connue (même d'une session précédente). */
-async function refreshAccount(account: ForgeAccount, settings: NotificationSettings): Promise<MyPullRequests> {
-  const previous = readSnapshots()[account.id] as Snapshot | undefined;
-  if (previous && Date.now() - previous.at < FRESH_MS) {
-    publishMyPullRequests(account.id, previous.data);
-    return previous.data;
+async function refreshAccount(
+  account: ForgeAccount, settings: NotificationSettings, task: Record<string, PrWatchSnapshot>,
+): Promise<MyPullRequests> {
+  const local = readSnapshots()[account.id] as Snapshot | undefined;
+  if (local && Date.now() - local.at < FRESH_MS) {
+    publishMyPullRequests(account.id, local.data);
+    return local.data;
   }
+  // Les listes de la tâche n'ont que les champs comparés : elles servent à comparer, jamais à afficher.
+  const previous = comparisonBase(local, task[account.id]);
   const data = await fetchMyPullRequests(account);
   writeSnapshot(account.id, data);
   publishMyPullRequests(account.id, data);
@@ -235,9 +269,10 @@ export async function syncMyPullRequests(): Promise<Set<string>> {
   const settings = useDisplayStore.getState().notifications;
   const followed = new Set<string>();
   if (!settings.enabled) return followed;
+  const task = backgroundWatch() ? await prWatchState().then((s) => s.snapshots).catch(() => ({})) : {};
   for (const account of useAccountsStore.getState().accounts) {
     try {
-      const data = await exclusive(() => refreshAccount(account, settings));
+      const data = await exclusive(() => refreshAccount(account, settings, task));
       for (const pr of [...data.assigned, ...data.authored]) followed.add(seenKey(account.id, pr.projectPath, pr.number).toLowerCase());
     } catch (e) {
       console.warn(`PR / MR de ${account.label} indisponibles :`, e);

@@ -1,21 +1,8 @@
+// Données des emojis (gemoji, ~1 900 entrées) : chargées à la demande par l'assistant de saisie (EmojiAssist),
+// à la première saisie de « : » ou à l'ouverture du sélecteur, pas au démarrage.
 import { emojiToName, gemoji, type Gemoji } from "gemoji";
 import { fold } from "./issueRefs";
 import { tr } from "../i18n";
-
-/** Emoji en cours de saisie : le « : » (à `start`) et ce qui le suit jusqu'au curseur. */
-export interface EmojiQuery {
-  start: number;
-  query: string;
-}
-
-/**
- * « :mot » juste avant le curseur, en début de mot et avec au moins deux caractères : ni « 12:30 », ni « fix: », ni les
- * émoticônes « :) », « :D » ou « :-D ».
- */
-export function emojiQueryAt(text: string, caret: number): EmojiQuery | null {
-  const m = /(?:^|[\s([{]):([\p{L}\p{N}+][\p{L}\p{N}_+-]+)$/u.exec(text.slice(0, caret));
-  return m ? { start: caret - m[1].length - 1, query: m[1] } : null;
-}
 
 /** Les noms de gemoji sont en anglais : mots français des emojis les plus courants. */
 const FRENCH_WORDS: Record<string, string> = {
@@ -100,9 +87,4 @@ export function rememberEmoji(emoji: string) {
   }
 }
 
-/** Remplace `start`…`end` par l'emoji et renvoie le texte et la position du curseur après l'emoji. */
-export function insertEmoji(text: string, start: number, end: number, emoji: string, spaceAfter = false): { text: string; caret: number } {
-  const after = text.slice(end);
-  const inserted = emoji + (spaceAfter && !/^\s/.test(after) ? " " : "");
-  return { text: text.slice(0, start) + inserted + after, caret: start + inserted.length };
-}
+export { emojiQueryAt, insertEmoji, type EmojiQuery } from "./emojiInput";

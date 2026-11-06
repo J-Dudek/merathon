@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Check, type LucideIcon } from "lucide-react";
 import { Kbd } from "./Kbd";
 import { nextMenuIndex } from "../lib/keyboardContextMenu";
+import { isMobile } from "../lib/platform";
 
 export interface MenuItem {
   label: string;
@@ -103,20 +104,23 @@ export function ContextMenu({ menu, onClose }: Props) {
     };
   }, [onClose]);
 
-  const style: React.CSSProperties = {
-    position: "fixed",
-    top: pos.top,
-    left: pos.left,
-    zIndex: 9999,
-  };
+  // Mobile : feuille en bas de l'écran, à portée de pouce, plutôt qu'un menu à l'endroit du toucher.
+  const sheet = isMobile();
+  const style: React.CSSProperties = sheet
+    ? { position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 10003 }
+    : { position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 };
 
   return createPortal(
+    <>
+    {sheet && <div className="fixed inset-0 z-[10002] bg-black/50" aria-hidden />}
     <div
       ref={ref}
       style={style}
       role="menu"
       onKeyDown={onMenuKey}
-      className="min-w-48 max-w-[min(40rem,calc(100vw-8px))] max-h-[80vh] overflow-y-auto p-1 rounded-lg border border-overlay/10 bg-[var(--color-bg-elevated)]/95 backdrop-blur-md shadow-2xl shadow-black/50 ring-1 ring-shade/40 select-none"
+      className={sheet
+        ? "mobile-sheet max-h-[70vh] overflow-y-auto p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] rounded-t-2xl bg-[var(--color-bg-elevated)] shadow-2xl select-none"
+        : "min-w-48 max-w-[min(40rem,calc(100vw-8px))] max-h-[80vh] overflow-y-auto p-1 rounded-lg border border-overlay/10 bg-[var(--color-bg-elevated)]/95 backdrop-blur-md shadow-2xl shadow-black/50 ring-1 ring-shade/40 select-none"}
     >
       {menuSections(menu.items).map((section, s) => {
         const entries = section.entries.map((entry, i) => {
@@ -128,7 +132,7 @@ export function ContextMenu({ menu, onClose }: Props) {
             role={entry.checked === undefined ? "menuitem" : "menuitemradio"}
             aria-checked={entry.checked}
             tabIndex={0}
-            className={`group w-full flex items-center gap-2.5 text-left px-2 py-1.5 rounded-md text-xs transition-colors outline-none disabled:opacity-40 disabled:cursor-default ${
+            className={`group w-full flex items-center text-left rounded-md transition-colors ${sheet ? "gap-4 px-3 min-h-12 py-2 text-sm" : "gap-2.5 px-2 py-1.5 text-xs"} outline-none disabled:opacity-40 disabled:cursor-default ${
               entry.danger
                 ? "text-red-400 hover:bg-red-500/15 focus-visible:bg-red-500/15"
                 : "text-[var(--color-text)] hover:bg-overlay/[0.08] focus-visible:bg-overlay/[0.12]"
@@ -139,7 +143,7 @@ export function ContextMenu({ menu, onClose }: Props) {
               onClose();
             }}
           >
-            {Icon && <Icon size={14} strokeWidth={1.75} className="shrink-0 opacity-70 group-hover:opacity-100" />}
+            {Icon && <Icon size={sheet ? 20 : 14} strokeWidth={1.75} className="shrink-0 opacity-70 group-hover:opacity-100" />}
             {/* Libellés renvoyés à la ligne plutôt que tronqués : les noms de branches longs restent lisibles. */}
             <span className="flex-1 min-w-0 [overflow-wrap:anywhere]">
               <span className="block">{entry.label}</span>
@@ -147,7 +151,7 @@ export function ContextMenu({ menu, onClose }: Props) {
                 <span className="block text-[10px] text-[var(--color-muted)] font-mono">{entry.hint}</span>
               )}
             </span>
-            {entry.shortcut && <Kbd keys={entry.shortcut} className="ml-4" />}
+            {entry.shortcut && !sheet && <Kbd keys={entry.shortcut} className="ml-4" />}
             {entry.checked && <Check size={14} strokeWidth={2} className="shrink-0 ml-4 text-[var(--color-accent-text)]" aria-hidden />}
           </button>
         );
@@ -164,13 +168,14 @@ export function ContextMenu({ menu, onClose }: Props) {
           </div>
         );
       })}
-    </div>,
+    </div>
+    </>,
     document.body
   );
 }
 
 /** Choix du menu regroupés sous leurs titres de section (le premier groupe peut ne pas en avoir). */
-function menuSections(items: MenuEntry[]): { header: string | null; entries: (MenuItem | "separator")[] }[] {
+export function menuSections(items: MenuEntry[]): { header: string | null; entries: (MenuItem | "separator")[] }[] {
   const sections: { header: string | null; entries: (MenuItem | "separator")[] }[] = [{ header: null, entries: [] }];
   for (const entry of items) {
     if (entry !== "separator" && "header" in entry) sections.push({ header: entry.header, entries: [] });

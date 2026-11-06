@@ -75,6 +75,27 @@ pub fn get_repo_info(path: String) -> Result<git::RepoInfo, GitError> {
     with_repo(&path, git::repo_info)
 }
 
+/// Dossier privé de l'application où vont les dépôts sur mobile (voir device_storage.rs).
+fn device_root(app: &AppHandle) -> Result<std::path::PathBuf, GitError> {
+    let data = app.path().app_data_dir().map_err(|e| GitError::Other(e.to_string()))?;
+    crate::device_storage::prepare_root(&data.join("repos"))
+}
+
+#[tauri::command(async)]
+pub fn device_repos_root(app: AppHandle) -> Result<String, GitError> {
+    Ok(device_root(&app)?.to_string_lossy().into_owned())
+}
+
+#[tauri::command(async)]
+pub fn list_device_folders(app: AppHandle, dir: String) -> Result<Vec<crate::device_storage::DeviceFolder>, GitError> {
+    crate::device_storage::list_folders(&device_root(&app)?, &dir)
+}
+
+#[tauri::command(async)]
+pub fn create_device_folder(app: AppHandle, dir: String, name: String) -> Result<String, GitError> {
+    crate::device_storage::create_folder(&device_root(&app)?, &dir, &name)
+}
+
 #[tauri::command(async)]
 pub fn init_repository(path: String) -> Result<(), GitError> {
     git::init_repo(&path)
@@ -263,6 +284,30 @@ pub fn get_conflict_content(path: String, file_path: String) -> Result<String, G
 #[tauri::command(async)]
 pub fn resolve_conflict(path: String, file_path: String, content: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::resolve_conflict(r, &file_path, &content))
+}
+
+// ---------------------------------------------------------------- Fichiers de la copie de travail
+
+/// Fichiers suivis et non suivis (hors `.gitignore`), pour les parcourir dans l'application.
+#[tauri::command(async)]
+pub fn list_files(path: String) -> Result<Vec<String>, GitError> {
+    with_repo(&path, git::list_files)
+}
+
+#[tauri::command(async)]
+pub fn read_file(path: String, file_path: String) -> Result<String, GitError> {
+    with_repo(&path, |r| git::read_file(r, &file_path))
+}
+
+/// `create` : nouveau fichier, refusé s'il existe déjà.
+#[tauri::command(async)]
+pub fn write_file(path: String, file_path: String, content: String, create: bool) -> Result<(), GitError> {
+    with_repo(&path, |r| git::write_file(r, &file_path, &content, create))
+}
+
+#[tauri::command(async)]
+pub fn delete_file(path: String, file_path: String) -> Result<(), GitError> {
+    with_repo(&path, |r| git::delete_file(r, &file_path))
 }
 
 // ---------------------------------------------------------------- Stash
@@ -517,6 +562,37 @@ pub fn ssh_check_connection(host: String, key: String) -> Result<ssh_setup::SshC
     ssh_setup::check_connection(&ssh_setup::ssh_dir()?, &host, &key)
 }
 
+/// Clé SSH de l'appareil (Android Keystore) : état et description, sans demander de confirmation.
+#[cfg(target_os = "android")]
+#[tauri::command(async)]
+pub fn ssh_device_key_status() -> Result<crate::android_keystore::DeviceKeyStatus, String> {
+    crate::android_keystore::status()
+}
+
+/// Supprime la clé SSH de l'appareil (par exemple invalidée). Elle reste à retirer de la forge.
+#[cfg(target_os = "android")]
+#[tauri::command(async)]
+pub fn ssh_device_key_delete() -> Result<(), String> {
+    crate::android_keystore::delete()
+}
+
+#[cfg(not(target_os = "android"))]
+fn device_key_unavailable() -> String {
+    tr!("La clé SSH de l'appareil n'existe que sur Android", "The device SSH key only exists on Android")
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command(async)]
+pub fn ssh_device_key_status() -> Result<serde_json::Value, String> {
+    Err(device_key_unavailable())
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command(async)]
+pub fn ssh_device_key_delete() -> Result<(), String> {
+    Err(device_key_unavailable())
+}
+
 #[tauri::command(async)]
 pub fn list_submodules(path: String) -> Result<Vec<git::SubmoduleInfo>, GitError> {
     with_repo(&path, git::list_submodules)
@@ -547,13 +623,23 @@ pub fn remove_worktree(path: String, name: String) -> Result<(), GitError> {
 }
 
 /// `remote` absent : fetch de tous les remotes.
+/// `background` : synchronisation automatique. Sur Android, la clé SSH de l'appareil ne peut alors demander aucune
+/// confirmation : verrouillée, elle fait échouer le fetch (ignoré sans bruit par l'interface). Sans effet ailleurs.
 #[tauri::command]
-pub async fn fetch_remote(app: AppHandle, path: String, remote: Option<String>) -> Result<(), GitError> {
+pub async fn fetch_remote(app: AppHandle, path: String, remote: Option<String>, background: Option<bool>) -> Result<(), GitError> {
     network(&app, move |creds| {
-        with_repo(&path, |r| match &remote {
-            Some(name) => git::fetch(r, name, creds),
-            None => git::fetch_all(r, creds),
-        })
+        let fetch = || {
+            with_repo(&path, |r| match &remote {
+                Some(name) => git::fetch(r, name, creds),
+                None => git::fetch_all(r, creds),
+            })
+        };
+        #[cfg(target_os = "android")]
+        if background == Some(true) {
+            return crate::ssh_signer::without_prompt(fetch);
+        }
+        let _ = background;
+        fetch()
     })
     .await
 }
@@ -681,7 +767,6 @@ pub fn list_accounts(app: AppHandle) -> Result<Vec<Account>, String> {
 fn username_for_token(provider: Provider, base_url: &str, token: &str) -> Result<String, String> {
     crate::accounts::validate_base_url(base_url)?;
     oauth::fetch_username(provider, &oauth::endpoints(provider, base_url), token.trim())
-        .map_err(|_| tr!("Token refusé par l'instance : vérifie sa validité et ses droits (scopes)", "Token refused by the instance: check its validity and permissions (scopes)"))
 }
 
 async fn blocking_str<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
@@ -918,6 +1003,7 @@ pub fn open_devtools(window: tauri::WebviewWindow) {
 
 // ---------------------------------------------------------------- Terminal intégré
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn terminal_open(
     app: AppHandle,
@@ -930,17 +1016,50 @@ pub fn terminal_open(
     crate::terminal::open(&app, window.label(), &cwd, cols, rows, on_event)
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn terminal_write(app: AppHandle, id: u32, data: String) -> Result<(), String> {
     crate::terminal::write(&app, id, &data)
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn terminal_resize(app: AppHandle, id: u32, cols: u16, rows: u16) -> Result<(), String> {
     crate::terminal::resize(&app, id, cols, rows)
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn terminal_close(app: AppHandle, id: u32) {
     crate::terminal::close(&app, id)
 }
+
+// Sur mobile (Android, iOS), il n'y a pas de shell exploitable : les commandes existent toujours, pour que le
+// gestionnaire d'invocation reste le même, mais refusent proprement (le frontend masque le panneau terminal).
+
+#[cfg(not(desktop))]
+fn terminal_unavailable() -> String {
+    tr!("terminal indisponible sur mobile", "terminal not available on mobile")
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub fn terminal_open(_cwd: String, _cols: u16, _rows: u16, _on_event: tauri::ipc::Channel<serde_json::Value>) -> Result<u32, String> {
+    Err(terminal_unavailable())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub fn terminal_write(_id: u32, _data: String) -> Result<(), String> {
+    Err(terminal_unavailable())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub fn terminal_resize(_id: u32, _cols: u16, _rows: u16) -> Result<(), String> {
+    Err(terminal_unavailable())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub fn terminal_close(_id: u32) {}

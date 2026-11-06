@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.16.0](https://github.com/J-Dudek/merathon/compare/v2.15.0...v2.16.0) (2026-11-06)
+
+### Nouveautés
+
+- Ajout de la génération d'une version Android (a03eaa0)
+
 ## [2.15.0](https://github.com/J-Dudek/merathon/compare/v2.14.0...v2.15.0) (2026-11-05)
 
 ### Nouveautés

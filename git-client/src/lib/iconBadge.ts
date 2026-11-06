@@ -3,6 +3,7 @@ import { Image } from "@tauri-apps/api/image";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { defaultWindowIcon } from "@tauri-apps/api/app";
 import { isWsl } from "../ipc/commands";
+import { hasDesktopFeatures } from "./platform";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { useSeenPrsStore, type SeenPr } from "../store/useSeenPrsStore";
@@ -94,6 +95,8 @@ export function useIconBadge() {
   useEffect(() => restoreMyPullRequests(accounts.map((a) => a.id)), [accounts]);
 
   useEffect(() => {
+    // Pas de pastille sur l'icône d'une appli Android : les notifications du système s'en chargent.
+    if (!hasDesktopFeatures()) return;
     const lists = accounts.flatMap((a) => {
       const data = cachedMyPullRequests(a.id);
       return data ? [{ accountId: a.id, data }] : [];

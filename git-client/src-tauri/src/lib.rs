@@ -1,16 +1,34 @@
+#[cfg(desktop)]
 use tauri::Manager;
 
 #[macro_use]
 mod i18n;
+mod latest_release;
 mod accounts;
 mod commands;
 mod debug_log;
+mod device_storage;
 mod forge;
 mod http;
 mod notifications;
 mod oauth;
+mod pr_watch;
 mod ssh_setup;
+// SSH sans OpenSSH (issue #38) : Android, et tests sur le bureau contre un vrai serveur OpenSSH.
+#[cfg(any(target_os = "android", test))]
+mod known_hosts;
+#[cfg(any(target_os = "android", test))]
+mod ssh_native;
+#[cfg(any(target_os = "android", test))]
+mod ssh_signer;
+#[cfg(any(target_os = "android", test))]
+mod android_keystore;
+#[cfg(test)]
+mod test_sshd;
+#[cfg(test)]
+mod bench;
 mod git;
+#[cfg(desktop)]
 mod terminal;
 mod window;
 
@@ -19,22 +37,45 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     configure_wsl_environment();
 
-    if let Err(e) = git::configure_network_timeouts() {
-        eprintln!("Délais réseau de libgit2 non appliqués : {e}");
-    }
-
-    tauri::Builder::default()
-        .manage(terminal::Terminals::default())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_notification::init());
+
+    // Mises à jour (hors du Play Store, qui les gère lui-même), redémarrage et terminaux : bureau seulement.
+    #[cfg(desktop)]
+    let builder = builder
+        .manage(terminal::Terminals::default())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
+        .setup(|_app| {
+            // Sans certificats, seul le HTTPS de Git échoue : l'application doit quand même démarrer.
+            #[cfg(target_os = "android")]
+            {
+                device_storage::set_home(_app);
+                match device_storage::trust_system_certificates() {
+                    Ok(count) => eprintln!("certificats du système : {count}"),
+                    Err(e) => eprintln!("certificats du système indisponibles : {e}"),
+                }
+            }
+            // Premier appel à libgit2, qui lit HOME une fois pour toutes à son initialisation : il doit suivre
+            // set_home, sinon Android n'a plus de configuration globale (« no configuration exists for the given level '4' »).
+            if let Err(e) = git::configure_network_timeouts() {
+                eprintln!("Délais réseau de libgit2 non appliqués : {e}");
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             i18n::set_language,
             commands::open_new_window,
             notifications::notify_desktop,
             notifications::close_desktop_notification,
+            pr_watch::pr_watch_configure,
+            pr_watch::pr_watch_snapshot,
+            pr_watch::pr_watch_state,
+            latest_release::latest_release,
             notifications::is_wsl,
             commands::open_repository,
             commands::trust_repository,
@@ -68,6 +109,10 @@ pub fn run() {
             commands::reword_head,
             commands::get_conflict_content,
             commands::resolve_conflict,
+            commands::list_files,
+            commands::read_file,
+            commands::write_file,
+            commands::delete_file,
             commands::list_stashes,
             commands::stash_save,
             commands::stash_apply,
@@ -111,6 +156,8 @@ pub fn run() {
             commands::ssh_host_status,
             commands::ssh_trust_host,
             commands::ssh_check_connection,
+            commands::ssh_device_key_status,
+            commands::ssh_device_key_delete,
             commands::list_submodules,
             commands::update_submodules,
             commands::list_worktrees,
@@ -137,6 +184,9 @@ pub fn run() {
             commands::oauth_start,
             commands::oauth_complete,
             commands::oauth_cancel,
+            commands::device_repos_root,
+            commands::list_device_folders,
+            commands::create_device_folder,
             commands::app_info,
             debug_log::set_debug_logging,
             commands::open_devtools,
@@ -145,9 +195,10 @@ pub fn run() {
             commands::terminal_resize,
             commands::terminal_close,
         ])
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                window.state::<terminal::Terminals>().close_window(window.label());
+        .on_window_event(|_window, _event| {
+            #[cfg(desktop)]
+            if let tauri::WindowEvent::Destroyed = _event {
+                _window.state::<terminal::Terminals>().close_window(_window.label());
             }
         })
         .run(tauri::generate_context!())

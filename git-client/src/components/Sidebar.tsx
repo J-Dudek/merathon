@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Archive, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Cloud, EyeOff, FileBox, FolderGit2, GitBranch, Package, Plus, RefreshCw, Tag, type LucideIcon } from "lucide-react";
+import { Archive, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Cloud, EllipsisVertical, EyeOff, FileBox, FolderGit2, GitBranch, Package, Plus, RefreshCw, Tag, type LucideIcon } from "lucide-react";
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore, confirmAction, promptText } from "../store/useUiStore";
 import {
@@ -9,13 +9,14 @@ import {
 import { errorMessage, runGit } from "../lib/actions";
 import { ContextMenu, useContextMenu, type MenuEntry } from "./ContextMenu";
 import { openRepoAt } from "../lib/repoActions";
+import { hasDesktopFeatures, isMobile } from "../lib/platform";
 import { createWorktree, deleteWorktree } from "../lib/worktrees";
 import { useBranchMenus } from "./branchMenus";
 import { branchKey, effectiveFilter, EMPTY_FILTER } from "../lib/graphFilter";
 import { useGraphFilterStore } from "../store/useGraphFilterStore";
 import { PullRequestList, checkoutPullRequest, useLinkedForge, usePullRequests } from "./PullRequestList";
 import { prFreshness, seenKey, useSeenPrsStore } from "../store/useSeenPrsStore";
-import { PullRequestReviewDialog } from "./PullRequestReviewDialog";
+import { PullRequestReviewDialog } from "./lazy";
 import { branchOnRemote, branchTree, flattenTree, localOnlyBranches, pullRequestsByBranch, type BranchNode } from "../lib/branches";
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
 import type { BranchInfo, StashInfo, SubmoduleInfo, TagInfo, WorktreeInfo } from "../types/git";
@@ -213,7 +214,9 @@ export function Sidebar() {
     const initialized = sm.state !== "uninitialized";
     return [
       { label: tr("Ouvrir dans un nouvel onglet"), disabled: !initialized, action: () => openRepoAt(abs) },
-      { label: tr("Ouvrir dans une nouvelle fenêtre"), disabled: !initialized, action: () => openNewWindow(abs) },
+      ...(hasDesktopFeatures()
+        ? [{ label: tr("Ouvrir dans une nouvelle fenêtre"), disabled: !initialized, action: () => openNewWindow(abs) }]
+        : []),
       "separator",
       {
         label: initialized ? tr("Mettre à jour (commit enregistré)") : tr("Initialiser et récupérer"),
@@ -234,7 +237,7 @@ export function Sidebar() {
     if (!w.valid) return [remove];
     return [
       { label: tr("Ouvrir dans un onglet"), action: () => openRepoAt(w.path) },
-      { label: tr("Ouvrir dans une nouvelle fenêtre"), action: () => openNewWindow(w.path) },
+      ...(hasDesktopFeatures() ? [{ label: tr("Ouvrir dans une nouvelle fenêtre"), action: () => openNewWindow(w.path) }] : []),
       { label: tr("Copier le chemin"), action: () => navigator.clipboard.writeText(w.path) },
       "separator",
       remove,
@@ -639,6 +642,17 @@ function Row({ icon: Icon, label, active, selected, dimmed, solo, depth = 0, tit
         {selected && <span className="sr-only">{tr(", sélectionnée")}</span>}
       </div>
       {action}
+      {/* Mobile : le menu ne s'ouvre sinon que par appui long, et un appui simple sélectionne la ligne. */}
+      {isMobile() && (
+        <button
+          data-touch-target
+          className="shrink-0 px-1.5 py-1 text-[var(--color-muted)] hover:text-[var(--color-text)]"
+          aria-label={tr("Actions sur {label}", { label })}
+          onClick={onContextMenu}
+        >
+          <EllipsisVertical size={14} />
+        </button>
+      )}
     </li>
   );
 }

@@ -3,6 +3,7 @@ import { TriangleAlert } from "lucide-react";
 import { Modal, inputClass } from "./Modal";
 import { filterMemo, GIT_MEMO, type MemoEntry } from "../lib/gitMemo";
 import { fieldLabel } from "../lib/fieldLabel";
+import { isMobile } from "../lib/platform";
 import { tr, trn } from "../i18n";
 
 /** Mémo des opérations git : à quoi elles servent, un cas d'usage, et comment les faire dans l'application. */
@@ -23,7 +24,8 @@ export function GitMemoDialog({ onClose }: { onClose: () => void }) {
             placeholder={tr("Rechercher…")}
             {...fieldLabel(tr("Rechercher dans le mémo Git"))}
             value={query}
-            autoFocus
+            // Mobile : on ouvre le mémo pour le lire ; le clavier ne doit pas en masquer la moitié d'emblée.
+            autoFocus={!isMobile()}
             onChange={(e) => setQuery(e.target.value)}
           />
           {GIT_MEMO.map(({ id, label, entries }) => {
@@ -60,6 +62,11 @@ export function GitMemoDialog({ onClose }: { onClose: () => void }) {
           <p role="status" className="sr-only">
             {searching && trn(found, "{n} fiche trouvée", "{n} fiches trouvées")}
           </p>
+          {isMobile() && (
+            <p className="mb-4 px-3 py-2 rounded-md bg-overlay/5 text-[var(--color-muted)] leading-relaxed">
+              {tr("Sur téléphone : « clic droit » et « survole » deviennent un appui long ; le panneau de gauche est l'écran « Dépôt », le panneau de droite l'écran « Détails » ; les raccourcis clavier (Ctrl+…, Échap) n'existent pas, Échap devient le bouton Retour.")}
+            </p>
+          )}
           {groups.length === 0 && <p className="text-[var(--color-muted)] italic">{tr("Aucune opération ne correspond à « {value} ».", { value: query.trim() })}</p>}
           {groups.map((group) => (
             <section key={group.id} className="mb-6 last:mb-0">

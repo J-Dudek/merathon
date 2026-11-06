@@ -1,6 +1,6 @@
 [package]
 name = "merathon"
-version = "2.15.0"
+version = "2.16.0"
 description = "Merathon — Git Repository Manager : client Git graphique de bureau"
 authors = ["Julien Dudek"]
 license = "MIT"
@@ -24,11 +24,6 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
-# Mises à jour automatiques (téléchargement signé depuis les releases GitHub) et redémarrage.
-# Sans la fonctionnalité `zip` : les releases publient les paquets bruts (AppImage, deb, exe, msi),
-# jamais d'archive .zip / .tar.gz ; elle n'apportait que la crate zip 4.x (RUSTSEC-2026-0367/0368/0369).
-tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
-tauri-plugin-process = "2"
 # Notifications système (activité des PR / MR quand la fenêtre est en arrière-plan).
 tauri-plugin-notification = "~2.5.0"
 serde = { version = "1", features = ["derive"] }
@@ -36,22 +31,58 @@ serde_json = "1"
 git2 = { version = "0.21", features = ["https", "ssh"] }
 tokio = { version = "1", features = ["full"] }
 thiserror = "1"
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 ureq = { version = "2", features = ["json"] }
 # TLS des appels aux forges : autorités du système (certificats d'entreprise) en plus de celles de Mozilla.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.8"
 webpki-roots = "1"
-portable-pty = "0.9"
 # Création et lecture des clés SSH (voir src/ssh_setup.rs). Sans `std` ni les fonctionnalités par défaut : elles feraient
 # entrer dans Cargo.lock, même sans les compiler, crypto-bigint (RUSTSEC-2026-0387) et rsa (RUSTSEC-2023-0071).
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519", "encryption", "getrandom"] }
 
 [dev-dependencies]
 tempfile = "3"
+# Tests du SSH Android sur le bureau (ssh_native.rs, ssh_signer.rs) : mêmes crates que la cible Android, plus une clé
+# P-256 logicielle (ring, déjà utilisé par rustls) à la place de l'Android Keystore. Aucune crate ajoutée à Cargo.lock.
+base64ct = "1"
+libc = "0.2"
+libgit2-sys = "0.18"
+ring = "0.17"
 
 # Notifications Linux par une connexion D-Bus gardée ouverte (voir src/notifications.rs).
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = "5"
 # Sous WSL, notification Windows par `powershell.exe -EncodedCommand` (voir src/notifications.rs).
 base64 = "0.22"
+
+# Bureau seulement : mises à jour automatiques, redémarrage, trousseau du système et terminal intégré.
+# Sur Android et iOS, il n'y a ni shell, ni trousseau, ni mises à jour hors du store.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+# Mises à jour automatiques (téléchargement signé depuis les releases GitHub) et redémarrage.
+# Sans la fonctionnalité `zip` : les releases publient les paquets bruts (AppImage, deb, exe, msi),
+# jamais d'archive .zip / .tar.gz ; elle n'apportait que la crate zip 4.x (RUSTSEC-2026-0367/0368/0369).
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
+tauri-plugin-process = "2"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+portable-pty = "0.9"
+
+# Android : OpenSSL (utilisé par libgit2 pour HTTPS et libssh2) n'existe pas sur le système ; il est compilé avec le projet.
+# Demande perl et make sur la machine de build.
+[target.'cfg(target_os = "android")'.dependencies]
+openssl-sys = { version = "0.9", features = ["vendored"] }
+# Autorités de certification du système données à libgit2 (voir src/device_storage.rs).
+libgit2-sys = "0.18"
+# SSH sans OpenSSH (src/ssh_native.rs, src/ssh_signer.rs) : encodage des clés et allocation de la signature rendue à libssh2.
+base64ct = "1"
+libc = "0.2"
+# Clé SSH de l'appareil (src/android_keystore.rs) : appels JNI vers MerathonKeystore.kt, versions déjà utilisées par tao.
+jni = "0.21"
+ndk-context = "0.1"
+
+# Binaires livrés (bureau et Android) : symboles retirés (APK Android 35 → 28 Mo) et LTO complète sur une seule unité de
+# compilation (−1,9 Mo de plus, lectures git ~7 % plus rapides), au prix d'une compilation de release plus longue
+# (+1,5 min environ). Pas de `panic = "abort"` : ssh_signer.rs rattrape les paniques (catch_unwind) avant le code C.
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

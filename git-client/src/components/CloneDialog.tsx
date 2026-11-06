@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { openRepoAt } from "../lib/repoActions";
 import { useUiStore } from "../store/useUiStore";
-import { cloneRepository, listGitProfiles } from "../ipc/commands";
+import { cloneRepository, deviceReposRoot, listGitProfiles } from "../ipc/commands";
+import { pickFolder } from "../lib/folderPicker";
+import { isMobile } from "../lib/platform";
+import { isSshUrl } from "../lib/remoteUrl";
+import { useSshAvailable } from "../lib/sshAvailability";
 import { errorMessage } from "../lib/actions";
 import { profileForAccount, profileForDir } from "../lib/gitProfiles";
 import type { ForgeRepo } from "../types/forge";
@@ -35,9 +38,19 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
   const [profiles, setProfiles] = useState<GitProfile[]>([]);
   const [dirChosen, setDirChosen] = useState(false);
   const targetProfile = profileForDir(profiles, parentDir);
+  const ssh = useSshAvailable();
+  const sshUnavailable = !ssh && isSshUrl(url);
+  let credentialsHint = tr("Les identifiants du compte correspondant à l'hôte de l'URL sont utilisés automatiquement.");
+  if (!isMobile()) credentialsHint = tr("Les identifiants du compte correspondant à l'hôte de l'URL sont utilisés automatiquement (HTTPS), sinon l'agent SSH ou tes clés ~/.ssh.");
+  else if (ssh) credentialsHint = tr("Les identifiants du compte correspondant à l'hôte de l'URL sont utilisés automatiquement (HTTPS), sinon la clé SSH de l'appareil.");
 
   useEffect(() => {
     listGitProfiles().then((info) => setProfiles(info.profiles)).catch(() => {});
+  }, []);
+
+  // Mobile : un seul espace pour les dépôts, proposé d'office.
+  useEffect(() => {
+    if (isMobile()) deviceReposRoot().then((root) => setParentDir((dir) => dir || root)).catch(() => {});
   }, []);
 
   // Dossier du profil lié au compte, tant que l'utilisateur n'en a pas choisi un autre.
@@ -72,8 +85,8 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
   }, [repos, filter]);
 
   async function chooseDir() {
-    const dir = await open({ directory: true, multiple: false });
-    if (typeof dir !== "string") return;
+    const dir = await pickFolder();
+    if (!dir) return;
     setParentDir(dir);
     setDirChosen(true);
   }
@@ -143,7 +156,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
           <input
             autoFocus
             className={inputClass}
-            placeholder={tr("https://github.com/owner/repo.git ou git@gitlab.com:group/repo.git")}
+            placeholder={ssh ? tr("https://github.com/owner/repo.git ou git@gitlab.com:group/repo.git") : "https://github.com/owner/repo.git"}
             required
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -174,17 +187,21 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
         {targetProfile && (
           <p className="text-[11px] text-[var(--color-text)]">
             {tr("Profil « {label} » : commits signés", { label: targetProfile.label })}{" "}{targetProfile.user_email ?? tr("selon ce profil")}
-            {targetProfile.ssh_key ? tr(", clé {ssh_key}", { ssh_key: targetProfile.ssh_key }) : ""}.
+            {targetProfile.ssh_key && !isMobile() ? tr(", clé {ssh_key}", { ssh_key: targetProfile.ssh_key }) : ""}.
           </p>
         )}
 
+        {sshUnavailable && (
+          <p role="alert" className="text-[11px] text-amber-300">{tr("Le SSH n'est pas encore pris en charge sur Android : utilise l'URL HTTPS du dépôt.")}</p>
+        )}
+
         <p className="text-[10px] text-[var(--color-muted)]">
-          {tr("Les identifiants du compte correspondant à l'hôte de l'URL sont utilisés automatiquement (HTTPS), sinon l'agent SSH ou tes clés ~/.ssh.")}
+          {credentialsHint}
         </p>
 
         <div className="flex justify-end gap-2">
           <Button onClick={onClose} disabled={cloning}>{tr("Annuler")}</Button>
-          <Button variant="primary" onClick={handleClone} disabled={cloning || !url.trim() || !parentDir || !name.trim()}>
+          <Button variant="primary" onClick={handleClone} disabled={cloning || sshUnavailable || !url.trim() || !parentDir || !name.trim()}>
             {cloning ? tr("Clonage…") : tr("Cloner")}
           </Button>
         </div>

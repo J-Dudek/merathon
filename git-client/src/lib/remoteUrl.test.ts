@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hostOf, instanceUrl, newPullRequestUrl, parseRemoteUrl, remoteForAccount } from "./remoteUrl";
+import { hostOf, instanceUrl, newPullRequestUrl, parseRemoteUrl, remoteForAccount, isSshUrl } from "./remoteUrl";
 import type { ForgeAccount } from "../types/forge";
 
 const gitlabCorp: ForgeAccount = {
@@ -79,5 +79,20 @@ describe("instanceUrl", () => {
     expect(instanceUrl("")).toBeNull();
     expect(instanceUrl("https://")).toBeNull();
     expect(instanceUrl("https://gitlab")).toBeNull();
+  });
+});
+
+describe("isSshUrl", () => {
+  it("recognizes both SSH forms and nothing else", () => {
+    expect(isSshUrl("git@github.com:owner/repo.git")).toBe(true);
+    expect(isSshUrl("ssh://git@gitlab.com/owner/repo.git")).toBe(true);
+    // Autres écritures acceptées par libgit2 : elles aussi sont du SSH (bloqué sur Android, issue #38).
+    expect(isSshUrl("git+ssh://git@gitlab.com/owner/repo.git")).toBe(true);
+    expect(isSshUrl("ssh+git://git@gitlab.com/owner/repo.git")).toBe(true);
+    expect(isSshUrl("SSH://git@gitlab.com/owner/repo.git")).toBe(true);
+    expect(isSshUrl("sshfs://gitlab.com/owner/repo.git")).toBe(false);
+    expect(isSshUrl("https://github.com/owner/repo.git")).toBe(false);
+    expect(isSshUrl("https://user@github.com/owner/repo.git")).toBe(false);
+    expect(isSshUrl("/data/repos/origin.git")).toBe(false);
   });
 });

@@ -131,6 +131,14 @@ async function syncRepo(path: string, followed: Set<string>): Promise<{ changes:
   };
 }
 
+/** Marqueur des fetch refusés par la clé SSH de l'appareil, faute de pouvoir demander la confirmation (android_keystore.rs). */
+const DEVICE_KEY_LOCKED = "device-ssh-key-locked";
+const lockedNotified = new Set<string>();
+
+export function isDeviceKeyLocked(error: unknown): boolean {
+  return String(error instanceof Error ? error.message : error).includes(DEVICE_KEY_LOCKED);
+}
+
 let running = false;
 const syncedListeners = new Set<() => void>();
 const runningListeners = new Set<() => void>();
@@ -176,6 +184,14 @@ export async function syncOpenRepos() {
         const message = describeChanges(repoName(path), changes, prLabel);
         if (message) useUiStore.getState().notify("info", message);
       } catch (e) {
+        if (isDeviceKeyLocked(e)) {
+          // Android : aucune confirmation en arrière-plan. Signalé une seule fois par dépôt, sans erreur répétée.
+          if (!lockedNotified.has(path)) {
+            lockedNotified.add(path);
+            useUiStore.getState().notify("info", tr("Synchronisation de {repo} en pause : la clé SSH de l'appareil est verrouillée. Un fetch lancé à la main demandera la confirmation.", { repo: repoName(path) }));
+          }
+          continue;
+        }
         console.warn(`Synchronisation de ${path} impossible :`, e);
       }
     }

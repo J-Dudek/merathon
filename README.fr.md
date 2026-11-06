@@ -9,7 +9,7 @@
 <p align="center"><em>« Ton code, c'est un marathon. »</em></p>
 
 <p align="center">
-  Client Git graphique de bureau, construit avec <strong>Tauri 2</strong> (backend Rust + <code>git2</code>)
+  Client Git graphique de bureau (Linux, Windows) et Android, construit avec <strong>Tauri 2</strong> (backend Rust + <code>git2</code>)
   et <strong>React 19 / TypeScript</strong> (frontend Vite + Tailwind + Zustand).
 </p>
 
@@ -30,8 +30,9 @@ Les paquets de chaque version sont publiés dans les [releases GitHub](https://g
 
 - **Linux** : `.deb` (Debian/Ubuntu) ou `.AppImage` (universel). Le paquet `.deb` remplace automatiquement l'ancien paquet `j6n`.
 - **Windows** : `.msi` ou `.exe`. Les installeurs ne sont pas encore signés : au premier lancement, cliquer sur **Informations complémentaires** puis **Exécuter quand même**.
+- **Android** : `.apk` pour téléphones et tablettes arm64, à installer hors Play Store (voir [Android](#android)).
 
-Les empreintes SHA-256 de tous les fichiers sont dans `SHA256SUMS.txt`. Une fois installée, l'application se met à jour toute seule.
+Les empreintes SHA-256 de tous les fichiers sont dans `SHA256SUMS.txt`. Une fois installée, l'application se met à jour toute seule (sur Android, elle propose de télécharger le nouvel APK).
 
 ### Configuration minimale
 
@@ -44,6 +45,32 @@ Les empreintes SHA-256 de tous les fichiers sont dans `SHA256SUMS.txt`. Une fois
 Sous Linux, les versions plus anciennes ne sont pas prises en charge : Ubuntu 20.04, par exemple, ne fournit pas `libwebkit2gtk-4.1-0`, et l'installation du `.deb` échoue avec « Depends: libwebkit2gtk-4.1-0 but it is not installable ». L'AppImage a la même exigence de glibc. Sous WSL avec une distribution trop ancienne, le plus simple est d'installer la version Windows. Sous WSL (WSLg), Merathon s'affiche en X11 pour que la barre des tâches Windows montre son icône plutôt que le pingouin ; `GDK_BACKEND=wayland merathon` force Wayland. Il passe aussi WebKitGTK en rendu logiciel (`WEBKIT_DISABLE_DMABUF_RENDERER=1`, `LIBGL_ALWAYS_SOFTWARE=1`) : selon le GPU et son pilote Windows, le rendu accéléré laisse des zones non redessinées, comme des rectangles blancs sur le graphe. Une variable déjà définie est respectée : `LIBGL_ALWAYS_SOFTWARE=0 merathon` réactive l'accélération matérielle.
 
 Les versions jusqu'à la 2.0.0 incluse demandent glibc ≥ 2.39 (Ubuntu 24.04, Debian 13) : sur un système plus ancien, le paquet s'installe mais l'application ne démarre pas (« version `GLIBC_2.39' not found »).
+
+### Android
+
+Merathon existe aussi pour Android (téléphones et tablettes), hors Play Store. L'APK est joint à chaque release à partir de la 2.16.0.
+
+**Télécharger et installer**
+
+1. Sur le téléphone, ouvrir la [dernière release](https://github.com/J-Dudek/merathon/releases/latest) et télécharger `Merathon_X.Y.Z_arm64.apk` (rubrique *Assets*).
+2. Ouvrir le fichier téléchargé. La première fois, Android demande d'autoriser le navigateur (ou le gestionnaire de fichiers) à installer des applications : accepter, puis revenir à l'installation. Play Protect peut signaler une application inconnue : choisir d'installer quand même.
+3. L'empreinte du fichier est dans `SHA256SUMS.txt`, comme pour les autres paquets.
+
+Configuration : Android 7.0 ou plus récent, processeur 64 bits ARM (arm64, presque tous les téléphones actuels).
+
+**Mises à jour** : au démarrage, et via Préférences → À propos → « Rechercher des mises à jour », Merathon signale une nouvelle version, en affiche les nouveautés et propose de télécharger le nouvel APK. Il s'installe par-dessus l'ancien : comptes, dépôts et réglages sont conservés.
+
+**Fonctionnalités sur Android**
+
+- **Interface tactile** : sur téléphone, un écran à la fois avec une barre en bas (Dépôt, Historique, Détails) ; sur tablette (plus petit côté d'au moins 600 dp), les trois colonnes du bureau. Pull, Push et Fetch à côté du nom du dépôt, les autres actions (pull avec rebase, push forcé, nouvelle branche, stash, synchronisation) dans le menu ⋯, menu principal dans le tiroir ☰. Le bouton Retour d'Android ferme ce qui est ouvert, revient à l'écran précédent, puis quitte.
+- **Git au quotidien** : graphe des commits, détail d'un commit et diff de ses fichiers, modifications en cours, commit, branches, stash, onglets de dépôts. Un appui long ou le bouton ⋮ ouvre le menu d'une branche.
+- **Dépôts et comptes** : clone en HTTPS avec le token des comptes GitHub, GitHub Enterprise et GitLab ; dépôts et identifiants restent dans le dossier privé de l'application. Les fichiers du dépôt se parcourent et se modifient dans l'application (menu → « Fichiers du dépôt… »).
+- **Pull requests et merge requests** : liste, détail, conversation, revue des fichiers modifiés et commentaires de ligne (sur téléphone, toucher le numéro de la ligne), approbation.
+- **Notifications** : pendant l'utilisation, fetch des dépôts ouverts et actualisation des PR / MR. En option, Merathon vérifie aussi l'activité de vos PR / MR quand il est fermé (Préférences → Synchronisation → « Quand Merathon est fermé », toutes les 15 min à 3 h), uniquement via les API de GitHub / GitLab, pour ménager la batterie.
+- **SSH (expérimental)** : à activer dans Préférences → SSH (« Activer le SSH sur cet appareil »). Sans OpenSSH, avec une clé créée dans le coffre de l'appareil (Android Keystore), qui n'en sort jamais ; chaque utilisation est confirmée par le déverrouillage de l'appareil. Détails : [docs/android-ssh](docs/android-ssh/README.md).
+- **Mémo Git**, avec les équivalents tactiles des raccourcis clavier.
+
+Restent propres au bureau : le terminal intégré, les nouvelles fenêtres, l'installation automatique des mises à jour, le zoom de l'interface et la pastille sur l'icône de l'application.
 
 ### Dépôts WSL ouverts depuis la version Windows
 
@@ -264,7 +291,7 @@ Les installeurs sont générés dans `git-client/src-tauri/target/release/bundle
      - `feat:` → version mineure,
      - `fix:`, `perf:`, `refactor:`, `build:` ou message libre → correctif,
      - uniquement `docs:`, `ci:`, `test:`, `chore:`, `style:` → pas de release ;
-  3. génération des paquets Linux (`.deb`, `.AppImage`) et Windows (`.msi`, `.exe`) avec la nouvelle version appliquée (`package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`), pendant que les tests tournent ; rien n'est encore publié ;
+  3. génération des paquets Linux (`.deb`, `.AppImage`), Windows (`.msi`, `.exe`) et Android (`.apk` arm64 signé) avec la nouvelle version appliquée (`package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`), pendant que les tests tournent ; rien n'est encore publié ;
   4. seulement si **les tests et tous les paquets** réussissent : commit `chore(release): vX.Y.Z` sur `main`, tag `vX.Y.Z` et release GitHub, publiée automatiquement. Le commit de version est vérifié identique aux fichiers dont les paquets ont été générés. Si un test ou une plateforme échoue, rien n'est tagué ni publié.
 
 La branche `main` étant protégée, le commit de version est poussé avec le secret `RELEASE_TOKEN` : un token autorisé à contourner la protection (GitHub App ou token *fine-grained* limité à ce dépôt, permission « Contents : read and write »).

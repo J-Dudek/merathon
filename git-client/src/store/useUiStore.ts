@@ -11,7 +11,14 @@ export interface DialogOptions {
   title: string;
   message?: string;
   /** Affiche un champ texte ; sa valeur est renvoyée dans `value`. */
-  input?: { placeholder?: string; initial?: string; multiline?: boolean; secret?: boolean };
+  input?: {
+    placeholder?: string;
+    initial?: string;
+    multiline?: boolean;
+    secret?: boolean;
+    /** Le champ peut rester vide. */
+    optional?: boolean;
+  };
   /** Affiche une case à cocher ; son état est renvoyé dans `checked`. */
   checkbox?: { label: string; initial?: boolean };
   confirmLabel?: string;
@@ -61,7 +68,7 @@ export interface SideWidths {
 export type Side = keyof SideWidths;
 
 /** Rubriques de la fenêtre des préférences. */
-export type PreferencesSection = "appearance" | "terminal" | "sync" | "profiles" | "shortcuts" | "activity" | "accessibility" | "about";
+export type PreferencesSection = "appearance" | "terminal" | "sync" | "profiles" | "ssh" | "shortcuts" | "activity" | "accessibility" | "about";
 
 const SIDES_KEY = "merathon.side-widths";
 export const defaultSideWidths: SideWidths = { left: 240, right: 320 };
@@ -69,6 +76,20 @@ export const SIDE_LIMITS: Record<Side, { min: number; max: number }> = {
   left: { min: 180, max: 600 },
   right: { min: 240, max: 800 },
 };
+
+/**
+ * Largeurs affichées dans une fenêtre de `total` px : si les panneaux ne laissent pas `minCenter` px au centre, ils
+ * rétrécissent (la droite d'abord, puis la gauche), sans descendre sous leur minimum. Les largeurs choisies ne
+ * changent pas : elles reviennent dès que la place le permet (tablette tournée en paysage).
+ */
+export function fitSideWidths(widths: SideWidths, total: number, minCenter: number): SideWidths {
+  let excess = widths.left + widths.right + minCenter - total;
+  if (excess <= 0) return widths;
+  const right = Math.max(SIDE_LIMITS.right.min, widths.right - excess);
+  excess -= widths.right - right;
+  const left = Math.max(SIDE_LIMITS.left.min, widths.left - Math.max(0, excess));
+  return { left, right };
+}
 
 /** Largeur bornée aux limites du panneau ; une valeur invalide redonne la largeur par défaut. */
 export function clampSideWidth(side: Side, width: unknown): number {
@@ -111,6 +132,10 @@ interface PendingDialog extends DialogOptions {
 interface UiStore {
   toasts: Toast[];
   dialog: PendingDialog | null;
+  /** Sélecteur de dossiers de l'application (mobile) : réponse attendue, null s'il est fermé. */
+  folderPicker: ((path: string | null) => void) | null;
+  pickFolderInApp: () => Promise<string | null>;
+  closeFolderPicker: (path: string | null) => void;
   /** Libellé de l'opération longue en cours (fetch, push…), null si aucune. */
   busy: string | null;
   /** Commit de base du rebase interactif en cours de préparation. */
@@ -125,6 +150,8 @@ interface UiStore {
   preferencesSection: PreferencesSection;
   /** Fenêtre du mémo git ouverte. */
   memoOpen: boolean;
+  /** Éditeur des fichiers du dépôt ouvert (`file` : fichier à ouvrir directement). */
+  fileEditor: { file?: string } | null;
 
   notify: (kind: Toast["kind"], message: string) => void;
   dismiss: (id: number) => void;
@@ -139,6 +166,8 @@ interface UiStore {
   setGraphWidth: (width: number | null) => void;
   setPreferencesOpen: (open: boolean, section?: PreferencesSection) => void;
   setMemoOpen: (open: boolean) => void;
+  openFileEditor: (file?: string) => void;
+  closeFileEditor: () => void;
 }
 
 let nextToastId = 1;
@@ -158,6 +187,7 @@ function clearToastTimer(id: number) {
 export const useUiStore = create<UiStore>((set, get) => ({
   toasts: [],
   dialog: null,
+  folderPicker: null,
   busy: null,
   interactiveRebaseBase: null,
   panel: loadPanel(),
@@ -166,6 +196,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   preferencesOpen: false,
   preferencesSection: "appearance",
   memoOpen: false,
+  fileEditor: null,
 
   notify: (kind, message) => {
     const id = nextToastId++;
@@ -213,11 +244,24 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set({ dialog: null });
   },
 
+  pickFolderInApp: () =>
+    new Promise((resolve) => {
+      get().folderPicker?.(null);
+      set({ folderPicker: resolve });
+    }),
+
+  closeFolderPicker: (path) => {
+    get().folderPicker?.(path);
+    set({ folderPicker: null });
+  },
+
   setBusy: (busy) => set({ busy }),
   setInteractiveRebaseBase: (interactiveRebaseBase) => set({ interactiveRebaseBase }),
 
   setPreferencesOpen: (preferencesOpen, preferencesSection = "appearance") => set({ preferencesOpen, preferencesSection }),
   setMemoOpen: (memoOpen) => set({ memoOpen }),
+  openFileEditor: (file) => set({ fileEditor: { file } }),
+  closeFileEditor: () => set({ fileEditor: null }),
 
   setPanel: (patch) => {
     const panel = { ...get().panel, ...patch };

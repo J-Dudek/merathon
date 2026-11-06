@@ -9,7 +9,7 @@ import { errorMessage, runGit } from "../lib/actions";
 import { remoteForAccount } from "../lib/remoteUrl";
 import { MY_PR_STATUSES } from "../lib/prStatus";
 import { ContextMenu, useContextMenu } from "./ContextMenu";
-import { PullRequestReviewDialog } from "./PullRequestReviewDialog";
+import { PullRequestReviewDialog } from "./lazy";
 import { PR_PAGE_SIZE, type ForgeAccount, type ForgePR, type PullRequestState } from "../types/forge";
 import type { RemoteInfo } from "../types/git";
 import { tr, COLON } from "../i18n";

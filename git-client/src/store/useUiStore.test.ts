@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { clampGraphWidth, clampSideWidth, defaultSideWidths, MAX_TOASTS, MIN_GRAPH_WIDTH, useUiStore } from "./useUiStore";
+import { clampGraphWidth, clampSideWidth, defaultSideWidths, fitSideWidths, MAX_TOASTS, MIN_GRAPH_WIDTH, useUiStore } from "./useUiStore";
 
 describe("side panel widths", () => {
   beforeEach(() => {
@@ -21,6 +21,19 @@ describe("side panel widths", () => {
 
     expect(useUiStore.getState().sideWidths).toEqual({ left: 180, right: 400 });
     expect(JSON.parse(localStorage.getItem("merathon.side-widths")!)).toEqual({ left: 180, right: 400 });
+  });
+});
+
+describe("fitSideWidths", () => {
+  it("keeps the chosen widths when the center has room", () => {
+    expect(fitSideWidths({ left: 240, right: 320 }, 1280, 320)).toEqual({ left: 240, right: 320 });
+  });
+
+  it("shrinks the right panel first, then the left one, down to their minimum", () => {
+    expect(fitSideWidths({ left: 240, right: 320 }, 840, 320)).toEqual({ left: 240, right: 280 });
+    expect(fitSideWidths({ left: 240, right: 320 }, 800, 320)).toEqual({ left: 240, right: 240 });
+    expect(fitSideWidths({ left: 240, right: 320 }, 760, 320)).toEqual({ left: 200, right: 240 });
+    expect(fitSideWidths({ left: 240, right: 320 }, 600, 320)).toEqual({ left: 180, right: 240 });
   });
 });
 

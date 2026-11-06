@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Comp
 import { createPortal } from "react-dom";
 import { Clock, Smile } from "lucide-react";
 import { caretPosition } from "../lib/caret";
-import { EMOJI_CATEGORIES, emojiQueryAt, emojisOfCategory, insertEmoji, recentEmojis, rememberEmoji, searchEmojis, type EmojiQuery } from "../lib/emoji";
+import { emojiQueryAt, insertEmoji, type EmojiQuery } from "../lib/emojiInput";
 import { tr } from "../i18n";
 
 const MAX_SUGGESTIONS = 8;
@@ -15,6 +15,34 @@ const RECENT = "recent";
 const EDGE = 4;
 /** Au-dessus des fenêtres (voir Modal). */
 const Z_INDEX = 10001;
+
+type EmojiData = typeof import("../lib/emoji");
+let emojiData: EmojiData | null = null;
+let emojiLoading: Promise<EmojiData> | null = null;
+
+/**
+ * Données des emojis, chargées à la première demande (`needed`) puis gardées : elles pèsent ~150 Ko de JavaScript,
+ * inutiles au démarrage. null le temps du chargement (quelques millisecondes, depuis le disque).
+ */
+export function loadEmojiData(): Promise<EmojiData> {
+  emojiLoading ??= import("../lib/emoji").then((m) => (emojiData = m));
+  return emojiLoading;
+}
+
+function useEmojiData(needed: boolean): EmojiData | null {
+  const [data, setData] = useState(emojiData);
+  useEffect(() => {
+    if (!needed || data) return;
+    let alive = true;
+    void loadEmojiData().then((m) => {
+      if (alive) setData(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [needed, data]);
+  return data;
+}
 
 /**
  * Position d'une liste flottante : sous `bottom` si elle y tient, sinon au-dessus de `top`. Elle est affichée dans un portail,
@@ -37,10 +65,12 @@ function EmojiPicker({ style, onPick, onClose }: { style: CSSProperties; onPick:
   const [tab, setTab] = useState<string>(RECENT);
   const [active, setActive] = useState(0);
   const query = text.trim();
+  const data = useEmojiData(true);
   const emojis = useMemo(() => {
-    if (query) return searchEmojis(query);
-    return tab === RECENT ? recentEmojis() : emojisOfCategory(tab);
-  }, [query, tab]);
+    if (!data) return [];
+    if (query) return data.searchEmojis(query);
+    return tab === RECENT ? data.recentEmojis() : data.emojisOfCategory(tab);
+  }, [data, query, tab]);
   const current = Math.min(active, emojis.length - 1);
   const shown = emojis[current];
 
@@ -117,7 +147,7 @@ function EmojiPicker({ style, onPick, onClose }: { style: CSSProperties; onPick:
         <button type="button" className={tabClass(!query && tab === RECENT)} aria-label={tr("Récents")} aria-pressed={!query && tab === RECENT} title={tr("Récents")} onClick={() => selectTab(RECENT)}>
           <Clock size={14} className="text-[var(--color-muted)]" aria-hidden="true" />
         </button>
-        {EMOJI_CATEGORIES.map((c) => (
+        {(data?.EMOJI_CATEGORIES ?? []).map((c) => (
           <button key={c.id} type="button" className={tabClass(!query && tab === c.id)} aria-label={c.label} aria-pressed={!query && tab === c.id} title={c.label} onClick={() => selectTab(c.id)}>
             <span aria-hidden="true">{c.icon}</span>
           </button>
@@ -165,7 +195,8 @@ export function useEmojiAssist(ref: RefObject<HTMLTextAreaElement | HTMLInputEle
   /** Curseur à replacer après l'insertion, une fois le texte rendu. */
   const pendingCaret = useRef<number | null>(null);
 
-  const suggestions = useMemo(() => (query ? searchEmojis(query.query, MAX_SUGGESTIONS) : []), [query]);
+  const data = useEmojiData(!!query || pickerStyle !== null);
+  const suggestions = useMemo(() => (query && data ? data.searchEmojis(query.query, MAX_SUGGESTIONS) : []), [data, query]);
   const open = !!query && query.start !== dismissed && suggestions.length > 0;
   const current = Math.min(active, suggestions.length - 1);
 
@@ -200,7 +231,7 @@ export function useEmojiAssist(ref: RefObject<HTMLTextAreaElement | HTMLInputEle
   function insert(emoji: string, start: number, end: number, spaceAfter: boolean) {
     const next = insertEmoji(value, start, end, emoji, spaceAfter);
     pendingCaret.current = next.caret;
-    rememberEmoji(emoji);
+    data?.rememberEmoji(emoji);
     onChange(next.text);
   }
 

@@ -61,7 +61,8 @@ export const useAccountsStore = create<AccountsStore>((set) => ({
   },
 
   add: async ({ provider, baseUrl, token, label }) => {
-    const base = trimEndChars(provider === "github" ? defaultBaseUrl("github") : baseUrl.trim());
+    // GitHub Enterprise : l'adresse saisie, pas github.com (le token partirait sur la mauvaise instance).
+    const base = trimEndChars(baseUrl.trim() || defaultBaseUrl(provider));
     const saved = await addPatAccount(provider, base, token, label?.trim() || null);
     warnIfInsecure(saved);
     set((s) => ({ accounts: [...s.accounts, saved.account], activeId: saved.account.id }));

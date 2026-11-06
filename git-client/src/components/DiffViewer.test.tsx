@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { DiffViewer, findMatches } from "./DiffViewer";
+import { DiffViewer, findMatches, hunkRange } from "./DiffViewer";
 import type { DiffLine, FileDiff } from "../types/git";
 
 const line = (kind: DiffLine["kind"], content: string, n: number): DiffLine => ({
@@ -68,5 +68,27 @@ describe("DiffViewer : recherche dans le fichier", () => {
     fireEvent.change(input, { target: { value: "total" } });
     fireEvent.keyDown(input, { key: "Escape" });
     expect(input.value).toBe("");
+  });
+});
+
+describe("hunkRange", () => {
+  it("donne les lignes de la nouvelle version, l'ancienne pour un bloc de suppressions", () => {
+    expect(hunkRange({ header: "", old_start: 3, new_start: 5, lines: [line("context", "a", 5), line("added", "b", 6), line("removed", "c", 4)] }))
+      .toEqual({ from: 5, to: 6 });
+    expect(hunkRange({ header: "", old_start: 8, new_start: 8, lines: [line("removed", "a", 8), line("removed", "b", 9)] }))
+      .toEqual({ from: 8, to: 9 });
+    expect(hunkRange({ header: "", old_start: 0, new_start: 0, lines: [] })).toBeNull();
+  });
+});
+
+describe("DiffViewer : affichage mobile", () => {
+  it("annonce les blocs par leurs lignes et commente au toucher du numéro", () => {
+    const onComment = vi.fn();
+    render(<DiffViewer diff={diff} loading={false} compact={{ wrap: true }} annotations={{ below: () => null, onComment }} />);
+    expect(screen.getByText("Ligne 1")).toBeTruthy();
+    expect(screen.getByText("Ligne 10")).toBeTruthy();
+    expect(screen.queryByText("@@ -1,2 +1,2 @@")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Commenter la ligne ajoutée 1" }));
+    expect(onComment).toHaveBeenCalledWith(diff.hunks[0].lines[1]);
   });
 });

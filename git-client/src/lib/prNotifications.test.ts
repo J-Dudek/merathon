@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterEvents, notificationText, pullRequestEvents, readNotifications, type PrEvent } from "./prNotifications";
+import { comparisonBase, filterEvents, notificationText, pullRequestEvents, readNotifications, type PrEvent } from "./prNotifications";
 import { defaultNotifications } from "../store/useDisplayStore";
 import type { MyPullRequests, PrSummary } from "../types/forge";
 
@@ -82,5 +82,22 @@ describe("readNotifications", () => {
     expect(readNotifications(notified, { a: seenAt("2026-01-01T00:00:00Z") })).toEqual([]);
     expect(readNotifications(notified, { a: seenAt(later) })).toEqual([1]);
     expect(readNotifications(notified, { a: seenAt(later), b: seenAt("2026-01-01T00:00:00Z") })).toEqual([1, 2]);
+  });
+});
+
+describe("comparisonBase", () => {
+  const local = { at: 100, data: lists([pr(1)]) };
+  const task = { at: 200, data: lists([pr(1, { headSha: "h2" })]) };
+
+  it("compare à la liste de la tâche d'arrière-plan si elle est plus récente : ce qu'elle a notifié ne l'est plus", () => {
+    expect(comparisonBase(local, task)).toBe(task);
+    expect(pullRequestEvents(comparisonBase(local, task)!.data, task.data)).toEqual([]);
+  });
+
+  it("garde la liste de l'application sinon", () => {
+    expect(comparisonBase(local, { ...task, at: 50 })).toBe(local);
+    expect(comparisonBase(local, undefined)).toBe(local);
+    expect(comparisonBase(undefined, task)).toBe(task);
+    expect(comparisonBase(undefined, undefined)).toBeUndefined();
   });
 });

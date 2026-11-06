@@ -15,6 +15,7 @@ import { ignoreDirPattern, ignoreExtensionPattern, ignoreFilePattern, ignoreFold
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
 import type { FileStatus, InteractiveStop, RepoState } from "../types/git";
 import { fieldLabel } from "../lib/fieldLabel";
+import { isMobile } from "../lib/platform";
 import { RebaseTimeline } from "./RebaseTimeline";
 import { branchOnRemote, pullRequestsByBranch } from "../lib/branches";
 import { appendThreadTrailers, draftFromMessage, type ThreadLinks } from "../lib/threadTrailers";
@@ -86,6 +87,7 @@ export function StagingPanel() {
   const lfs = useRepoStore((s) => s.lfs);
   const setCenter = useRepoStore((s) => s.setCenter);
   const notify = useUiStore((s) => s.notify);
+  const openFileEditor = useUiStore((s) => s.openFileEditor);
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
   const { summary, description, amend, threads } = useRepoStore((s) => s.commitDraft);
@@ -284,11 +286,13 @@ export function StagingPanel() {
       ...(!f.staged && f.status !== "conflicted"
         ? [{ label: tr("Annuler les modifications…"), danger: true, action: () => discard([f]) }]
         : []),
+      // Mobile : aucun autre éditeur n'accède au dossier privé des dépôts.
+      ...(isMobile() && f.status !== "deleted" ? [{ label: tr("Modifier dans Merathon"), action: () => openFileEditor(f.path) }] : []),
       ...lfsEntry(f),
       ...ignoreEntries(f),
       "separator" as const,
       { label: tr("Copier le chemin"), action: () => navigator.clipboard.writeText(f.path) },
-      { label: tr("Afficher dans le gestionnaire de fichiers"), action: () => revealItemInDir(abs).catch((e) => notify("error", errorMessage(e))) },
+      ...(isMobile() ? [] : [{ label: tr("Afficher dans le gestionnaire de fichiers"), action: () => revealItemInDir(abs).catch((e) => notify("error", errorMessage(e))) }]),
     ];
   }
 
@@ -507,7 +511,14 @@ export function StagingPanel() {
         </FileSection>
 
         {status.length === 0 && state === "clean" && (
-          <p className="p-3 text-xs text-[var(--color-muted)] italic">{tr("Aucune modification en cours")}</p>
+          <div className="p-3 flex flex-col items-start gap-2">
+            <p className="text-xs text-[var(--color-muted)] italic">{tr("Aucune modification en cours")}</p>
+            {isMobile() && (
+              <button className="text-xs text-[var(--color-accent-text)] hover:underline" onClick={() => openFileEditor()}>
+                {tr("Modifier un fichier…")}
+              </button>
+            )}
+          </div>
         )}
       </div>
 

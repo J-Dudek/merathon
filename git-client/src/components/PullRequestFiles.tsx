@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, List, ListTree, MessageSquare, RotateCw, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, List, ListTree, MessageSquare, RotateCw, Search, WrapText } from "lucide-react";
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore } from "../store/useUiStore";
 import { compareRefs, fetchRemote, getCompareFileDiff } from "../ipc/commands";
@@ -13,7 +13,8 @@ import type {
   DraftComment, ForgeAccount, ForgeComment, LinePosition, PullRequestDetails, ReviewThread, ReviewVerdict,
 } from "../types/forge";
 import { DiffViewer, type DiffAnnotations } from "./DiffViewer";
-import { Button, inputClass } from "./Modal";
+import { Button, Modal, inputClass } from "./Modal";
+import { isMobile, isPhone } from "../lib/platform";
 import { fieldLabel } from "../lib/fieldLabel";
 import { LineCounts } from "./CommitDetails";
 import { MarkdownBody } from "./MarkdownBody";
@@ -52,6 +53,25 @@ function saveTreeMode(tree: boolean) {
   }
 }
 
+const WRAP_KEY = "merathon.diffWrap";
+
+/** Mobile : lignes longues repliées par défaut, le défilement horizontal reste au choix. */
+function loadWrap(): boolean {
+  try {
+    return localStorage.getItem(WRAP_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function saveWrap(wrap: boolean) {
+  try {
+    localStorage.setItem(WRAP_KEY, wrap ? "1" : "0");
+  } catch {
+    // stockage indisponible : choix gardé pour la session
+  }
+}
+
 const treePadding = (depth: number) => 8 + depth * 12;
 
 /**
@@ -86,6 +106,12 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
   const [busy, setBusy] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [treeMode, setTreeMode] = useState(loadTreeMode);
+  // Téléphone : la liste occupe l'écran, un fichier s'ouvre par-dessus dans sa propre fenêtre (le retour d'Android la ferme).
+  // Tablette : liste et diff côte à côte, comme sur le bureau.
+  const mobile = isPhone();
+  const [fileOpen, setFileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [wrap, setWrap] = useState(loadWrap);
 
   const prKey = `${account.id}/${projectPath}/${pr.number}`;
   const [viewed, setViewed] = useState<Set<string>>(() => loadViewed(prKey, headSha));
@@ -152,7 +178,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
   }, [loadThreads]);
 
   useEffect(() => {
-    if (!repoPath || !comparison || !selected) {
+    if (!repoPath || !comparison || !selected || (mobile && !fileOpen)) {
       setDiff(null);
       return;
     }
@@ -165,7 +191,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
     return () => {
       cancelled = true;
     };
-  }, [repoPath, comparison, selected]);
+  }, [repoPath, comparison, selected, mobile, fileOpen]);
 
   /** Exécute une action sur la forge puis recharge les fils. */
   async function act(fn: () => Promise<void>, success?: string): Promise<boolean> {
@@ -215,6 +241,8 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
       const after = ordered.slice(ordered.findIndex((f) => f.path === path) + 1).concat(ordered);
       const nextFile = after.find((f) => !next.has(f.path));
       if (path === selected && nextFile) setSelected(nextFile.path);
+      // Mobile : dernier fichier vu, retour à la liste.
+      else if (path === selected && mobile) setFileOpen(false);
     }
     setViewed(next);
     saveViewed(prKey, headSha, next);
@@ -226,6 +254,11 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
     toggleViewedRef.current = toggleViewed;
   });
   const onToggleViewed = useCallback((path: string) => toggleViewedRef.current(path), []);
+
+  const openFile = useCallback((path: string) => {
+    setSelected(path);
+    setFileOpen(true);
+  }, []);
 
   const toggleTreeMode = useCallback(() => {
     setTreeMode(!treeMode);
@@ -266,7 +299,8 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
         const keys = lineKeys(line);
         const lineThreads = keys.flatMap((k) => index.threadsByLine.get(k) ?? []);
         const lineDrafts = keys.flatMap((k) => index.draftsByLine.get(k) ?? []);
-        const composingHere = composing && composing.position.path === selected
+        // Mobile : le formulaire s'ouvre en bas de l'écran, pas sous la ligne.
+        const composingHere = !mobile && composing && composing.position.path === selected
           && keys.includes(`${composing.position.side}:${composing.position.line}`);
         if (!lineThreads.length && !lineDrafts.length && !composingHere) return null;
         return (
@@ -300,6 +334,24 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
     }
     : undefined;
 
+  const outdated = index && index.outdated.length > 0 && (
+    <div className="px-3 py-2 border-b border-overlay/5 flex flex-col gap-2 max-h-48 overflow-y-auto">
+      <span className="text-[10px] uppercase tracking-widest text-[var(--color-muted)]">
+        {tr("Commentaires sur une version précédente")}
+      </span>
+      {index.outdated.map((t) => (
+        <Thread
+          key={t.id}
+          thread={t}
+          prUrl={pr.url}
+          busy={busy}
+          onReply={(body) => act(() => client.replyToThread(projectPath, pr.number, t, body), tr("Réponse publiée"))}
+          onResolve={(resolved) => act(() => client.resolveThread(projectPath, pr.number, t, resolved), resolved ? tr("Fil résolu") : tr("Fil rouvert"))}
+        />
+      ))}
+    </div>
+  );
+
   if (!repoPath) return <p className="p-4 text-xs text-[var(--color-muted)] italic">{tr("Aucun dépôt ouvert")}</p>;
 
   const totals = files.reduce((t, f) => ({ add: t.add + f.additions, del: t.del + f.deletions }), { add: 0, del: 0 });
@@ -307,12 +359,15 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
 
   return (
     <div className="flex flex-col h-full min-h-[240px]">
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-overlay/10 text-[11px] text-[var(--color-muted)]">
+      <div className={`flex items-center gap-2 px-4 py-2 border-b border-overlay/10 text-[11px] text-[var(--color-muted)] ${mobile ? "flex-wrap" : ""}`}>
         {loading && <span>{tr("Calcul du diff…")}</span>}
         {!loading && comparison && (
           <span className="truncate">
             {trn(comparison.commits, "{n} commit", "{n} commits")} · {trn(files.length, "{n} fichier", "{n} fichiers")} ·{" "}
-            <LineCounts add={totals.add} del={totals.del} all />{" "}{tr("· vus {viewedCount}/{length} · base", { viewedCount, length: files.length })}{" "}<span className="font-mono">{comparison.merge_base.slice(0, 7)}</span> ({base})
+            <LineCounts add={totals.add} del={totals.del} all />{" "}
+            {mobile
+              ? tr("· vus {viewedCount}/{length}", { viewedCount, length: files.length })
+              : <>{tr("· vus {viewedCount}/{length} · base", { viewedCount, length: files.length })}{" "}<span className="font-mono">{comparison.merge_base.slice(0, 7)}</span> ({base})</>}
           </span>
         )}
         {stale && <span className="text-amber-300 shrink-0">{tr("tête locale différente de la forge : fetch pour commenter")}</span>}
@@ -370,7 +425,109 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
       )}
       {error && <p className="px-4 py-2 text-xs text-red-400 break-words">{error}</p>}
       {threadsError && <p className="px-4 py-1 text-xs text-amber-300 break-words">{tr("Commentaires de ligne indisponibles : {threadsError}", { threadsError })}</p>}
-      {comparison && (
+      {comparison && mobile && (
+        <div className="flex flex-1 min-h-0">
+          <FileList
+            mobile
+            files={files}
+            treeMode={treeMode}
+            onToggleTreeMode={toggleTreeMode}
+            selected={null}
+            viewed={viewed}
+            commentCount={commentCount}
+            onSelect={openFile}
+            onToggleViewed={onToggleViewed}
+          />
+        </div>
+      )}
+      {mobile && fileOpen && selectedFile && (() => {
+        const position = ordered.findIndex((f) => f.path === selectedFile.path);
+        const go = (delta: number) => {
+          const target = ordered[position + delta];
+          if (target) setSelected(target.path);
+        };
+        const composingLine = composing && composing.position.path === selectedFile.path ? composing : null;
+        const isViewed = viewed.has(selectedFile.path);
+        const slash = selectedFile.path.lastIndexOf("/");
+        return (
+          <Modal
+            title={selectedFile.path.slice(slash + 1)}
+            onClose={() => {
+              setFileOpen(false);
+              setSearchOpen(false);
+            }}
+            width="w-screen"
+            height="h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-16px)]"
+          >
+            <div className="h-full flex flex-col">
+              <div className="flex items-center gap-2 px-3 py-1.5 border-b border-overlay/10 text-[11px] text-[var(--color-muted)]">
+                <span className="font-mono truncate flex-1 min-w-0">{slash > 0 ? selectedFile.path.slice(0, slash) : ""}</span>
+                <span className="shrink-0 font-mono"><LineCounts add={selectedFile.additions} del={selectedFile.deletions} /></span>
+                <span className="shrink-0 tabular-nums">{position + 1}/{ordered.length}</span>
+                <IconToggle
+                  pressed={wrap}
+                  label={tr("Retour à la ligne des lignes longues")}
+                  onClick={() => {
+                    setWrap(!wrap);
+                    saveWrap(!wrap);
+                  }}
+                >
+                  <WrapText size={15} />
+                </IconToggle>
+                <IconToggle pressed={searchOpen} label={tr("Rechercher dans le fichier")} onClick={() => setSearchOpen(!searchOpen)}>
+                  <Search size={15} />
+                </IconToggle>
+              </div>
+              {outdated}
+              <div className="flex-1 min-h-0">
+                <DiffViewer
+                  key={selectedFile.path}
+                  diff={diff}
+                  loading={diffLoading}
+                  annotations={annotations}
+                  searchable={searchOpen}
+                  compact={{ wrap }}
+                />
+              </div>
+              {composingLine ? (
+                <div className="px-3 py-2 border-t border-overlay/10 bg-shade/20 flex flex-col gap-1.5">
+                  <span className="text-[11px] text-[var(--color-muted)]">
+                    {tr("Commentaire sur la ligne {line}", { line: composingLine.position.line })}
+                  </span>
+                  <Composer
+                    text={composingLine.text}
+                    busy={busy}
+                    onChange={(text) => setComposing({ ...composingLine, text })}
+                    onCancel={() => setComposing(null)}
+                    onDraft={addDraft}
+                    onPublish={publishNow}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-2 px-3 py-2 border-t border-overlay/10">
+                  <BarButton label={tr("Fichier précédent")} disabled={position <= 0} onClick={() => go(-1)}>
+                    <ChevronLeft size={18} />
+                  </BarButton>
+                  <button
+                    type="button"
+                    aria-pressed={isViewed}
+                    onClick={() => toggleViewed(selectedFile.path)}
+                    className={`flex-1 min-h-11 rounded-md text-sm font-semibold inline-flex items-center justify-center gap-1.5 ${
+                      isViewed ? "bg-overlay/10 text-[var(--color-text)]" : "bg-[var(--color-accent-solid)] text-white"
+                    }`}
+                  >
+                    {isViewed ? <><Check size={16} />{tr("Vu")}</> : <>{tr("Vu, suivant")}<ChevronRight size={16} /></>}
+                  </button>
+                  <BarButton label={tr("Fichier suivant")} disabled={position >= ordered.length - 1} onClick={() => go(1)}>
+                    <ChevronRight size={18} />
+                  </BarButton>
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
+      {comparison && !mobile && (
         <div className="flex flex-1 min-h-0">
           <FileList
             files={files}
@@ -392,23 +549,7 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
                 </label>
               </div>
             )}
-            {index && index.outdated.length > 0 && (
-              <div className="px-3 py-2 border-b border-overlay/5 flex flex-col gap-2 max-h-48 overflow-y-auto">
-                <span className="text-[10px] uppercase tracking-widest text-[var(--color-muted)]">
-                  {tr("Commentaires sur une version précédente")}
-                </span>
-                {index.outdated.map((t) => (
-                  <Thread
-                    key={t.id}
-                    thread={t}
-                    prUrl={pr.url}
-                    busy={busy}
-                    onReply={(body) => act(() => client.replyToThread(projectPath, pr.number, t, body), tr("Réponse publiée"))}
-                    onResolve={(resolved) => act(() => client.resolveThread(projectPath, pr.number, t, resolved), resolved ? tr("Fil résolu") : tr("Fil rouvert"))}
-                  />
-                ))}
-              </div>
-            )}
+            {outdated}
             <div className="flex-1 min-h-0">
               <DiffViewer diff={diff} loading={diffLoading} annotations={annotations} searchable />
             </div>
@@ -423,7 +564,9 @@ export function PullRequestFiles({ account, projectPath, remoteName, details, dr
  * Colonne des fichiers : recherche sur le chemin, liste ou arborescence. La recherche et les dossiers repliés vivent ici :
  * taper dans le champ ne re-rend pas le diff.
  */
-const FileList = memo(function FileList({ files, treeMode, onToggleTreeMode, selected, viewed, commentCount, onSelect, onToggleViewed }: {
+const FileList = memo(function FileList({ mobile = false, files, treeMode, onToggleTreeMode, selected, viewed, commentCount, onSelect, onToggleViewed }: {
+  /** Pleine largeur, lignes hautes faciles à toucher. */
+  mobile?: boolean;
   files: CommitFile[];
   treeMode: boolean;
   onToggleTreeMode: () => void;
@@ -454,6 +597,7 @@ const FileList = memo(function FileList({ files, treeMode, onToggleTreeMode, sel
       file={f}
       depth={depth}
       selected={selected === f.path}
+      mobile={mobile}
       viewed={viewed.has(f.path)}
       comments={commentCount.get(f.path) ?? 0}
       onSelect={onSelect}
@@ -462,7 +606,7 @@ const FileList = memo(function FileList({ files, treeMode, onToggleTreeMode, sel
   );
 
   return (
-      <div className="w-64 shrink-0 flex flex-col border-r border-overlay/10">
+      <div className={mobile ? "flex-1 min-w-0 flex flex-col" : "w-64 shrink-0 flex flex-col border-r border-overlay/10"}>
         <div className="flex items-center gap-1 p-1.5 border-b border-overlay/5">
           <div className="relative flex-1 min-w-0">
             <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--color-muted)] pointer-events-none" aria-hidden />
@@ -497,7 +641,7 @@ const FileList = memo(function FileList({ files, treeMode, onToggleTreeMode, sel
             <li className="px-3 py-1 text-xs text-[var(--color-muted)] italic">{tr("Aucun fichier ne correspond")}</li>
           )}
           {treeMode
-            ? <FileTree nodes={fileTree(shownFiles, (f) => f.path)} depth={0} isOpen={isOpen} onToggle={toggleFolder} viewed={viewed} row={row} />
+            ? <FileTree nodes={fileTree(shownFiles, (f) => f.path)} depth={0} isOpen={isOpen} onToggle={toggleFolder} viewed={viewed} row={row} mobile={mobile} />
             : shownFiles.map((f) => row(f))}
         </ul>
       </div>
@@ -505,7 +649,8 @@ const FileList = memo(function FileList({ files, treeMode, onToggleTreeMode, sel
 });
 
 /** Dossiers pliables ; chaque dossier indique combien de ses fichiers ont été vus. */
-function FileTree({ nodes, depth, isOpen, onToggle, viewed, row }: {
+function FileTree({ nodes, depth, isOpen, onToggle, viewed, row, mobile }: {
+  mobile: boolean;
   nodes: FileNode<CommitFile>[];
   depth: number;
   isOpen: (path: string) => boolean;
@@ -525,7 +670,7 @@ function FileTree({ nodes, depth, isOpen, onToggle, viewed, row }: {
           aria-expanded={open}
           onClick={() => onToggle(node.path)}
           title={node.path}
-          className="w-full flex items-center gap-1 pr-2 py-[3px] text-left hover:bg-overlay/5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
+          className={`w-full flex items-center gap-1 pr-2 ${mobile ? "min-h-10" : "py-[3px]"} text-left hover:bg-overlay/5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60`}
           style={{ paddingLeft: treePadding(depth) }}
         >
           <Chevron size={11} className="w-3 shrink-0 text-[var(--color-muted)]" />
@@ -539,7 +684,7 @@ function FileTree({ nodes, depth, isOpen, onToggle, viewed, row }: {
         </button>
         {open && (
           <ul>
-            <FileTree nodes={node.children} depth={depth + 1} isOpen={isOpen} onToggle={onToggle} viewed={viewed} row={row} />
+            <FileTree nodes={node.children} depth={depth + 1} isOpen={isOpen} onToggle={onToggle} viewed={viewed} row={row} mobile={mobile} />
           </ul>
         )}
       </li>
@@ -548,8 +693,10 @@ function FileTree({ nodes, depth, isOpen, onToggle, viewed, row }: {
 }
 
 /** Ligne d'un fichier ; avec `depth` (arborescence), en retrait, sinon avec son dossier. */
-const FileRow = memo(function FileRow({ file, depth, selected, viewed, comments, onSelect, onToggleViewed }: {
+const FileRow = memo(function FileRow({ file, depth, selected, mobile, viewed, comments, onSelect, onToggleViewed }: {
   file: CommitFile;
+  /** Ligne haute, nom au-dessus de son dossier. */
+  mobile: boolean;
   depth?: number;
   selected: boolean;
   viewed: boolean;
@@ -563,7 +710,7 @@ const FileRow = memo(function FileRow({ file, depth, selected, viewed, comments,
   return (
     <li>
       <div
-        className={`flex items-center gap-2 pr-2 py-[3px] text-xs ${selected ? "bg-[var(--color-accent)]/20" : "hover:bg-overlay/5"}`}
+        className={`flex items-center gap-2 pr-2 ${mobile ? "min-h-12 py-1.5 text-sm" : "py-[3px] text-xs"} ${selected ? "bg-[var(--color-accent)]/20" : "hover:bg-overlay/5"}`}
         style={{ paddingLeft: depth === undefined ? 8 : treePadding(depth) + 16 }}
         title={file.old_path ? `${file.old_path} → ${file.path}` : file.path}
       >
@@ -571,6 +718,7 @@ const FileRow = memo(function FileRow({ file, depth, selected, viewed, comments,
           type="checkbox"
           checked={viewed}
           onChange={() => onToggleViewed(file.path)}
+          className={mobile ? "w-5 h-5 shrink-0" : undefined}
           aria-label={tr("Marquer {path} comme vu", { path: file.path })}
         />
         {/* Fichier vu : nom en gris (sans transparence, qui ferait chuter le contraste) et case cochée. */}
@@ -581,7 +729,7 @@ const FileRow = memo(function FileRow({ file, depth, selected, viewed, comments,
           className="flex-1 min-w-0 flex items-center gap-2 text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60 rounded"
         >
           <span className={`w-3 shrink-0 font-mono font-bold ${status.color}`} aria-hidden>{status.letter}</span>
-          <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
+          <span className={`flex-1 min-w-0 flex ${mobile ? "flex-col" : "items-baseline gap-1.5"}`}>
             <span className={`truncate shrink-0 max-w-full ${viewed ? "text-[var(--color-muted)]" : "text-[var(--color-text)]"}`}>{file.path.slice(slash + 1)}</span>
             {dir && <span className="truncate text-[10px] font-mono text-[var(--color-muted)]">{dir}</span>}
           </span>
@@ -708,7 +856,7 @@ function Composer({ text, busy, onChange, onCancel, onDraft, onPublish }: {
       <EmojiTextarea
         autoFocus
         className={`${inputClass} h-20 resize-y font-mono`}
-        placeholder={tr("Commentaire (Markdown) · Ctrl+Entrée : ajouter à la revue")}
+        placeholder={isMobile() ? tr("Commentaire sur la ligne (Markdown)") : tr("Commentaire (Markdown) · Ctrl+Entrée : ajouter à la revue")}
         {...fieldLabel(tr("Commentaire sur la ligne (Markdown)"))}
         value={text}
         onChange={onChange}
@@ -720,7 +868,7 @@ function Composer({ text, busy, onChange, onCancel, onDraft, onPublish }: {
           }
         }}
       />
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
         <Button onClick={onCancel} disabled={busy}>{tr("Annuler")}</Button>
         <Button onClick={onPublish} disabled={busy || !text.trim()} title={tr("Publier ce seul commentaire")}>
           {tr("Commenter maintenant")}
@@ -763,7 +911,7 @@ function SubmitReview({ account, details, drafts, busy, onCancel, onSubmit }: {
         value={body}
         onChange={setBody}
       />
-      <div className="flex items-center gap-4 text-xs text-[var(--color-text)]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[var(--color-text)]">
         {verdicts.map((v) => (
           <label key={v.value} className="flex items-center gap-1.5 cursor-pointer">
             <input type="radio" name="review-verdict" checked={verdict === v.value} onChange={() => setVerdict(v.value)} />
@@ -787,5 +935,49 @@ function SubmitReview({ account, details, drafts, busy, onCancel, onSubmit }: {
         </p>
       )}
     </div>
+  );
+}
+
+/** Bouton d'icône à deux états de la barre d'un fichier (mobile). */
+function IconToggle({ pressed, label, onClick, children }: {
+  pressed: boolean;
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`w-9 h-9 shrink-0 inline-flex items-center justify-center rounded-md ${
+        pressed ? "bg-[var(--color-accent)]/25 text-[var(--color-text)]" : "text-[var(--color-muted)]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Bouton précédent / suivant de la barre du bas (mobile), à portée de pouce. */
+function BarButton({ label, disabled, onClick, children }: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="w-12 min-h-11 shrink-0 inline-flex items-center justify-center rounded-md bg-overlay/10 text-[var(--color-text)] disabled:opacity-30"
+    >
+      {children}
+    </button>
   );
 }

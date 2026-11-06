@@ -31,6 +31,8 @@ export function initTheme() {
     const theme = resolveTheme(next, media?.matches ?? true);
     document.documentElement.dataset.theme = theme;
     useThemeStore.setState({ theme });
+    // Android : icônes de la barre d'état lisibles sur le thème affiché (voir MainActivity.kt).
+    (window as { MerathonSystemBars?: { setDark: (dark: boolean) => void } }).MerathonSystemBars?.setDark(theme === "dark");
     // Barre de titre et contrôles natifs de la fenêtre ; null : thème du système.
     if (next !== preference) {
       preference = next;

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { LANGUAGES, type Language } from "../i18n";
+import { isMobile } from "../lib/platform";
 
 /** Réglages d'affichage, communs à toutes les fenêtres. */
 export interface DisplaySettings {
@@ -19,8 +20,12 @@ export interface DisplaySettings {
   languageChosen: boolean;
   /** Notifications de l'activité des PR / MR à traiter ou ouvertes par moi (relevée à chaque synchronisation). */
   notifications: NotificationSettings;
+  /** Android : minutes entre deux vérifications des PR / MR quand l'application est fermée (`notifications.background`). */
+  backgroundInterval: number;
   /** Mode débug (À propos) : collecte les logs et affiche l'onglet « Logs » du panneau du bas. */
   debugMode: boolean;
+  /** Android : SSH avec la clé de l'appareil (Android Keystore), en essai (issue #38). Sans effet sur le bureau. */
+  experimentalSsh: boolean;
 }
 
 /** Interrupteur général, puis un réglage par type d'événement. */
@@ -33,6 +38,8 @@ export interface NotificationSettings {
   review: boolean;
   /** Pastille sur l'icône de l'application : nombre de PR / MR avec du nouveau. */
   badge: boolean;
+  /** Android : vérifier aussi quand l'application est fermée (tâche WorkManager, voir pr_watch.rs). Désactivé par défaut. */
+  background: boolean;
 }
 
 export type ThemePreference = "system" | "dark" | "light";
@@ -46,11 +53,14 @@ export const TERMINAL_FONT_MIN = 9;
 export const TERMINAL_FONT_MAX = 24;
 /** Intervalles de synchronisation proposés, en minutes (0 : désactivée). */
 export const SYNC_INTERVALS = [0, 1, 2, 5, 10, 15, 30, 60];
+/** Intervalles de la vérification en arrière-plan (Android), en minutes : WorkManager n'accepte pas moins de 15. */
+export const BACKGROUND_INTERVALS = [15, 30, 60, 180];
 
-export const defaultNotifications: NotificationSettings = { enabled: true, opened: true, commits: true, comments: true, ci: true, review: true, badge: true };
+export const defaultNotifications: NotificationSettings = { enabled: true, opened: true, commits: true, comments: true, ci: true, review: true, badge: true, background: false };
 
 export const defaultDisplay: DisplaySettings = {
-  zoom: 1, terminalFontSize: 12, density: "normal", syncInterval: 5, theme: "system", language: "fr", languageChosen: false, notifications: defaultNotifications, debugMode: false,
+  zoom: 1, terminalFontSize: 12, density: isMobile() ? "comfortable" : "normal", syncInterval: 5, theme: "system", language: "fr", languageChosen: false, notifications: defaultNotifications, debugMode: false,
+  backgroundInterval: 30, experimentalSsh: false,
 };
 
 const KEY = "merathon.display";
@@ -75,7 +85,9 @@ export function sanitize(raw: unknown): DisplaySettings {
     language: LANGUAGES.includes(r.language as Language) ? r.language! : defaultDisplay.language,
     languageChosen: r.languageChosen === true,
     notifications: sanitizeNotifications(r.notifications),
+    backgroundInterval: BACKGROUND_INTERVALS.includes(r.backgroundInterval as number) ? r.backgroundInterval! : defaultDisplay.backgroundInterval,
     debugMode: r.debugMode === true,
+    experimentalSsh: r.experimentalSsh === true,
   };
 }
 
@@ -109,8 +121,8 @@ export const useDisplayStore = create<DisplayStore>((set, get) => {
     set(next);
   }
   const current = (): DisplaySettings => {
-    const { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications, debugMode } = get();
-    return { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications, debugMode };
+    const { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications, backgroundInterval, debugMode, experimentalSsh } = get();
+    return { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications, backgroundInterval, debugMode, experimentalSsh };
   };
   return {
     ...load(),

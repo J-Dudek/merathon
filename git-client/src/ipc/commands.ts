@@ -1,9 +1,9 @@
 import { Channel, invoke as tauriInvoke, type InvokeArgs } from "@tauri-apps/api/core";
 import type {
   BranchDivergence, BranchInfo, CommitDetails, CommitFile, CommitTrailers, PrPush, PrRebase, CommitInfo, FileDiff, FileStatus, GitProfile, GitProfileInput, GitProfilesInfo, Identity, IdentityStatus, MergeResult,
-  InteractiveOutcome, LfsStatus, RefComparison, RemoteInfo, RepoInfo, SshCheck, SshHostStatus, SshKeyInfo, SshSetupInfo, StashInfo, SubmoduleInfo, TagInfo, TodoCommit, WorktreeInfo,
+  InteractiveOutcome, LfsStatus, RefComparison, RemoteInfo, RepoInfo, DeviceKeyStatus, SshCheck, SshHostStatus, SshKeyInfo, SshSetupInfo, StashInfo, SubmoduleInfo, TagInfo, TodoCommit, WorktreeInfo,
 } from "../types/git";
-import type { DeviceCode, ForgeAccount, Provider, SavedAccount } from "../types/forge";
+import type { DeviceCode, ForgeAccount, MyPullRequests, PrSummary, Provider, SavedAccount } from "../types/forge";
 import { describeCommand } from "../lib/journal";
 import { useJournalStore } from "../store/useJournalStore";
 import { milestoneForCommand } from "../lib/milestones";
@@ -71,6 +71,14 @@ export const trustRepository = (path: string) => invoke<void>("trust_repository"
 /** Préfixe de l'erreur renvoyée par `open_repository` pour un dépôt absent de `safe.directory`. */
 export const UNTRUSTED_REPO_ERROR = "Untrusted repository";
 export const getRepoInfo = (path: string) => invoke<RepoInfo>("get_repo_info", { path });
+export interface DeviceFolder {
+  name: string;
+  path: string;
+  is_repo: boolean;
+}
+export const deviceReposRoot = () => invoke<string>("device_repos_root");
+export const listDeviceFolders = (dir: string) => invoke<DeviceFolder[]>("list_device_folders", { dir });
+export const createDeviceFolder = (dir: string, name: string) => invoke<string>("create_device_folder", { dir, name });
 export const initRepository = (path: string) => invoke<void>("init_repository", { path });
 /** `repo` : dépôt à ouvrir directement dans la nouvelle fenêtre. */
 export const openNewWindow = (repo: string | null = null) => invoke<void>("open_new_window", { repo });
@@ -80,6 +88,39 @@ export const notifyDesktop = (title: string, body: string) => invoke<number | nu
 /** Retire une notification de la liste du système. */
 export const closeDesktopNotification = (id: number) => invoke<void>("close_desktop_notification", { id });
 export const isWsl = () => invoke<boolean>("is_wsl");
+
+/** Android : réglages de la vérification des PR en arrière-plan (pr_watch.rs) ; null : désactivée. */
+export interface PrWatchSettings {
+  minutes: number;
+  opened: boolean;
+  commits: boolean;
+  comments: boolean;
+  ci: boolean;
+  review: boolean;
+  english: boolean;
+}
+/** Dernière liste « mes PR » d'un compte connue de la tâche (`at` : ms). Les PR n'y ont que les champs comparés. */
+export interface PrWatchSnapshot {
+  at: number;
+  data: MyPullRequests;
+}
+export interface PrWatchState {
+  snapshots: Record<string, PrWatchSnapshot>;
+  /** Notifications affichées par la tâche, avec les PR qu'elles mentionnent (clé de consultation). */
+  shown: { id: number; prs: { key: string; pr: PrSummary }[] }[];
+}
+export const prWatchConfigure = (settings: PrWatchSettings | null) => invoke<void>("pr_watch_configure", { settings });
+export const prWatchSnapshot = (accountId: string, snapshot: PrWatchSnapshot) => invoke<void>("pr_watch_snapshot", { accountId, snapshot });
+export const prWatchState = () => invoke<PrWatchState>("pr_watch_state");
+
+/** Android : dernière release publique (latest_release.rs) ; `apkUrl` absent si elle n'a pas d'APK. */
+export interface LatestRelease {
+  version: string;
+  notes: string;
+  pageUrl: string;
+  apkUrl: string | null;
+}
+export const latestRelease = () => invoke<LatestRelease>("latest_release");
 
 /** `path` null : identité globale. */
 export const getIdentity = (path: string | null) => invoke<Identity>("get_identity", { path });
@@ -142,6 +183,13 @@ export const getConflictContent = (path: string, filePath: string) =>
   invoke<string>("get_conflict_content", { path, filePath });
 export const resolveConflict = (path: string, filePath: string, content: string) =>
   invoke<void>("resolve_conflict", { path, filePath, content });
+/** Fichiers suivis et non suivis (hors .gitignore) de la copie de travail. */
+export const listFiles = (path: string) => invoke<string[]>("list_files", { path });
+export const readFile = (path: string, filePath: string) => invoke<string>("read_file", { path, filePath });
+/** `create` : nouveau fichier, refusé s'il existe déjà. */
+export const writeFile = (path: string, filePath: string, content: string, create: boolean) =>
+  invoke<void>("write_file", { path, filePath, content, create });
+export const deleteFile = (path: string, filePath: string) => invoke<void>("delete_file", { path, filePath });
 
 // ---------------------------------------------------------------- Stash
 
@@ -220,6 +268,8 @@ export const sshExistingKey = (name: string) => tauriInvoke<SshKeyInfo>("ssh_exi
 export const sshHostStatus = (host: string) => tauriInvoke<SshHostStatus>("ssh_host_status", { host });
 export const sshTrustHost = (host: string, fingerprint: string) => tauriInvoke<void>("ssh_trust_host", { host, fingerprint });
 export const sshCheckConnection = (host: string, key: string) => tauriInvoke<SshCheck>("ssh_check_connection", { host, key });
+export const sshDeviceKeyStatus = () => tauriInvoke<DeviceKeyStatus>("ssh_device_key_status");
+export const sshDeviceKeyDelete = () => tauriInvoke<void>("ssh_device_key_delete");
 export const listSubmodules = (path: string) => invoke<SubmoduleInfo[]>("list_submodules", { path });
 /** `names` vide : tous les sous-modules. */
 export const updateSubmodules = (path: string, names: string[] = []) => invoke<void>("update_submodules", { path, names });
@@ -233,7 +283,8 @@ export const removeWorktree = (path: string, name: string) => invoke<void>("remo
 export const fetchRemote = (path: string, remote: string | null = null) =>
   invoke<void>("fetch_remote", { path, remote });
 /** Fetch de tous les remotes en arrière-plan (synchronisation périodique) : pas inscrit au journal. */
-export const fetchAllQuietly = (path: string) => tauriInvoke<void>("fetch_remote", { path, remote: null });
+/** Synchronisation automatique : sur Android, la clé SSH de l'appareil n'y demande jamais de confirmation. */
+export const fetchAllQuietly = (path: string) => tauriInvoke<void>("fetch_remote", { path, remote: null, background: true });
 /** Fetch d'un remote en arrière-plan (état d'une PR à l'ouverture) : pas inscrit au journal. */
 export const fetchRemoteQuietly = (path: string, remote: string) => tauriInvoke<void>("fetch_remote", { path, remote });
 export const pull = (path: string, rebase: boolean) => invoke<MergeResult>("pull", { path, rebase });

@@ -19,7 +19,16 @@ import { EmojiTextarea } from "./EmojiAssist";
 import { MarkdownBody } from "./MarkdownBody";
 import { UserPicker } from "./UserPicker";
 import { fieldLabel } from "../lib/fieldLabel";
+import { isMobile } from "../lib/platform";
 import { tr, trn, locale, COLON } from "../i18n";
+
+/** Onglet des fichiers : hauteur fixe pour le diff ; sur mobile, tout l'écran. */
+function filesTabHeight(): string {
+  return isMobile() ? "h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-16px)]" : "h-[76vh]";
+}
+
+/** Nom de branche : tronqué sur une ligne, entier (renvoyé à la ligne) en largeur téléphone. */
+const BRANCH_CLASS = "font-mono text-xs text-[var(--color-text)] truncate max-[760px]:whitespace-normal max-[760px]:break-all";
 
 const labelClass = "text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)]";
 
@@ -305,7 +314,7 @@ export function PullRequestReviewDialog({ account, projectPath, remoteName, numb
       title={title}
       onClose={requestClose}
       width={tab === "files" ? "w-[1100px]" : "w-[760px]"}
-      height={tab === "files" ? "h-[76vh]" : ""}
+      height={tab === "files" ? filesTabHeight() : ""}
       resizeKey="pull-request-review"
     >
       {loadError && <p className="p-4 text-xs text-red-400 break-words">{loadError}</p>}
@@ -555,13 +564,15 @@ function Header({ details, account, forgeName, onCheckout, target, branches, onT
           {pr.author} · {formatDate(pr.createdAt)} · {account.label}
         </span>
       </div>
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="font-mono text-xs text-[var(--color-text)] truncate">{pr.sourceBranch}</span>
+      {/* Téléphone : les branches prennent toute la ligne (sans être coupées), les boutons passent dessous. */}
+      <div className="flex flex-wrap items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1 max-[760px]:basis-full">
+        <span className={BRANCH_CLASS}>{pr.sourceBranch}</span>
         <ArrowRight size={12} className="text-[var(--color-muted)] shrink-0" />
         <span className="sr-only">{tr("vers")}</span>
         {target === null ? (
           <>
-            <span className="font-mono text-xs text-[var(--color-text)] truncate">{pr.targetBranch}</span>
+            <span className={BRANCH_CLASS}>{pr.targetBranch}</span>
             {pr.state === "open" && !pending && (
               <button
                 className="shrink-0 text-[var(--color-muted)] hover:text-[var(--color-text)]"
@@ -585,6 +596,7 @@ function Header({ details, account, forgeName, onCheckout, target, branches, onT
             pending={pending}
           />
         )}
+        </div>
         <div className="ml-auto flex gap-2 shrink-0">
           {pr.state === "open" && onCheckout && <Button onClick={onCheckout}>Checkout</Button>}
           <Button onClick={() => openUrl(pr.url)} title={tr("Ouvrir sur {forgeName}", { forgeName })}>
@@ -658,7 +670,8 @@ function People({ details, onEdit, disabled }: { details: PullRequestDetails; on
     <div className="grid grid-cols-2 gap-3 relative">
       {onEdit && (
         <button
-          className="absolute right-0 top-0 inline-flex items-center gap-1 text-[11px] text-[var(--color-accent-text)] hover:underline disabled:opacity-50"
+          // En largeur téléphone, la colonne « Assignés » est trop étroite : le bouton passe sur sa propre ligne.
+          className="absolute right-0 top-0 max-[760px]:static max-[760px]:col-span-2 max-[760px]:justify-self-end inline-flex items-center gap-1 text-[11px] text-[var(--color-accent-text)] hover:underline disabled:opacity-50"
           onClick={onEdit}
           disabled={disabled}
           title={tr("Modifier les relecteurs et les assignés")}

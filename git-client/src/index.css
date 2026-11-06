@@ -321,3 +321,52 @@ textarea:focus-visible {
   .celebrate-trophy { transform: translate(-50%, -50%); }
   .celebrate-timer { display: none; }
 }
+
+/* Écrans tactiles (pointeur « coarse ») : zones d'appui d'au moins 40 px pour les menus, la barre d'outils et les onglets. */
+@media (pointer: coarse) {
+  [role="menuitem"],
+  [role="menuitemradio"],
+  [role="tab"],
+  header button,
+  nav[aria-label] button {
+    min-height: 40px;
+  }
+  header button {
+    min-width: 40px;
+  }
+  /* Petites icônes des listes et croix de fermeture : une cible assez grande pour un doigt. */
+  aside button,
+  [data-touch-target] {
+    min-width: 28px;
+    min-height: 28px;
+  }
+  /* Flèche d'un bouton à menu (Pull ▾, Push ▾) : plus étroite, pour que les actions tiennent sur une ligne. */
+  header button[aria-haspopup] {
+    min-width: 32px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
+/* Mobile : le tiroir de navigation et la feuille de menu glissent à l'ouverture. */
+@keyframes mobile-drawer-in {
+  from { transform: translateX(-100%); }
+}
+@keyframes mobile-sheet-in {
+  from { transform: translateY(100%); }
+}
+.mobile-drawer { animation: mobile-drawer-in 180ms ease-out; }
+.mobile-sheet { animation: mobile-sheet-in 180ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .mobile-drawer, .mobile-sheet { animation: none; }
+}
+
+/* Écran tactile : pas de survol, les actions qui n'apparaissent qu'au survol restent visibles. */
+@media (hover: none) {
+  .opacity-0.group-hover\:opacity-100:not([role="tooltip"]) {
+    opacity: 1;
+  }
+}

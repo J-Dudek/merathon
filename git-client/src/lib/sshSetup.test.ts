@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { connectionHint, isKeyAlreadyRegistered, passphraseProblem, sshKeysPage } from "./sshSetup";
+import { connectionHint, hostProblem, isKeyAlreadyRegistered, passphraseProblem, sshKeysPage } from "./sshSetup";
 
 describe("sshSetup", () => {
+  it("reconnaît un échec dû à l'hôte et retire le préfixe technique", () => {
+    expect(hostProblem("ssh-host-problem: La clé SSH de localhost ne correspond pas à celle enregistrée")).toBe(
+      "La clé SSH de localhost ne correspond pas à celle enregistrée",
+    );
+    expect(hostProblem("Confirmation annulée")).toBeNull();
+  });
+
   it("reconnaît une clé déjà enregistrée sur GitHub et GitLab", () => {
     expect(isKeyAlreadyRegistered("Validation Failed: key is already in use")).toBe(true);
     expect(isKeyAlreadyRegistered("fingerprint has already been taken")).toBe(true);

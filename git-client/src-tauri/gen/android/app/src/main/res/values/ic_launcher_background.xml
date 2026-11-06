@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Fond du logo (icons/icon.png), visible dans les coins des masques carrés -->
+  <color name="ic_launcher_background">#1B1D2C</color>
+</resources>

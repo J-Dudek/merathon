@@ -1,0 +1,7 @@
+# OpenSSL, compilé avec le projet pour Android, appelle `<cible>-ranlib`, absent des NDK récents :
+# on lui indique le `llvm-ranlib` du NDK. Ces variables ne concernent que les cibles Android.
+[env]
+RANLIB_aarch64_linux_android = { value = ".cargo/android-ranlib.sh", relative = true }
+RANLIB_armv7_linux_androideabi = { value = ".cargo/android-ranlib.sh", relative = true }
+RANLIB_i686_linux_android = { value = ".cargo/android-ranlib.sh", relative = true }
+RANLIB_x86_64_linux_android = { value = ".cargo/android-ranlib.sh", relative = true }

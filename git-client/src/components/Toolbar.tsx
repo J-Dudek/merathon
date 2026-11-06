@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { useRepoStore } from "../store/useRepoStore";
 import { useUiStore } from "../store/useUiStore";
 import { useTabsStore } from "../store/useTabsStore";
-import { AppWindow, Archive, ArchiveRestore, ArrowDown, ArrowUp, BookOpen, ChevronDown, CloudDownload, FolderOpen, FolderPlus, GitBranch, History, Info, Monitor, Moon, RefreshCw, Settings, SquarePlus, Sun, X, type LucideIcon } from "lucide-react";
+import { AppWindow, Archive, ArchiveRestore, ArrowDown, ArrowUp, BookOpen, ChevronDown, CloudDownload, EllipsisVertical, FileText, FolderOpen, FolderPlus, FolderSync, GitBranch, History, Info, Menu, Monitor, Moon, RefreshCw, Settings, SquarePlus, Sun, Users, X, type LucideIcon } from "lucide-react";
 import {
   createBranch, fetchRemote, openNewWindow, pull, stashApply, stashSave,
 } from "../ipc/commands";
@@ -9,9 +10,11 @@ import { reportMerge, runGit } from "../lib/actions";
 import { pushBranch } from "../lib/threadReplies";
 import { chooseAndInitRepo, chooseAndOpenRepo, openRepoAt } from "../lib/repoActions";
 import { ContextMenu, useContextMenu, type MenuEntry } from "./ContextMenu";
+import { MobileDrawer } from "./MobileDrawer";
 import { SearchBar } from "./SearchBar";
 import { Tooltip } from "./Tooltip";
 import { checkForUpdates } from "../lib/updater";
+import { hasDesktopFeatures, isMobile } from "../lib/platform";
 import { syncOpenRepos, useSyncRunning } from "../lib/autoSync";
 import { useThemeStore } from "../lib/theme";
 import { useDisplayStore, type ThemePreference } from "../store/useDisplayStore";
@@ -27,7 +30,7 @@ function headLabel(info: RepoInfo): string {
   return info.head_branch ?? "";
 }
 
-export function Toolbar({ onClone }: { onClone: () => void }) {
+export function Toolbar({ onClone, onAccounts }: { onClone: () => void; onAccounts: () => void }) {
   const repoPath = useRepoStore((s) => s.repoPath);
   const info = useRepoStore((s) => s.info);
   const branches = useRepoStore((s) => s.branches);
@@ -39,6 +42,7 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
   const tabCount = useTabsStore((s) => s.tabs.length);
   const setPreferencesOpen = useUiStore((s) => s.setPreferencesOpen);
   const setMemoOpen = useUiStore((s) => s.setMemoOpen);
+  const openFileEditor = useUiStore((s) => s.openFileEditor);
   const busy = useUiStore((s) => s.busy);
   const ask = useUiStore((s) => s.ask);
   const syncing = useSyncRunning();
@@ -54,6 +58,8 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
       { label: tr("Ouvrir…"), icon: FolderOpen, shortcut: "Ctrl+O", action: chooseAndOpenRepo },
       { label: tr("Cloner…"), icon: CloudDownload, action: onClone },
       { label: tr("Initialiser…"), icon: FolderPlus, action: chooseAndInitRepo },
+      // Mobile : les dépôts sont dans le dossier privé de l'application, qu'aucun autre éditeur n'ouvre.
+      ...(isMobile() && repoPath ? [{ label: tr("Fichiers du dépôt…"), icon: FileText, action: () => openFileEditor() }] : []),
       ...(others.length > 0
         ? [
             { header: tr("Récents") },
@@ -62,13 +68,18 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
         : []),
       "separator",
       { label: tr("Nouvel onglet"), icon: SquarePlus, shortcut: "Ctrl+T", action: newTab },
-      { label: tr("Nouvelle fenêtre"), icon: AppWindow, shortcut: "Ctrl+Maj+N", action: () => openNewWindow() },
+      ...(hasDesktopFeatures()
+        ? [{ label: tr("Nouvelle fenêtre"), icon: AppWindow, shortcut: "Ctrl+Maj+N", action: () => openNewWindow() }]
+        : []),
       ...(repoPath || tabCount > 1
         ? [{ label: tr("Fermer l'onglet"), icon: X, shortcut: "Ctrl+W", action: () => closeTab(activeTab) }]
         : []),
       "separator",
+      ...(isMobile() ? [{ label: tr("Comptes"), icon: Users, action: onAccounts }] : []),
       { label: tr("Préférences…"), icon: Settings, shortcut: "Ctrl+,", action: () => setPreferencesOpen(true) },
-      { label: tr("Rechercher des mises à jour…"), icon: RefreshCw, action: () => checkForUpdates(true) },
+      ...(hasDesktopFeatures()
+        ? [{ label: tr("Rechercher des mises à jour…"), icon: RefreshCw, action: () => checkForUpdates(true) }]
+        : []),
       { label: tr("Mémo Git"), icon: BookOpen, action: () => setMemoOpen(true) },
       { label: tr("À propos de Merathon"), icon: Info, action: () => setPreferencesOpen(true, "about") },
     ];
@@ -120,7 +131,7 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
     if (!repoPath) return;
     const result = await ask({
       title: tr("Mettre de côté (stash)"),
-      input: { placeholder: "Message (optionnel)" },
+      input: { placeholder: "Message (optionnel)", optional: true },
       checkbox: { label: tr("Inclure les fichiers non suivis"), initial: true },
       confirmLabel: "Stash",
     });
@@ -134,6 +145,20 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
   }
 
   const disabled = !repoPath || !!busy;
+
+  if (isMobile()) {
+    return (
+      <MobileToolbar
+        repoPath={repoPath}
+        repoName={repoName}
+        info={info}
+        head={head ? { behind: head.behind, ahead: head.ahead } : null}
+        stashCount={stashes.length}
+        actions={{ pull: doPull, push: doPush, fetch: doFetch, branch: doBranch, stash: doStash, pop: doPop }}
+        repoMenu={repoMenu}
+      />
+    );
+  }
 
   return (
     <header className="flex flex-wrap items-center gap-1.5 px-3 min-h-11 py-1 shrink-0 bg-[var(--color-bg-secondary)] border-b border-overlay/10">
@@ -224,17 +249,137 @@ export function Toolbar({ onClone }: { onClone: () => void }) {
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <ThemeButton onOpen={openMenu} />
         <SearchBar />
-        <button
-          className="text-xs px-2 py-1 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
-          onClick={() => openNewWindow()}
-          title={tr("Ouvrir une nouvelle fenêtre")}
-          aria-label={tr("Ouvrir une nouvelle fenêtre")}
-        >
-          <AppWindow size={14} strokeWidth={1.75} />
-        </button>
+        {hasDesktopFeatures() && (
+          <button
+            className="text-xs px-2 py-1 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
+            onClick={() => openNewWindow()}
+            title={tr("Ouvrir une nouvelle fenêtre")}
+            aria-label={tr("Ouvrir une nouvelle fenêtre")}
+          >
+            <AppWindow size={14} strokeWidth={1.75} />
+          </button>
+        )}
       </div>
 
       {menu && <ContextMenu menu={menu} onClose={closeMenu} />}
+    </header>
+  );
+}
+
+interface GitActions {
+  pull: (rebase: boolean) => Promise<void>;
+  push: (force?: boolean) => Promise<void>;
+  fetch: () => Promise<void>;
+  branch: () => Promise<void>;
+  stash: () => Promise<void>;
+  pop: () => Promise<void>;
+}
+
+/**
+ * Mobile : une seule ligne, pour laisser la place au contenu. Les actions courantes à côté du dépôt (Pull, Push,
+ * Fetch, recherche), les autres dans « ⋯ » ; le thème est dans les préférences.
+ */
+function MobileToolbar({ repoPath, repoName, info, head, stashCount, actions, repoMenu }: {
+  repoPath: string | null;
+  repoName: string | undefined;
+  info: RepoInfo | null;
+  /** Branche courante suivie : commits à récupérer et à envoyer. */
+  head: { behind?: number; ahead?: number } | null;
+  stashCount: number;
+  actions: GitActions;
+  repoMenu: () => MenuEntry[];
+}) {
+  const busy = useUiStore((s) => s.busy);
+  const syncing = useSyncRunning();
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const disabled = !repoPath || !!busy;
+
+  const more: MenuEntry[] = [
+    { label: "Pull (rebase)", icon: ArrowDown, disabled: disabled || !head, action: () => void actions.pull(true) },
+    { label: tr("Push forcé…"), icon: ArrowUp, danger: true, disabled: disabled || !head, action: () => void actions.push(true) },
+    "separator",
+    { label: tr("Nouvelle branche…"), icon: GitBranch, disabled: disabled || !info?.head_hash, action: () => void actions.branch() },
+    { label: "Stash", icon: Archive, disabled, action: () => void actions.stash() },
+    {
+      label: stashCount ? `Pop (${trn(stashCount, "{n} stash", "{n} stashes")})` : "Pop",
+      icon: ArchiveRestore,
+      disabled: disabled || stashCount === 0,
+      action: () => void actions.pop(),
+    },
+    "separator",
+    {
+      label: syncing ? tr("Synchronisation en cours…") : tr("Synchroniser les dépôts ouverts"),
+      hint: tr("Fetch de chaque dépôt ouvert et actualisation de ses PR / MR"),
+      icon: FolderSync,
+      disabled: syncing || !!busy,
+      action: () => void syncOpenRepos(),
+    },
+  ];
+
+  return (
+    <header className="flex flex-wrap items-center gap-0.5 px-2 min-h-14 py-1 shrink-0 bg-[var(--color-bg-secondary)] border-b border-overlay/10">
+      <h1 className="sr-only">Merathon{repoName ? ` — ${repoName}` : ""}</h1>
+      <button
+        className="w-11 h-11 shrink-0 inline-flex items-center justify-center rounded-full text-[var(--color-text)] active:bg-overlay/10"
+        onClick={() => setDrawerOpen(true)}
+        aria-label={repoPath ? tr("Ouvrir le menu du dépôt ({repoPath})", { repoPath }) : tr("Ouvrir le menu du dépôt")}
+        aria-haspopup="dialog"
+      >
+        <Menu size={22} strokeWidth={1.75} />
+      </button>
+      <div className="flex-1 min-w-0 pl-1">
+        <p className="text-base font-semibold text-[var(--color-text)] truncate">{repoName ?? "Merathon"}</p>
+        {(info || busy) && (
+          <p className="text-xs font-mono text-[var(--color-accent-text)] truncate">
+            {info && (
+              <>
+                <span className="sr-only">{tr("Branche courante :")}{" "}</span>
+                {headLabel(info)}
+              </>
+            )}
+            {/* Opération en cours (Fetch…, Push…), annoncée par la zone de statut ci-dessous. */}
+            {busy && <span className="font-sans text-[var(--color-muted)]" aria-hidden>{info ? " · " : ""}{busy}</span>}
+          </p>
+        )}
+      </div>
+      {repoPath && (
+        <>
+          <ToolBtn
+            label="Pull"
+            icon={ArrowDown}
+            badge={head?.behind}
+            badgeLabel={(n) => trn(n, "{n} commit à récupérer", "{n} commits à récupérer")}
+            disabled={disabled || !head}
+            onClick={() => void actions.pull(false)}
+          />
+          <ToolBtn
+            label="Push"
+            icon={ArrowUp}
+            badge={head?.ahead}
+            badgeLabel={(n) => trn(n, "{n} commit à envoyer", "{n} commits à envoyer")}
+            disabled={disabled || !head}
+            onClick={() => void actions.push(false)}
+          />
+          <ToolBtn label="Fetch" icon={RefreshCw} disabled={disabled} onClick={() => void actions.fetch()} />
+        </>
+      )}
+      <SearchBar />
+      {repoPath && (
+        <button
+          className="relative w-10 h-10 shrink-0 inline-flex items-center justify-center rounded-full text-[var(--color-text)] active:bg-overlay/10"
+          onClick={(e) => openMenu(e, more)}
+          aria-label={tr("Autres actions (branche, stash, synchronisation…)")}
+          aria-haspopup="menu"
+        >
+          <EllipsisVertical size={20} strokeWidth={1.75} />
+          {/* Stashs à réappliquer : signalés sur le menu, comme sur le bouton Pop du bureau. */}
+          {stashCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[var(--color-accent-solid)]" aria-hidden />}
+        </button>
+      )}
+      <span role="status" className="sr-only">{busy ?? ""}</span>
+      {menu && <ContextMenu menu={menu} onClose={closeMenu} />}
+      {drawerOpen && <MobileDrawer title={repoName ?? "Merathon"} subtitle={info ? headLabel(info) : undefined} items={repoMenu()} onClose={() => setDrawerOpen(false)} />}
     </header>
   );
 }
@@ -290,6 +435,27 @@ function ToolBtn({ label, icon: Icon, badge, badgeLabel, disabled, onClick, onMe
   onClick: () => void;
   onMenu?: (e: React.MouseEvent) => void;
 }) {
+  const title = badge && badgeLabel ? `${label} (${badgeLabel(badge)})` : label;
+  if (isMobile()) {
+    // Mobile : icône seule, zone de toucher de 40 px, pastille dans le coin.
+    return (
+      <button
+        className="relative w-10 h-10 shrink-0 inline-flex items-center justify-center rounded-full text-[var(--color-text)] active:bg-overlay/10 disabled:opacity-40"
+        onClick={onClick}
+        disabled={disabled}
+        title={title}
+      >
+        <Icon size={20} strokeWidth={1.75} />
+        <span className="sr-only">{label}</span>
+        {!!badge && (
+          <span className="absolute top-0.5 right-0 min-w-4 px-1 text-[9px] text-center rounded-full bg-[var(--color-accent-solid)] text-white leading-4">
+            <span aria-hidden>{badge}</span>
+            <span className="sr-only">{badgeLabel ? ` (${badgeLabel(badge)})` : ` (${badge})`}</span>
+          </span>
+        )}
+      </button>
+    );
+  }
   return (
     <div className="flex items-stretch">
       <button
@@ -297,10 +463,10 @@ function ToolBtn({ label, icon: Icon, badge, badgeLabel, disabled, onClick, onMe
         style={onMenu ? undefined : { borderRadius: 4 }}
         onClick={onClick}
         disabled={disabled}
-        title={badge && badgeLabel ? `${label} (${badgeLabel(badge)})` : label}
+        title={title}
       >
         <Icon size={13} strokeWidth={1.75} className="opacity-80 shrink-0" />
-        {label}
+        <span>{label}</span>
         {!!badge && (
           <span className="text-[9px] px-1 rounded-full bg-[var(--color-accent-solid)] text-white leading-4">
             <span aria-hidden>{badge}</span>

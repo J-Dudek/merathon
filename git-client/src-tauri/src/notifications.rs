@@ -41,17 +41,21 @@ pub async fn notify_desktop(app: AppHandle, title: String, body: String) -> Resu
 
 /// Retire une notification de la liste du système (sans effet si l'utilisateur l'a déjà fermée).
 #[tauri::command]
-pub async fn close_desktop_notification(id: u32) -> Result<(), String> {
+pub async fn close_desktop_notification(app: AppHandle, id: u32) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
+        let _ = app;
         tauri::async_runtime::spawn_blocking(move || linux::close(id))
             .await
             .map_err(|e| e.to_string())?
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = id;
-        Ok(())
+        // Android : notification de la vérification en arrière-plan (pr_watch.rs).
+        let id = i32::try_from(id).map_err(|e| e.to_string())?;
+        tauri::async_runtime::spawn_blocking(move || crate::pr_watch::dismiss(&app, id))
+            .await
+            .map_err(|e| e.to_string())?
     }
 }
 

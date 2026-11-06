@@ -1,10 +1,17 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
 vi.mock("@tauri-apps/plugin-updater", () => ({ check: vi.fn() }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ label: "main" }) }));
+vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(async () => "2.15.0") }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(async () => {}) }));
+vi.mock("../ipc/commands", () => ({ latestRelease: vi.fn() }));
 
-const { CHANGELOG_MARKER, compareVersions, downloadLabel, releaseNoteSections } = await import("./updater");
+const { check } = await import("@tauri-apps/plugin-updater");
+const { openUrl } = await import("@tauri-apps/plugin-opener");
+const { latestRelease } = await import("../ipc/commands");
+const { useUiStore } = await import("../store/useUiStore");
+const { CHANGELOG_MARKER, compareVersions, downloadLabel, releaseNoteSections, checkForUpdates } = await import("./updater");
 
 describe("releaseNoteSections", () => {
   const body = [
@@ -111,5 +118,56 @@ describe("downloadLabel", () => {
     expect(downloadLabel(0, 0)).toBe("Téléchargement de la mise à jour…");
     expect(downloadLabel(512, 1024)).toBe("Téléchargement de la mise à jour… 50 %");
     expect(downloadLabel(2048, 1024)).toBe("Téléchargement de la mise à jour… 100 %");
+  });
+});
+
+describe("checkForUpdates", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const android = () => vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (Linux; Android 14) Mobile Safari/537.36");
+  const release = (version: string, apkUrl: string | null = `https://x/Merathon_${version}_arm64.apk`) =>
+    vi.mocked(latestRelease).mockResolvedValue({ version, notes: "### Nouveautés\n\n- truc", pageUrl: "https://x/release", apkUrl });
+
+  it("Android : pas de plugin de mise à jour, mais la dernière release publique", async () => {
+    android();
+    release("2.15.0");
+    const notify = vi.spyOn(useUiStore.getState(), "notify");
+    await checkForUpdates(true);
+    expect(check).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith("success", "Merathon est à jour");
+  });
+
+  it("Android : propose de télécharger l'APK d'une version plus récente, dans le navigateur", async () => {
+    android();
+    release("2.16.0");
+    const ask = vi.spyOn(useUiStore.getState(), "ask").mockResolvedValue({ value: "", checked: false });
+    await checkForUpdates();
+    expect(ask.mock.calls[0][0]).toMatchObject({ title: "Merathon 2.16.0 est disponible", confirmLabel: "Télécharger" });
+    expect(ask.mock.calls[0][0].sections).toEqual([{ title: "Nouveautés", items: ["truc"] }]);
+    expect(openUrl).toHaveBeenCalledWith("https://x/Merathon_2.16.0_arm64.apk");
+  });
+
+  it("Android : rien à proposer si l'utilisateur refuse, ni pour une release sans APK", async () => {
+    android();
+    release("2.16.0");
+    vi.spyOn(useUiStore.getState(), "ask").mockResolvedValue(null);
+    await checkForUpdates();
+    release("2.17.0", null);
+    const notify = vi.spyOn(useUiStore.getState(), "notify");
+    await checkForUpdates();
+    expect(notify).not.toHaveBeenCalled();
+    await checkForUpdates(true);
+    expect(notify).toHaveBeenCalledWith("info", expect.stringContaining("sans APK Android"));
+    expect(openUrl).not.toHaveBeenCalled();
+  });
+
+  it("Android : une erreur réseau n'est signalée que pour une vérification demandée", async () => {
+    android();
+    vi.mocked(latestRelease).mockRejectedValue(new Error("hors ligne"));
+    const notify = vi.spyOn(useUiStore.getState(), "notify");
+    await checkForUpdates();
+    expect(notify).not.toHaveBeenCalled();
+    await checkForUpdates(true);
+    expect(notify).toHaveBeenCalledWith("error", expect.stringContaining("hors ligne"));
   });
 });

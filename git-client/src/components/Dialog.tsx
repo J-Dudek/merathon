@@ -20,7 +20,7 @@ export function Dialog() {
 
   if (!dialog) return null;
 
-  const needsValue = !!dialog.input && !dialog.input.multiline;
+  const needsValue = !!dialog.input && !dialog.input.multiline && !dialog.input.optional;
   const canConfirm = !needsValue || value.trim().length > 0;
   const confirm = () => canConfirm && closeDialog({ value, checked });
 
@@ -63,8 +63,8 @@ export function Dialog() {
             autoFocus
             className={inputClass}
             type={dialog.input.secret ? "password" : "text"}
-            required
-            aria-required
+            required={needsValue}
+            aria-required={needsValue}
             autoComplete={dialog.input.secret ? "off" : undefined}
             placeholder={dialog.input.placeholder}
             {...fieldLabel(dialog.title)}

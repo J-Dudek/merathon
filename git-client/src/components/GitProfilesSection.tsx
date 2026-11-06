@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { pickFolder } from "../lib/folderPicker";
+import { isMobile } from "../lib/platform";
 import { FolderGit2 } from "lucide-react";
 import { Button, inputClass } from "./Modal";
-import { SshSetupDialog } from "./SshSetupDialog";
+import { SshSetupDialog } from "./lazy";
 import { deleteGitProfile, listGitProfiles, saveGitProfile, sshAllKeys, sshCreateKey, sshExistingKey } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
 import { keyNameFor } from "../lib/gitProfiles";
@@ -60,8 +61,8 @@ export function GitProfilesSection() {
   const mismatch = creating ? passphraseProblem(passphrase, confirmation) : null;
 
   async function chooseDir() {
-    const dir = await open({ directory: true, multiple: false });
-    if (typeof dir === "string") set({ dir });
+    const dir = await pickFolder();
+    if (dir) set({ dir });
   }
 
   function edit(profile: GitProfile) {
@@ -140,7 +141,9 @@ export function GitProfilesSection() {
       <div>
         <h3 className="text-sm font-semibold">{tr("Profils Git")}</h3>
         <p className="text-[var(--color-muted)]">
-          {tr("Une identité et une clé SSH par dossier de projets. Git applique lui-même ces règles (includeIf), y compris en ligne de commande. En HTTPS, le token reste choisi d'après l'instance du remote.")}
+          {isMobile()
+            ? tr("Une identité par dossier de projets. Le token du compte reste choisi d'après l'instance du remote.")
+            : tr("Une identité et une clé SSH par dossier de projets. Git applique lui-même ces règles (includeIf), y compris en ligne de commande. En HTTPS, le token reste choisi d'après l'instance du remote.")}
         </p>
       </div>
 
@@ -166,14 +169,17 @@ export function GitProfilesSection() {
               {account && ` · ${account.label}`}
               {profile.account_id && !account && tr(" · compte supprimé")}
             </p>
-            <p className="text-[var(--color-muted)] flex items-center gap-2 flex-wrap">
-              <span className="break-all">{tr("Clé SSH :")}{" "}{profile.ssh_key ?? tr("clés par défaut")}</span>
-              {profile.managed && account && profile.ssh_key && (
-                <button className="underline hover:text-[var(--color-text)]" onClick={() => registerKey(account, profile.ssh_key!)}>
-                  {tr("Enregistrer et tester sur {label}", { label: account.label })}
-                </button>
-              )}
-            </p>
+            {/* Mobile : pas de SSH (issue #38), donc ni clé de profil ni « clés par défaut » à afficher. */}
+            {!isMobile() && (
+              <p className="text-[var(--color-muted)] flex items-center gap-2 flex-wrap">
+                <span className="break-all">{tr("Clé SSH :")}{" "}{profile.ssh_key ?? tr("clés par défaut")}</span>
+                {profile.managed && account && profile.ssh_key && (
+                  <button className="underline hover:text-[var(--color-text)]" onClick={() => registerKey(account, profile.ssh_key!)}>
+                    {tr("Enregistrer et tester sur {label}", { label: account.label })}
+                  </button>
+                )}
+              </p>
+            )}
           </div>
         );
       })}
@@ -229,15 +235,17 @@ export function GitProfilesSection() {
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
               </select>
             </label>
-            <label className="block flex-1 min-w-0">
-              <span className="block font-semibold mb-1">{tr("Clé SSH")}</span>
-              <select className={inputClass} value={draft.key} onChange={(e) => set({ key: e.target.value })}>
-                <option value="">{tr("Clés par défaut")}</option>
-                {keys.map((k) => <option key={k.path} value={k.path}>{k.name}{k.encrypted ? " (passphrase)" : ""}</option>)}
-                {draft.key && draft.key !== NEW_KEY && !keys.some((k) => k.path === draft.key) && <option value={draft.key}>{fileName(draft.key)}</option>}
-                <option value={NEW_KEY}>{tr("Créer {keyNameFor}", { keyNameFor: keyNameFor(draft.label) })}</option>
-              </select>
-            </label>
+            {!isMobile() && (
+              <label className="block flex-1 min-w-0">
+                <span className="block font-semibold mb-1">{tr("Clé SSH")}</span>
+                <select className={inputClass} value={draft.key} onChange={(e) => set({ key: e.target.value })}>
+                  <option value="">{tr("Clés par défaut")}</option>
+                  {keys.map((k) => <option key={k.path} value={k.path}>{k.name}{k.encrypted ? " (passphrase)" : ""}</option>)}
+                  {draft.key && draft.key !== NEW_KEY && !keys.some((k) => k.path === draft.key) && <option value={draft.key}>{fileName(draft.key)}</option>}
+                  <option value={NEW_KEY}>{tr("Créer {keyNameFor}", { keyNameFor: keyNameFor(draft.label) })}</option>
+                </select>
+              </label>
+            )}
           </div>
           {creating && (
             <div className="space-y-1.5">

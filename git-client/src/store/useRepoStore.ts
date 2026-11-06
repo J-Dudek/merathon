@@ -54,6 +54,8 @@ export interface CommitDraft {
 
 interface RepoStore {
   repoPath: string | null;
+  /** Le contenu du dépôt ouvert a été lu : une liste vide veut alors vraiment dire « aucun commit ». */
+  loaded: boolean;
   info: RepoInfo | null;
   commits: CommitInfo[];
   branches: BranchInfo[];
@@ -101,6 +103,7 @@ let lastRefresh = 0;
 
 export const emptyRepo: RepoState = {
   repoPath: null,
+  loaded: false,
   info: null,
   commits: [],
   branches: [],
@@ -154,12 +157,16 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
       gitIdentityStatus(path).catch(() => null),
       lfsStatus(path).catch(() => null),
       getStatus(path),
-    ]);
+    ]).catch((e) => {
+      // Lecture en échec (erreur signalée par l'appelant) : l'écran ne reste pas sur « Chargement… ».
+      if (get().repoPath === path) set({ loaded: true });
+      throw e;
+    });
     if (get().repoPath !== path) return; // un autre dépôt a été ouvert entre-temps
     if (current !== lastRefresh) return; // une lecture plus récente (ex. à la fin d'un pull) fait foi
     const selected = get().selectedCommit;
     set({
-      info, commits, branches, tags, stashes, remotes, submodules, worktrees, identity, lfs, status,
+      loaded: true, info, commits, branches, tags, stashes, remotes, submodules, worktrees, identity, lfs, status,
       selectedCommit: selected ? commits.find((c) => c.hash === selected.hash) ?? null : null,
     });
   },
@@ -187,7 +194,7 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
   snapshot: () => {
     const s = get();
     return {
-      repoPath: s.repoPath, info: s.info, commits: s.commits, branches: s.branches, tags: s.tags, stashes: s.stashes,
+      repoPath: s.repoPath, loaded: s.loaded, info: s.info, commits: s.commits, branches: s.branches, tags: s.tags, stashes: s.stashes,
       remotes: s.remotes, submodules: s.submodules, worktrees: s.worktrees, identity: s.identity, lfs: s.lfs, status: s.status, selectedCommit: s.selectedCommit,
       comparison: s.comparison, searchQuery: s.searchQuery, center: s.center, commitDraft: s.commitDraft,
     };

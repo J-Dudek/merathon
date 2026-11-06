@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, Plus, Search, X } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { FileDiff, DiffLine } from "../types/git";
+import type { FileDiff, DiffHunk, DiffLine } from "../types/git";
 import type { LineAction } from "../ipc/commands";
 import { tr, trn } from "../i18n";
 
@@ -26,6 +26,11 @@ interface Props {
   annotations?: DiffAnnotations;
   /** Barre de recherche dans le fichier (Ctrl+F depuis le diff). */
   searchable?: boolean;
+  /**
+   * Affichage pour téléphone : une seule colonne de numéros (qui sert aussi à commenter, au toucher), texte plus grand,
+   * blocs annoncés par leurs numéros de ligne. Avec `wrap`, les lignes longues passent à la ligne.
+   */
+  compact?: { wrap: boolean };
 }
 
 /** Occurrence de la recherche : bloc, ligne dans le bloc, position dans le contenu. */
@@ -33,6 +38,19 @@ interface Match {
   hunk: number;
   line: number;
   start: number;
+}
+
+/** Première et dernière ligne d'un bloc, dans la nouvelle version (l'ancienne pour un bloc de suppressions). */
+export function hunkRange(hunk: DiffHunk): { from: number; to: number } | null {
+  const numbers = hunk.lines.map((l) => l.new_lineno).filter((n): n is number => n != null);
+  const source = numbers.length ? numbers : hunk.lines.map((l) => l.old_lineno).filter((n): n is number => n != null);
+  return source.length ? { from: Math.min(...source), to: Math.max(...source) } : null;
+}
+
+function hunkLabel(hunk: DiffHunk): string {
+  const range = hunkRange(hunk);
+  if (!range) return hunk.header;
+  return range.from === range.to ? tr("Ligne {from}", range) : tr("Lignes {from}–{to}", range);
 }
 
 /** Occurrences de `query` dans le contenu des lignes, sans tenir compte de la casse. */
@@ -53,7 +71,10 @@ interface Selection {
   anchor: number;
 }
 
-export function DiffViewer({ diff, loading, staging, annotations, searchable }: Props) {
+export function DiffViewer({ diff, loading, staging, annotations, searchable, compact }: Props) {
+  // Valeurs simples pour les lignes mémoïsées : un objet recréé à chaque rendu les re-rendrait toutes.
+  const isCompact = !!compact;
+  const wrap = !!compact?.wrap;
   const [selection, setSelection] = useState<Selection | null>(null);
   const [applying, setApplying] = useState(false);
   const [query, setQuery] = useState("");
@@ -78,6 +99,12 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable }: 
   const activeKey = active >= 0 ? `${matches[active].hunk}:${matches[active].line}` : null;
 
   useEffect(() => setSelection(null), [diff]);
+  // Mobile : la barre s'ouvre depuis une icône, prête à la saisie, et se vide en se fermant.
+  useEffect(() => {
+    if (!isCompact) return;
+    if (searchable) searchRef.current?.focus();
+    else setQuery("");
+  }, [isCompact, searchable]);
   // Nouveau fichier ou nouvelle recherche : on repart de la première occurrence.
   useEffect(() => setCurrent(0), [diff, deferredQuery]);
   useEffect(() => {
@@ -192,12 +219,12 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable }: 
         tabIndex={0}
         role="region"
         aria-label={tr("Différences de {path}", { path: diff.path })}
-        className="flex-1 overflow-auto font-mono text-[11px] leading-5 select-text outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60"
+        className={`flex-1 overflow-auto font-mono ${compact ? "text-xs" : "text-[11px]"} leading-5 select-text outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/60`}
       >
         {diff.hunks.map((hunk, i) => (
           <div key={i}>
             <div className="flex items-center gap-2 px-2 py-0.5 bg-[var(--color-bg-info)] text-[var(--color-info)] border-y border-overlay/5 sticky top-0 z-10">
-              <span className="truncate flex-1">{hunk.header}</span>
+              <span className="truncate flex-1">{compact ? hunkLabel(hunk) : hunk.header}</span>
               {staging && (
                 <div className="flex gap-1 font-sans shrink-0">
                   {staging.side === "unstaged" ? (
@@ -212,7 +239,7 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable }: 
               )}
             </div>
             <table className="w-full border-collapse">
-              <DiffHeader annotations={!!annotations} />
+              <DiffHeader annotations={!!annotations} compact={!!compact} />
               <tbody>
                 {hunk.lines.map((line, j) => {
                   const highlights = byLine.get(`${i}:${j}`);
@@ -233,6 +260,8 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable }: 
                       // Seules les lignes concernées reçoivent des valeurs qui changent : les autres ne sont pas re-rendues.
                       current={activeKey === `${i}:${j}` ? active : -1}
                       queryLength={highlights ? deferredQuery.length : 0}
+                      compact={isCompact}
+                      wrap={wrap}
                     />
                   );
                 })}
@@ -342,8 +371,10 @@ function HunkBtn({ onClick, disabled, danger, children }: {
 }
 
 /** En-têtes des colonnes, annoncés par les lecteurs d'écran (RGAA 5.6) ; ligne sans hauteur à l'écran. */
-function DiffHeader({ annotations }: { annotations: boolean }) {
-  const columns = [tr("Sélection"), ...(annotations ? [tr("Commentaire")] : []), tr("Ancienne ligne"), tr("Nouvelle ligne"), tr("Contenu")];
+function DiffHeader({ annotations, compact }: { annotations: boolean; compact: boolean }) {
+  const columns = compact
+    ? [tr("Ligne"), tr("Contenu")]
+    : [tr("Sélection"), ...(annotations ? [tr("Commentaire")] : []), tr("Ancienne ligne"), tr("Nouvelle ligne"), tr("Contenu")];
   return (
     <thead>
       <tr className="h-0">
@@ -357,7 +388,7 @@ function DiffHeader({ annotations }: { annotations: boolean }) {
   );
 }
 
-const DiffLineRow = memo(function DiffLineRow({ line, hunk, index, selectable, selected, onToggle, annotated, below, onComment, highlights, current, queryLength }: {
+const DiffLineRow = memo(function DiffLineRow({ line, hunk, index, selectable, selected, onToggle, annotated, below, onComment, highlights, current, queryLength, compact, wrap }: {
   line: DiffLine;
   hunk: number;
   index: number;
@@ -373,8 +404,46 @@ const DiffLineRow = memo(function DiffLineRow({ line, hunk, index, selectable, s
   /** Fils, brouillons ou formulaire sous la ligne. */
   below: React.ReactNode;
   onComment?: (line: DiffLine) => void;
+  /** Affichage pour téléphone (voir `Props.compact`). */
+  compact?: boolean;
+  wrap?: boolean;
 }) {
   const { bg, text, prefix } = lineStyle(line.kind);
+
+  if (compact) {
+    const number = line.kind === "removed" ? line.old_lineno : line.new_lineno;
+    return (
+      <>
+        <tr className={bg}>
+          <td className="w-9 align-top text-right pr-1.5 select-none text-[var(--color-muted)] border-r border-overlay/5">
+            {/* Pas de survol au doigt : toucher le numéro ouvre le commentaire. */}
+            {onComment ? (
+              <button
+                type="button"
+                className="w-full text-right active:bg-[var(--color-accent)]/30 rounded-sm"
+                aria-label={tr("Commenter la ligne {lineLabel}", { lineLabel: lineLabel(line) })}
+                onClick={() => onComment(line)}
+              >
+                {number ?? ""}
+              </button>
+            ) : (number ?? "")}
+          </td>
+          <td className={`pl-1.5 pr-2 ${wrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"} ${text}`}>
+            <span className="select-none mr-1 opacity-70" aria-hidden>{prefix}</span>
+            {line.kind !== "context" && <span className="sr-only">{line.kind === "added" ? tr("Ajoutée : ") : tr("Supprimée : ")}</span>}
+            <Highlighted content={line.content} highlights={highlights} current={current} length={queryLength} />
+          </td>
+        </tr>
+        {below && (
+          <tr>
+            <td colSpan={2} className="px-2 py-1.5 bg-shade/30 border-y border-overlay/5 font-sans text-xs whitespace-normal">
+              {below}
+            </td>
+          </tr>
+        )}
+      </>
+    );
+  }
 
   return (
     <>
@@ -403,7 +472,7 @@ const DiffLineRow = memo(function DiffLineRow({ line, hunk, index, selectable, s
           <td className="w-5 select-none">
             {onComment && (
               <button
-                className="w-4 h-4 leading-none rounded bg-[var(--color-accent-solid)] text-white font-sans font-bold opacity-0 group-hover:opacity-100 focus:opacity-100"
+                className="w-4 h-4 leading-none rounded bg-[var(--color-accent-solid)] text-white font-sans font-bold opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-50"
                 title={tr("Commenter cette ligne")}
                 aria-label={tr("Commenter la ligne {lineLabel}", { lineLabel: lineLabel(line) })}
                 onClick={(e) => {

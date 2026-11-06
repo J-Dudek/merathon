@@ -19,13 +19,46 @@ const LEGACY_KEYRING_SERVICE: &str = "git-client";
 /// est copiée sous le nouveau ; l'ancienne est conservée, pour qu'une version antérieure de
 /// l'application (retour en arrière, installation en parallèle) retrouve encore le compte.
 fn keyring_secret(id: &str) -> Option<String> {
-    if let Ok(secret) = keyring::Entry::new(KEYRING_SERVICE, id).and_then(|e| e.get_password()) {
+    if let Some(secret) = keyring_get(KEYRING_SERVICE, id) {
         return Some(secret);
     }
-    let secret = keyring::Entry::new(LEGACY_KEYRING_SERVICE, id).and_then(|e| e.get_password()).ok()?;
-    let _ = keyring::Entry::new(KEYRING_SERVICE, id).and_then(|e| e.set_password(&secret));
+    let secret = keyring_get(LEGACY_KEYRING_SERVICE, id)?;
+    let _ = keyring_set(KEYRING_SERVICE, id, &secret);
     Some(secret)
 }
+
+/// Accès au trousseau du système. Sur mobile (Android, iOS), la crate `keyring` n'a pas de coffre : elle se rabattrait
+/// sur un coffre factice en mémoire, qui accepterait le token puis le perdrait au redémarrage. Ces fonctions y sont
+/// donc sans effet, et les tokens passent par le fichier de secours (voir `store_token`).
+#[cfg(desktop)]
+fn keyring_get(service: &str, id: &str) -> Option<String> {
+    keyring::Entry::new(service, id).and_then(|e| e.get_password()).ok()
+}
+
+#[cfg(desktop)]
+fn keyring_set(service: &str, id: &str, secret: &str) -> bool {
+    keyring::Entry::new(service, id).and_then(|e| e.set_password(secret)).is_ok()
+}
+
+#[cfg(desktop)]
+fn keyring_delete(service: &str, id: &str) {
+    if let Ok(entry) = keyring::Entry::new(service, id) {
+        let _ = entry.delete_credential();
+    }
+}
+
+#[cfg(not(desktop))]
+fn keyring_get(_service: &str, _id: &str) -> Option<String> {
+    None
+}
+
+#[cfg(not(desktop))]
+fn keyring_set(_service: &str, _id: &str, _secret: &str) -> bool {
+    false
+}
+
+#[cfg(not(desktop))]
+fn keyring_delete(_service: &str, _id: &str) {}
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -182,9 +215,7 @@ impl AccountStore {
         let accounts: Vec<Account> = self.list()?.into_iter().filter(|a| a.id != id).collect();
         self.write_accounts(&accounts)?;
         for service in [KEYRING_SERVICE, LEGACY_KEYRING_SERVICE] {
-            if let Ok(entry) = keyring::Entry::new(service, id) {
-                let _ = entry.delete_credential();
-            }
+            keyring_delete(service, id);
         }
         let mut file_tokens = self.read_file_tokens();
         if file_tokens.remove(id).is_some() {
@@ -239,9 +270,7 @@ impl AccountStore {
 
     /// Stocke le secret ; renvoie vrai s'il est dans le trousseau, faux s'il a fallu le fichier.
     fn store_token(&self, id: &str, token: &str) -> Result<bool, String> {
-        let keyring_ok = keyring::Entry::new(KEYRING_SERVICE, id)
-            .and_then(|e| e.set_password(token))
-            .is_ok();
+        let keyring_ok = keyring_set(KEYRING_SERVICE, id, token);
         let mut tokens = self.read_file_tokens();
         if keyring_ok {
             // Ne laisse pas d'ancienne copie en clair dans le fichier de secours.

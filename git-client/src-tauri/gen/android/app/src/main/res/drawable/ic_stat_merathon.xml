@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Petite icône des notifications (barre d'état) : silhouette d'une pull request, blanche, teintée par Android. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M6,3a3,3 0,1 0,0 6a3,3 0,1 0,0 -6zM18,15a3,3 0,1 0,0 6a3,3 0,1 0,0 -6zM13,6h3a2,2 0,0 1,2 2v7M6,9v12" />
+</vector>

@@ -3,6 +3,7 @@ import type { ForgeIssue } from "../types/forge";
 import { CLOSING_KEYWORD, insertIssueRef, issueQueryAt, matchIssues, uniqueIssues, type IssueQuery } from "../lib/issueRefs";
 import { caretPosition } from "../lib/caret";
 import { useEmojiAssist } from "./EmojiAssist";
+import { isMobile } from "../lib/platform";
 import { tr } from "../i18n";
 
 const MAX_SUGGESTIONS = 8;
@@ -163,17 +164,38 @@ export function IssueRefTextarea({ value, onChange, issues, search, label, class
               <span className="font-mono text-[var(--color-muted)] shrink-0">#{issue.number}</span>
               <span className="truncate">{issue.title}</span>
               {issue.state === "closed" && <span className="ml-auto shrink-0 text-[10px] text-[var(--color-muted)]">{tr("fermée")}</span>}
+              {/* Écran tactile : pas de Maj+Entrée ni de Maj+clic, un bouton insère la fermeture. */}
+              {isMobile() && (
+                <button
+                  type="button"
+                  data-touch-target
+                  className={`${issue.state === "closed" ? "" : "ml-auto "}shrink-0 px-1.5 py-0.5 rounded border border-overlay/20 text-[10px] text-[var(--color-muted)]`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    pick(issue, true);
+                  }}
+                  aria-label={tr("Ajoute « {CLOSING_KEYWORD} #{number} » : l'issue sera fermée au merge", { CLOSING_KEYWORD, number: issue.number })}
+                >
+                  {CLOSING_KEYWORD}
+                </button>
+              )}
             </li>
           ))}
         </ul>
         {open && (
           <p className="px-2 py-1 border-t border-overlay/10 text-[10px] text-[var(--color-muted)]" aria-live="polite">
-            {suggestions.length
-              ? tr("Entrée : #{number} · Maj+Entrée : {CLOSING_KEYWORD} #{number} (fermée au merge)", { number: suggestions[current].number, CLOSING_KEYWORD })
-              : tr("Recherche sur la forge…")}
+            {suggestions.length ? pickHint(suggestions[current].number) : tr("Recherche sur la forge…")}
           </p>
         )}
       </div>
     </div>
   );
+}
+
+/** Aide sous la liste : le clavier physique n'existe pas sur un écran tactile. */
+function pickHint(number: number): string {
+  return isMobile()
+    ? tr("Toucher : #{number} · « {CLOSING_KEYWORD} » : fermée au merge", { number, CLOSING_KEYWORD })
+    : tr("Entrée : #{number} · Maj+Entrée : {CLOSING_KEYWORD} #{number} (fermée au merge)", { number, CLOSING_KEYWORD });
 }

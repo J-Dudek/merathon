@@ -16,6 +16,15 @@ export function sshKeysPage(account: Pick<ForgeAccount, "provider" | "base_url">
   return account.provider === "github" ? `${base}/settings/ssh/new` : `${base}/-/user_settings/ssh_keys`;
 }
 
+/** Préfixe posé par le backend (`HOST_PROBLEM_MARKER`) quand le test de connexion échoue à cause de l'hôte. */
+const HOST_PROBLEM_MARKER = "ssh-host-problem: ";
+
+/** Problème d'hôte (inconnu, clé modifiée) signalé par le test de connexion, sans le préfixe ; null sinon. */
+export function hostProblem(message: string): string | null {
+  const at = message.indexOf(HOST_PROBLEM_MARKER);
+  return at < 0 ? null : message.slice(at + HOST_PROBLEM_MARKER.length);
+}
+
 /** Une passphrase vide est acceptée ; une passphrase saisie doit être confirmée à l'identique. */
 export function passphraseProblem(passphrase: string, confirmation: string): string | null {
   return passphrase === confirmation ? null : tr("Les deux passphrases sont différentes");
@@ -23,6 +32,11 @@ export function passphraseProblem(passphrase: string, confirmation: string): str
 
 /** Explication d'un test de connexion refusé. */
 export function connectionHint(encrypted: boolean | null, message: string): string {
+  // Clé de l'appareil (Android) : refus de la forge, ou confirmation annulée.
+  if (/refuse la clé de cet appareil|refuses this device's key/i.test(message)) {
+    return tr("La forge ne reconnaît pas encore cette clé : vérifie qu'elle est bien enregistrée sur le compte.");
+  }
+  if (/^Confirmation (annulée|cancelled)/.test(message)) return tr("Confirmation annulée : vérifie à nouveau pour la redemander.");
   if (/permission denied/i.test(message) && encrypted !== false) {
     return tr("Si la clé a une passphrase, ajoute-la d'abord à ton agent SSH (ssh-add), puis vérifie à nouveau.");
   }

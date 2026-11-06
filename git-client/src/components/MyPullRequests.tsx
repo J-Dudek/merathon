@@ -9,7 +9,7 @@ import { useDisplayStore } from "../store/useDisplayStore";
 import { MY_PR_STATUSES, groupByProject, myPrStatus, sortByStatus } from "../lib/prStatus";
 import { ContextMenu, useContextMenu } from "./ContextMenu";
 import { PRRow, checkoutPullRequest, markPullRequestRead, useLinkedForge } from "./PullRequestList";
-import { PullRequestReviewDialog } from "./PullRequestReviewDialog";
+import { PullRequestReviewDialog } from "./lazy";
 import { PanelSection as Section } from "./PanelSection";
 import type { ForgeAccount, MyPullRequests, PrSummary } from "../types/forge";
 import { tr } from "../i18n";

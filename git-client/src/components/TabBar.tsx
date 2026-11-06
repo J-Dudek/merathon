@@ -49,6 +49,7 @@ export function TabBar() {
                   e.stopPropagation();
                   closeTab(tab.id);
                 }}
+                data-touch-target
                 aria-label={tr("Fermer l'onglet {name}", { name })}
                 title={tr("Fermer l'onglet (Ctrl+W)")}
               >

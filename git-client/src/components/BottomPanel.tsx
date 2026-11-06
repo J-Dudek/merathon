@@ -8,8 +8,12 @@ import { useDebugLogStore, type DebugLevel } from "../store/useDebugLogStore";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { errorMessage } from "../lib/actions";
 import { logLine } from "../lib/debugLog";
-import { attachTerminal, LEAVE_TERMINAL_HINT, restartTerminal } from "../lib/terminals";
+import { LEAVE_TERMINAL_HINT } from "../lib/terminalHint";
+
+/** xterm.js n'est chargé qu'à l'ouverture du terminal (jamais sur mobile, où il n'existe pas). */
+const loadTerminals = () => import("../lib/terminals");
 import { resizeKeyDelta } from "../lib/resizeKeys";
+import { hasDesktopFeatures } from "../lib/platform";
 import { tr, trn, locale, COLON } from "../i18n";
 
 const HEADER_HEIGHT = 28;
@@ -28,7 +32,10 @@ export function BottomPanel() {
   const debugMode = useDisplayStore((s) => s.debugMode);
   const clearLogs = useDebugLogStore((s) => s.clear);
   // Onglet mémorisé alors que le mode débug était actif : il n'existe plus une fois désactivé.
-  const tab = panel.tab === "logs" && !debugMode ? "terminal" : panel.tab;
+  const wantedTab = panel.tab === "logs" && !debugMode ? "terminal" : panel.tab;
+  // Pas de terminal sur mobile : on retombe sur le journal, même si la préférence enregistrée était « terminal ».
+  const terminalAvailable = hasDesktopFeatures();
+  const tab: BottomPanelState["tab"] = wantedTab === "terminal" && !terminalAvailable ? "journal" : wantedTab;
 
   const journalVisible = panel.open && tab === "journal";
   const logsVisible = panel.open && tab === "logs";
@@ -64,7 +71,8 @@ export function BottomPanel() {
     window.addEventListener("pointerup", up);
   }
 
-  if (!repoPath) return null;
+  // Mobile : pas de panneau du bas (ni terminal, ni journal) ; les erreurs s'affichent en notification.
+  if (!repoPath || !terminalAvailable) return null;
 
   return (
     <div
@@ -92,14 +100,16 @@ export function BottomPanel() {
             title={tr("Redimensionner (flèches haut / bas au clavier)")}
           />
         )}
-        <PanelTab
-          name="terminal"
-          active={panel.open && tab === "terminal"}
-          onClick={() => select("terminal")}
-          title={`Terminal (${LEAVE_TERMINAL_HINT})`}
-        >
-          Terminal
-        </PanelTab>
+        {terminalAvailable && (
+          <PanelTab
+            name="terminal"
+            active={panel.open && tab === "terminal"}
+            onClick={() => select("terminal")}
+            title={`Terminal (${LEAVE_TERMINAL_HINT})`}
+          >
+            Terminal
+          </PanelTab>
+        )}
         <PanelTab name="journal" active={journalVisible} onClick={() => select("journal")}>
           {tr("Journal")}
           {newErrors > 0 && (
@@ -123,7 +133,7 @@ export function BottomPanel() {
             </>
           )}
           {panel.open && tab === "terminal" && (
-            <HeaderBtn onClick={() => restartTerminal(tabId)} title={tr("Relancer le shell")}><RotateCw size={13} className="mx-auto" /></HeaderBtn>
+            <HeaderBtn onClick={() => void loadTerminals().then((t) => t.restartTerminal(tabId))} title={tr("Relancer le shell")}><RotateCw size={13} className="mx-auto" /></HeaderBtn>
           )}
           {journalVisible && (
             <>
@@ -159,13 +169,22 @@ function TerminalView({ tabId, path }: { tabId: number; path: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   useLayoutEffect(() => {
-    if (!ref.current) return;
-    try {
-      return attachTerminal(tabId, path, ref.current);
-    } catch (e) {
-      console.error("Terminal :", e);
-      setError(errorMessage(e));
-    }
+    const container = ref.current;
+    if (!container) return;
+    let detach: (() => void) | undefined;
+    let cancelled = false;
+    loadTerminals()
+      .then((t) => {
+        if (!cancelled) detach = t.attachTerminal(tabId, path, container);
+      })
+      .catch((e) => {
+        console.error("Terminal :", e);
+        setError(errorMessage(e));
+      });
+    return () => {
+      cancelled = true;
+      detach?.();
+    };
   }, [tabId, path]);
   if (error) return <p className="p-3 text-xs text-red-400 font-mono whitespace-pre-wrap">{tr("Terminal indisponible : {error}", { error })}</p>;
   return <div ref={ref} className="h-full w-full pl-2 pt-1" />;

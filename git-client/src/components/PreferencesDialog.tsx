@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import {
-  Accessibility, Bell, BookOpen, Bug, Check, Copy, ExternalLink, FolderCog, FolderGit2, Info, Keyboard, Languages, Monitor, Moon, Palette, RefreshCw, RotateCcw, Scale, ScrollText,
+  Accessibility, Bell, BookOpen, Bug, Check, Copy, ExternalLink, FolderCog, FolderGit2, Info, KeyRound, Keyboard, Languages, Monitor, Moon, Palette, RefreshCw, RotateCcw, Scale, ScrollText,
   SquareTerminal, Sun, Trophy, type LucideIcon,
 } from "lucide-react";
 import { getTauriVersion, getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Modal } from "./Modal";
+import { Modal, inputClass } from "./Modal";
 import { GitProfilesSection } from "./GitProfilesSection";
+import { DeviceSshSection } from "./DeviceSshSection";
 import { Kbd } from "./Kbd";
 import { Tooltip } from "./Tooltip";
 import {
-  ROW_HEIGHTS, SYNC_INTERVALS, TERMINAL_FONT_MAX, TERMINAL_FONT_MIN, ZOOM_STEPS, defaultDisplay, useDisplayStore, type Density,
+  BACKGROUND_INTERVALS, ROW_HEIGHTS, SYNC_INTERVALS, TERMINAL_FONT_MAX, TERMINAL_FONT_MIN, ZOOM_STEPS, defaultDisplay, useDisplayStore, type Density,
   type NotificationSettings, type ThemePreference,
 } from "../store/useDisplayStore";
 import { useUiStore, type PreferencesSection as Section } from "../store/useUiStore";
@@ -19,8 +20,9 @@ import {
   MILESTONE_KINDS, kindEmojis, milestoneTier, nextMilestone, rewardLabel, type MilestoneKind, type Reward, type Tier,
 } from "../lib/milestones";
 import { syncOpenRepos, useSyncRunning } from "../lib/autoSync";
-import { sendTestNotification } from "../lib/prNotifications";
+import { notificationsAllowed, sendTestNotification } from "../lib/prNotifications";
 import { checkForUpdates } from "../lib/updater";
+import { hasDesktopFeatures, isAndroid, isMobile } from "../lib/platform";
 import { errorMessage } from "../lib/actions";
 import { aboutReport, osLabel, REPO_URL, releaseUrl, versionLabel } from "../lib/about";
 import {
@@ -36,6 +38,7 @@ const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
   { id: "sync", label: tr("Synchronisation"), icon: RefreshCw },
   { id: "profiles", label: tr("Profils Git"), icon: FolderCog },
+  { id: "ssh", label: "SSH", icon: KeyRound },
   { id: "shortcuts", label: tr("Raccourcis"), icon: Keyboard },
   { id: "activity", label: tr("Mon activité"), icon: Trophy },
   { id: "accessibility", label: tr("Accessibilité"), icon: Accessibility },
@@ -43,7 +46,7 @@ const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
 ];
 
 /** Rubriques sans réglage : pas de bouton « Réinitialiser ». */
-const READ_ONLY: Section[] = ["profiles", "shortcuts", "activity", "accessibility", "about"];
+const READ_ONLY: Section[] = ["profiles", "ssh", "shortcuts", "activity", "accessibility", "about"];
 
 /** Préférences de l'application : appliquées immédiatement et partagées entre les fenêtres. */
 export function PreferencesDialog({ onClose }: { onClose: () => void }) {
@@ -52,7 +55,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
   // « Mon activité » n'apparaît qu'après la première récompense : avant, elle gâcherait la surprise.
   const hasRewards = useCelebrationStore((s) => s.milestones.rewards.length > 0);
   const newRewards = useCelebrationStore((s) => hasNewRewards(s.milestones));
-  const sections = SECTIONS.filter((s) => s.id !== "activity" || hasRewards);
+  const sections = SECTIONS.filter((s) => (s.id !== "activity" || hasRewards) && (s.id !== "terminal" || hasDesktopFeatures()) && (s.id !== "shortcuts" || !isMobile()) && (s.id !== "ssh" || isMobile()));
 
   return (
     <Modal title={tr("Préférences")} onClose={onClose} width="w-[720px]">
@@ -79,9 +82,11 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
               )}
             </button>
           ))}
-          <p className="mt-auto px-2.5 pb-1 text-[10px] leading-relaxed text-[var(--color-muted)]">
-            {tr("Les modifications sont appliquées immédiatement à toutes les fenêtres.")}
-          </p>
+          {!isMobile() && (
+            <p className="mt-auto px-2.5 pb-1 text-[10px] leading-relaxed text-[var(--color-muted)]">
+              {tr("Les modifications sont appliquées immédiatement à toutes les fenêtres.")}
+            </p>
+          )}
         </nav>
 
         <div className="flex-1 min-w-0 flex flex-col">
@@ -96,6 +101,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
             {section === "terminal" && <TerminalSection />}
             {section === "sync" && <SyncSection />}
             {section === "profiles" && <GitProfilesSection />}
+            {section === "ssh" && <DeviceSshSection />}
             {section === "shortcuts" && <ShortcutsSection />}
             {section === "activity" && <ActivitySection />}
             {section === "accessibility" && <AccessibilitySection />}
@@ -185,27 +191,30 @@ function AppearanceSection() {
         </div>
       </Group>
 
-      <Group
-        title={tr("Taille de l'interface")}
-        description={tr("Agrandit ou réduit tout : textes, panneaux, graphe et terminal.")}
-        value={percent(Math.round(zoom * 100))}
-      >
-        <Slider
-          label={tr("Taille de l'interface")}
-          valueText={percent(Math.round(zoom * 100))}
-          min={0}
-          max={ZOOM_STEPS.length - 1}
-          value={index}
-          onChange={(i) => update({ zoom: ZOOM_STEPS[i] })}
-          ticks={ZOOM_STEPS.map((z) => `${Math.round(z * 100)}`)}
-          defaultIndex={ZOOM_STEPS.indexOf(defaultDisplay.zoom)}
-        />
-        <p className="mt-3 flex items-center gap-1.5 text-[10px] text-[var(--color-muted)]">
-          <Kbd keys="Ctrl+=" />{" "}{tr("agrandir")}{" "}<span className="mx-1">·</span>
-          <Kbd keys="Ctrl+-" />{" "}{tr("réduire")}{" "}<span className="mx-1">·</span>
-          <Kbd keys="Ctrl+0" /> {percent(100)}
-        </p>
-      </Group>
+      {/* Mobile : la taille suit le réglage du système. */}
+      {!isMobile() && (
+        <Group
+          title={tr("Taille de l'interface")}
+          description={tr("Agrandit ou réduit tout : textes, panneaux, graphe et terminal.")}
+          value={percent(Math.round(zoom * 100))}
+        >
+          <Slider
+            label={tr("Taille de l'interface")}
+            valueText={percent(Math.round(zoom * 100))}
+            min={0}
+            max={ZOOM_STEPS.length - 1}
+            value={index}
+            onChange={(i) => update({ zoom: ZOOM_STEPS[i] })}
+            ticks={ZOOM_STEPS.map((z) => `${Math.round(z * 100)}`)}
+            defaultIndex={ZOOM_STEPS.indexOf(defaultDisplay.zoom)}
+          />
+          <p className="mt-3 flex items-center gap-1.5 text-[10px] text-[var(--color-muted)]">
+            <Kbd keys="Ctrl+=" />{" "}{tr("agrandir")}{" "}<span className="mx-1">·</span>
+            <Kbd keys="Ctrl+-" />{" "}{tr("réduire")}{" "}<span className="mx-1">·</span>
+            <Kbd keys="Ctrl+0" /> {percent(100)}
+          </p>
+        </Group>
+      )}
 
       <Group title={tr("Densité du graphe")} description={tr("Hauteur des lignes de l'historique des commits.")}>
         <div className="grid grid-cols-3 gap-2.5">
@@ -308,13 +317,17 @@ function SyncSection() {
   const update = useDisplayStore((s) => s.update);
   const syncing = useSyncRunning();
   const index = Math.max(0, SYNC_INTERVALS.indexOf(interval));
+  // Android : cet intervalle ne vaut que pendant l'utilisation ; l'application fermée a son propre réglage, juste après.
+  const android = isAndroid();
 
   return (
     <>
       <SectionTitle title={tr("Synchronisation")} subtitle={tr("Surveillance des dépôts ouverts dans les onglets.")} />
       <Group
-        title={tr("Intervalle")}
-        description={tr("Fetch de chaque dépôt ouvert et actualisation de ses PR / MR ; une notification résume les changements.")}
+        title={android ? tr("Pendant l'utilisation") : tr("Intervalle")}
+        description={android
+          ? tr("Fetch des dépôts ouverts et actualisation des PR / MR tant que Merathon est à l'écran.")
+          : tr("Fetch de chaque dépôt ouvert et actualisation de ses PR / MR ; une notification résume les changements.")}
         value={syncLabel(interval)}
       >
         <Slider
@@ -336,12 +349,13 @@ function SyncSection() {
         <RefreshCw size={13} strokeWidth={1.75} className={syncing ? "animate-spin" : ""} />
         {syncing ? tr("Synchronisation…") : tr("Synchroniser maintenant")}
       </button>
+      {android && <BackgroundCheck />}
       <NotificationsGroup />
     </>
   );
 }
 
-const NOTIFICATION_KINDS: { key: Exclude<keyof NotificationSettings, "enabled">; label: string }[] = [
+const NOTIFICATION_KINDS: { key: Exclude<keyof NotificationSettings, "enabled" | "background">; label: string }[] = [
   { key: "opened", label: tr("Nouvelle PR / MR à traiter (assignée ou relecture demandée)") },
   { key: "commits", label: tr("Nouveaux commits (hors mes propres PR / MR)") },
   { key: "comments", label: tr("Nouveaux commentaires") },
@@ -349,6 +363,57 @@ const NOTIFICATION_KINDS: { key: Exclude<keyof NotificationSettings, "enabled">;
   { key: "review", label: tr("Approbation ou modifications demandées") },
   { key: "badge", label: tr("Pastille sur l'icône : nombre de PR / MR avec du nouveau, non consultées") },
 ];
+
+/** « Toutes les 30 min », « Toutes les 3 h ». */
+function everyLabel(minutes: number): string {
+  return minutes < 60 ? tr("Toutes les {minutes} min", { minutes }) : tr("Toutes les {hours} h", { hours: minutes / 60 });
+}
+
+/** Android : vérification quand l'application est fermée, désactivée par défaut (consommation de batterie). */
+function BackgroundCheck() {
+  const settings = useDisplayStore((s) => s.notifications);
+  const interval = useDisplayStore((s) => s.backgroundInterval);
+  const update = useDisplayStore((s) => s.update);
+  const notify = useUiStore((s) => s.notify);
+  const disabled = !settings.enabled;
+
+  async function toggle(on: boolean) {
+    update({ notifications: { ...settings, background: on } });
+    if (on && !(await notificationsAllowed())) {
+      notify("error", tr("Les notifications système ne sont pas autorisées pour Merathon : la vérification n'affichera rien."));
+    }
+  }
+
+  return (
+    <section className="mt-6">
+      <Group
+        title={tr("Quand Merathon est fermé")}
+        description={disabled ? tr("Nécessite les notifications, activées plus bas.") : tr("Sans fetch des dépôts : seulement les API de GitHub / GitLab.")}
+      >
+        <div className={disabled ? "opacity-50" : ""}>
+          <label className="flex items-center gap-2 font-medium">
+            <input type="checkbox" className="h-4 w-4" checked={settings.background} disabled={disabled} onChange={(e) => void toggle(e.target.checked)} />
+            {tr("Vérifier l'activité de mes PR / MR")}
+          </label>
+          <p className="mt-1 pl-6 text-xs text-[var(--color-muted)]">
+            {tr("Android vérifie vos PR / MR à l'intervalle choisi, seulement avec du réseau, en regroupant ses réveils avec ceux des autres applications : quelques secondes de réseau à chaque fois. Les notifications font apparaître une pastille sur l'icône.")}
+          </p>
+          <label className="mt-2 pl-6 flex items-center gap-2">
+            {tr("Fréquence")}
+            <select
+              className={`${inputClass} w-auto!`}
+              value={interval}
+              disabled={disabled || !settings.background}
+              onChange={(e) => update({ backgroundInterval: Number(e.target.value) })}
+            >
+              {BACKGROUND_INTERVALS.map((m) => <option key={m} value={m}>{everyLabel(m)}</option>)}
+            </select>
+          </label>
+        </div>
+      </Group>
+    </section>
+  );
+}
 
 function NotificationsGroup() {
   const settings = useDisplayStore((s) => s.notifications);
@@ -375,7 +440,8 @@ function NotificationsGroup() {
           {tr("Activer les notifications")}
         </label>
         <div role="group" aria-label={tr("Notifier pour")} className={`flex flex-col gap-2.5 pl-6 ${settings.enabled ? "" : "opacity-50"}`}>
-          {NOTIFICATION_KINDS.map(({ key, label }) => (
+          {/* Android : la pastille de l'icône vient des notifications elles-mêmes, pas de ce réglage. */}
+          {NOTIFICATION_KINDS.filter(({ key }) => !(key === "badge" && isAndroid())).map(({ key, label }) => (
             <label key={key} className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -529,7 +595,7 @@ function AboutSection() {
           <h3 className="text-base font-semibold">
             Merathon {version && <span className="ml-1 font-mono text-xs font-normal text-[var(--color-muted)]">v{version}</span>}
           </h3>
-          <p className="mt-0.5 text-[var(--color-muted)]">{tr("Git Repository Manager — client Git graphique de bureau.")}</p>
+          <p className="mt-0.5 text-[var(--color-muted)]">{isMobile() ? tr("Git Repository Manager — client Git graphique.") : tr("Git Repository Manager — client Git graphique de bureau.")}</p>
         </div>
       </div>
 
@@ -543,14 +609,17 @@ function AboutSection() {
           ))}
         </div>
         <div className="mt-2.5 flex gap-2">
-          <button
-            onClick={check}
-            disabled={checking}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/10 hover:bg-overlay/10 disabled:opacity-50"
-          >
-            <RefreshCw size={13} strokeWidth={1.75} className={checking ? "animate-spin" : ""} />
-            {checking ? tr("Vérification…") : tr("Rechercher des mises à jour")}
-          </button>
+          {/* Android : l'APK est distribué hors store ; Merathon prévient d'une nouvelle version (updater.ts). */}
+          {(hasDesktopFeatures() || isAndroid()) && (
+            <button
+              onClick={check}
+              disabled={checking}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/10 hover:bg-overlay/10 disabled:opacity-50"
+            >
+              <RefreshCw size={13} strokeWidth={1.75} className={checking ? "animate-spin" : ""} />
+              {checking ? tr("Vérification…") : tr("Rechercher des mises à jour")}
+            </button>
+          )}
           <button
             onClick={copy}
             disabled={!version}

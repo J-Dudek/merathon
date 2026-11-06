@@ -214,7 +214,7 @@ pub fn fetch_username(provider: Provider, endpoints: &Endpoints, access_token: &
         .set("User-Agent", "Merathon")
         .timeout(Duration::from_secs(30))
         .call()
-        .map_err(|e| tr!("Impossible de lire le profil : {e}", "Could not read the profile: {e}"))?
+        .map_err(profile_error)?
         .into_json()
         .map_err(|e| e.to_string())?;
     let field = match provider {
@@ -225,6 +225,17 @@ pub fn fetch_username(provider: Provider, endpoints: &Endpoints, access_token: &
         .and_then(Value::as_str)
         .map(str::to_string)
         .ok_or_else(|| tr!("Profil utilisateur illisible", "Unreadable user profile"))
+}
+
+/// Un token refusé (401, 403) n'est pas une instance injoignable : le message ne doit pas les confondre.
+fn profile_error(e: ureq::Error) -> String {
+    match e {
+        ureq::Error::Status(code @ (401 | 403), _) => tr!(
+            "Token refusé par l'instance ({code}) : vérifie sa validité et ses droits (scopes)",
+            "Token refused by the instance ({code}): check its validity and permissions (scopes)"
+        ),
+        e => tr!("Impossible de joindre l'instance pour lire le profil : {e}", "Could not reach the instance to read the profile: {e}"),
+    }
 }
 
 /// Drapeaux d'annulation des connexions en cours, par device_code.
@@ -255,6 +266,28 @@ mod tests {
     use serde_json::json;
     use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
+
+    #[test]
+    fn a_refused_token_is_not_an_unreachable_instance() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap() > 2 {
+                line.clear();
+            }
+            stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n").unwrap();
+        });
+        let refused = fetch_username(Provider::Github, &endpoints(Provider::Github, &format!("http://127.0.0.1:{port}")), "t").unwrap_err();
+        assert!(refused.starts_with("Token refusé par l'instance (401)"), "{refused}");
+
+        // Port fermé : l'instance est injoignable, le token n'y est pour rien.
+        let closed = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let unreachable = fetch_username(Provider::Github, &endpoints(Provider::Github, &format!("http://127.0.0.1:{closed}")), "t").unwrap_err();
+        assert!(unreachable.starts_with("Impossible de joindre l'instance") && !unreachable.contains("Token"), "{unreachable}");
+    }
 
     #[test]
     fn endpoints_per_provider() {

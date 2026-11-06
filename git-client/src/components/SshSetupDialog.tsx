@@ -5,9 +5,10 @@ import { Modal, inputClass } from "./Modal";
 import { sshCheckConnection, sshCreateKey, sshExistingKey, sshHostStatus, sshSetupInfo, sshTrustHost } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
 import { hostOf } from "../lib/remoteUrl";
-import { connectionHint, defaultKeyTitle, isKeyAlreadyRegistered, passphraseProblem, sshKeysPage } from "../lib/sshSetup";
+import { connectionHint, defaultKeyTitle, hostProblem, isKeyAlreadyRegistered, passphraseProblem, sshKeysPage } from "../lib/sshSetup";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useUiStore } from "../store/useUiStore";
+import { isMobile } from "../lib/platform";
 import type { ForgeAccount } from "../types/forge";
 import type { SshCheck, SshKeyInfo, SshSetupInfo } from "../types/git";
 import { tr, quoted } from "../i18n";
@@ -74,9 +75,13 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
     };
   }, [fixedKey]);
 
+  // Android : clé de l'appareil (Android Keystore), sans fichier ni passphrase.
+  const device = isMobile();
   const creating = choice === NEW_KEY;
   const mismatch = creating ? passphraseProblem(passphrase, confirmation) : null;
   const chosenPath = creating ? info?.new_key_path : info?.keys.find((k) => k.name === choice)?.path;
+  let firstStep = tr("Utilisation de {chosenPath}, sans la modifier.", { chosenPath });
+  if (creating) firstStep = device ? tr("Création de la clé dans {chosenPath}.", { chosenPath }) : tr("Création de {chosenPath}. Aucun fichier existant n'est modifié.", { chosenPath });
   const mark = (id: StepId, state: StepState, detail?: string) => setSteps((s) => ({ ...s, [id]: { state, detail } }));
 
   async function start() {
@@ -170,7 +175,15 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
       setPause({ kind: "finished", check });
       if (check.authenticated) notify("success", tr("Clé SSH configurée pour {label}", { label: account.label }));
     } catch (e) {
-      mark("check", "failed", errorMessage(e));
+      const message = errorMessage(e);
+      const host = hostProblem(message);
+      if (host) {
+        // Hôte connu de known_hosts, mais sa clé a changé (ou il n'est pas validé) : c'est l'étape de l'empreinte qui échoue.
+        mark("host", "failed", host);
+        mark("check", "waiting");
+      } else {
+        mark("check", "failed", message);
+      }
       setPause({ kind: "stopped" });
     }
   }
@@ -185,7 +198,7 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
     <Modal title={tr("Configurer SSH · {label}", { label: account.label })} onClose={onClose} width="w-[560px]">
       <div className="px-4 py-3 space-y-3 text-xs text-[var(--color-text)] overflow-y-auto">
         {loadError && <p role="alert" className="text-red-400">{loadError}</p>}
-        {!info && !loadError && <p className="text-[var(--color-muted)]">{tr("Lecture de ~/.ssh…")}</p>}
+        {!info && !loadError && <p className="text-[var(--color-muted)]">{device ? tr("Lecture de la clé de l'appareil…") : tr("Lecture de ~/.ssh…")}</p>}
         {info && !started && (
           <>
             <fieldset className="space-y-1.5">
@@ -203,17 +216,24 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
               {info.new_key_path && (
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input type="radio" name="ssh-key" className="mt-0.5" checked={creating} onChange={() => setChoice(NEW_KEY)} />
-                  <span>{tr("Créer")}{" "}<span className="font-mono">{info.new_key_path}</span> (ed25519)</span>
+                  <span>{tr("Créer")}{" "}<span className="font-mono">{info.new_key_path}</span>{device ? " (ECDSA P-256)" : " (ed25519)"}</span>
                 </label>
               )}
-              {!info.new_key_path && info.keys.length === 0 && (
+              {info.problem && <p role="alert" className="text-amber-300">{info.problem}</p>}
+              {!device && !info.problem && !info.new_key_path && info.keys.length === 0 && (
                 <p role="alert" className="text-amber-300">
                   {tr("Un fichier id_ed25519 existe sans partie .pub lisible. Merathon ne l'écrase pas : régénère le .pub avec ssh-keygen -y, puis reviens ici.")}
                 </p>
               )}
             </fieldset>
 
-            {creating && (
+            {creating && device && (
+              <p className="text-[11px] text-[var(--color-muted)]">
+                {tr("La clé est créée dans le coffre de l'appareil (Android Keystore) : elle ne peut pas en être copiée, et chaque connexion SSH demande ton empreinte ou le code de l'appareil (valable 30 s). Il faut un verrouillage d'écran.")}
+              </p>
+            )}
+
+            {creating && !device && (
               <div className="space-y-1.5">
                 <label className="block">
                   <span className="block font-semibold mb-1">{tr("Passphrase (facultative)")}</span>
@@ -240,7 +260,7 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
             <div>
               <p className="font-semibold mb-1">{tr("Ce qui va se passer")}</p>
               <ol className="list-decimal pl-4 space-y-0.5 text-[var(--color-muted)]">
-                <li>{creating ? tr("Création de {chosenPath}. Aucun fichier existant n'est modifié.", { chosenPath }) : tr("Utilisation de {chosenPath}, sans la modifier.", { chosenPath })}</li>
+                <li>{firstStep}</li>
                 <li>
                   {tr("Envoi de la clé publique au compte {username} sur {host}.", { username: account.username, host })}
                   {account.provider === "github" && tr(" Le token doit avoir le scope write:public_key ; sinon, tu pourras l'ajouter à la main.")}

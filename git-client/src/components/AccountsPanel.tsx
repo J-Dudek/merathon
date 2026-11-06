@@ -11,14 +11,20 @@ import { ContextMenu, useContextMenu } from "./ContextMenu";
 import { inputClass } from "./Modal";
 import { useLinkedForge } from "./PullRequestList";
 import { MyPullRequestsSection } from "./MyPullRequests";
-import { SshSetupDialog } from "./SshSetupDialog";
+import { SshSetupDialog } from "./lazy";
+import { isMobile } from "../lib/platform";
+import { useSshAvailable } from "../lib/sshAvailability";
 import { IdentityProblem } from "./IdentityProblem";
 import { PanelSection as Section } from "./PanelSection";
 import type { DeviceCode, ForgeAccount, ForgeIssue, Provider } from "../types/forge";
 import { fieldLabel } from "../lib/fieldLabel";
 import { tr } from "../i18n";
 
-type Kind = "github" | "gitlab" | "gitlab-self";
+type Kind = "github" | "github-self" | "gitlab" | "gitlab-self";
+
+const isGitHub = (kind: Kind) => kind === "github" || kind === "github-self";
+/** Instance auto-hébergée : son adresse est saisie. */
+const isSelfHosted = (kind: Kind) => kind === "github-self" || kind === "gitlab-self";
 
 export function AccountsPanel() {
   const accounts = useAccountsStore((s) => s.accounts);
@@ -133,11 +139,12 @@ function IdentitySection() {
 // ---------------------------------------------------------------- Comptes
 
 const tokenHelpLabel = (kind: Kind) =>
-  tr("Créer un token ({value})", { value: kind === "github" ? "scopes repo, read:user, workflow" : "scopes api, read_user, write_repository" });
+  tr("Créer un token ({value})", { value: isGitHub(kind) ? "scopes repo, read:user, workflow" : "scopes api, read_user, write_repository" });
 
 function tokenHelpUrl(kind: Kind, url: string): string {
-  if (kind === "github") {
-    return "https://github.com/settings/tokens/new?scopes=repo,read:user,workflow&description=Merathon";
+  if (isGitHub(kind)) {
+    const base = kind === "github" ? "https://github.com" : url;
+    return `${base}/settings/tokens/new?scopes=repo,read:user,workflow&description=Merathon`;
   }
   return `${url}/-/user_settings/personal_access_tokens?name=Merathon&scopes=api,read_user,write_repository`;
 }
@@ -163,11 +170,13 @@ function rememberClientId(host: string, clientId: string) {
 /** Page d'enregistrement d'une application OAuth sur la forge. */
 function oauthAppHelpUrl(kind: Kind, url: string): string {
   if (kind === "github") return "https://github.com/settings/applications/new";
+  if (kind === "github-self") return `${url}/settings/applications/new`;
   return `${url}/-/user_settings/applications`;
 }
 
 const KINDS = [
   ["github", "GitHub"],
+  ["github-self", "GitHub Enterprise"],
   ["gitlab", "GitLab.com"],
   ["gitlab-self", tr("GitLab privé")],
 ] as const;
@@ -209,9 +218,9 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [device, setDevice] = useState<DeviceCode | null>(null);
 
-  const provider: Provider = kind === "github" ? "github" : "gitlab";
+  const provider: Provider = isGitHub(kind) ? "github" : "gitlab";
   // Instance normalisée (null tant que la saisie est incomplète) : sert aux liens d'aide et à la connexion.
-  const url = kind === "gitlab-self" ? instanceUrl(baseUrl) : defaultBaseUrl(provider);
+  const url = isSelfHosted(kind) ? instanceUrl(baseUrl) : defaultBaseUrl(provider);
   const host = url ? hostOf(url) : null;
 
   useEffect(() => {
@@ -237,7 +246,7 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
   }, [kind, builtIn, defaults]);
 
   const credentialsFilled = mode === "pat" ? !!token.trim() : !!effectiveClientId?.trim();
-  const valid = (kind !== "gitlab-self" || !!host) && credentialsFilled;
+  const valid = (!isSelfHosted(kind) || !!host) && credentialsFilled;
 
   async function submitToken() {
     const account = await add({ provider, baseUrl: url!, token: token.trim(), label });
@@ -290,7 +299,7 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
         submit();
       }}
     >
-      <div className="grid grid-cols-3 gap-1">
+      <div className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-1">
         {KINDS.map(([k, l]) => (
           <button
             key={k}
@@ -304,6 +313,9 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
       </div>
       {kind === "gitlab-self" && (
         <input className={inputClass} placeholder={tr("https://gitlab.mon-entreprise.fr")} {...fieldLabel(tr("Adresse de l'instance GitLab"))} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+      )}
+      {kind === "github-self" && (
+        <input className={inputClass} placeholder={tr("https://github.mon-entreprise.fr")} {...fieldLabel(tr("Adresse de l'instance GitHub Enterprise"))} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
       )}
 
       <div className="grid grid-cols-2 gap-1">
@@ -331,7 +343,7 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
       )}
       {mode === "oauth" && !showClientId && (
         <p className="text-[10px] text-[var(--color-muted)]">
-          {tr("Un code s'affichera : saisis-le sur la page")}{" "}{kind === "github" ? "GitHub" : "GitLab"}{" "}{tr("qui s'ouvrira dans ton navigateur.")}
+          {tr("Un code s'affichera : saisis-le sur la page")}{" "}{isGitHub(kind) ? "GitHub" : "GitLab"}{" "}{tr("qui s'ouvrira dans ton navigateur.")}
           <button type="button" className="text-sky-400 hover:underline" onClick={() => setAdvanced(true)}>
             {tr("Paramètres avancés")}
           </button>
@@ -346,7 +358,7 @@ function AddAccountForm({ onDone }: { onDone: () => void }) {
         </SmallButton>
         <SmallButton onClick={onDone}>{tr("Annuler")}</SmallButton>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">{tr("Les identifiants sont stockés dans le trousseau du système.")}</p>
+      <p className="text-[10px] text-[var(--color-muted)]">{isMobile() ? tr("Les identifiants sont stockés dans le dossier privé de l'application.") : tr("Les identifiants sont stockés dans le trousseau du système.")}</p>
     </form>
   );
 }
@@ -423,7 +435,7 @@ function ClientIdFields({ kind, url, clientId, onClientId, onUseDefault }: {
         onChange={(e) => onClientId(e.target.value)}
       />
       <p className="text-[10px] text-[var(--color-muted)]">
-        {kind === "github"
+        {isGitHub(kind)
           ? tr("Application OAuth GitHub avec « Enable Device Flow » coché.")
           : tr("Application GitLab non confidentielle, scopes api, read_user, write_repository (GitLab 17.2+).")}{" "}
         <button
@@ -482,16 +494,20 @@ function AccountRow({ account }: { account: ForgeAccount }) {
   }
 
   async function handleRemove() {
-    if (!(await confirmAction(tr("Supprimer le compte {label} ?", { label: account.label }), tr("Le token sera retiré du trousseau."), true))) return;
+    if (!(await confirmAction(tr("Supprimer le compte {label} ?", { label: account.label }), isMobile() ? tr("Le token sera supprimé de cet appareil.") : tr("Le token sera retiré du trousseau."), true))) return;
     await remove(account.id).catch((e) => notify("error", errorMessage(e)));
   }
+
+  // Mobile : seulement avec le réglage « SSH (expérimental) » (clé de l'Android Keystore, issue #38).
+  const ssh = useSshAvailable();
+  const sshEntry = ssh ? [{ label: tr("Configurer SSH…"), action: () => setSshSetup(true) }] : [];
 
   return (
     <div
       className="flex items-center gap-2 px-3 py-1.5 hover:bg-overlay/5 group"
       onContextMenu={(e) => open(e, [
         ...(account.auth === "pat" ? [{ label: tr("Changer le token…"), action: changeToken }] : []),
-        { label: tr("Configurer SSH…"), action: () => setSshSetup(true) },
+        ...sshEntry,
         { label: tr("Renommer…"), action: rename },
         { label: tr("Ouvrir le profil"), action: () => openUrl(`${account.base_url}/${account.username}`) },
         "separator",
@@ -513,7 +529,7 @@ function AccountRow({ account }: { account: ForgeAccount }) {
         aria-haspopup="menu"
         onClick={(e) => open(e, [
           ...(account.auth === "pat" ? [{ label: tr("Changer le token…"), action: changeToken }] : []),
-          { label: tr("Configurer SSH…"), action: () => setSshSetup(true) },
+          ...sshEntry,
           { label: tr("Renommer…"), action: rename },
           "separator",
           { label: tr("Supprimer"), danger: true, action: handleRemove },
