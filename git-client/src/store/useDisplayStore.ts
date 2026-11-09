@@ -20,6 +20,8 @@ export interface DisplaySettings {
   languageChosen: boolean;
   /** Notifications de l'activité des PR / MR à traiter ou ouvertes par moi (relevée à chaque synchronisation). */
   notifications: NotificationSettings;
+  /** Android : pull (fast-forward seulement) des dépôts ouverts au lancement de l'application. */
+  pullOnLaunch: boolean;
   /** Android : minutes entre deux vérifications des PR / MR quand l'application est fermée (`notifications.background`). */
   backgroundInterval: number;
   /** Mode débug (À propos) : collecte les logs et affiche l'onglet « Logs » du panneau du bas. */
@@ -60,7 +62,7 @@ export const defaultNotifications: NotificationSettings = { enabled: true, opene
 
 export const defaultDisplay: DisplaySettings = {
   zoom: 1, terminalFontSize: 12, density: isMobile() ? "comfortable" : "normal", syncInterval: 5, theme: "system", language: "fr", languageChosen: false, notifications: defaultNotifications, debugMode: false,
-  backgroundInterval: 30, experimentalSsh: false,
+  backgroundInterval: 30, experimentalSsh: false, pullOnLaunch: true,
 };
 
 const KEY = "merathon.display";
@@ -88,6 +90,7 @@ export function sanitize(raw: unknown): DisplaySettings {
     backgroundInterval: BACKGROUND_INTERVALS.includes(r.backgroundInterval as number) ? r.backgroundInterval! : defaultDisplay.backgroundInterval,
     debugMode: r.debugMode === true,
     experimentalSsh: r.experimentalSsh === true,
+    pullOnLaunch: typeof r.pullOnLaunch === "boolean" ? r.pullOnLaunch : defaultDisplay.pullOnLaunch,
   };
 }
 
@@ -121,8 +124,8 @@ export const useDisplayStore = create<DisplayStore>((set, get) => {
     set(next);
   }
   const current = (): DisplaySettings => {
-    const { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications, backgroundInterval, debugMode, experimentalSsh } = get();
-    return { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications, backgroundInterval, debugMode, experimentalSsh };
+    const { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications, backgroundInterval, debugMode, experimentalSsh, pullOnLaunch } = get();
+    return { zoom, terminalFontSize, density, syncInterval, theme, language, languageChosen, notifications, backgroundInterval, debugMode, experimentalSsh, pullOnLaunch };
   };
   return {
     ...load(),

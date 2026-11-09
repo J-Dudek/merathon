@@ -33,4 +33,31 @@ describe("refresh", () => {
 
     expect(useRepoStore.getState().status).toEqual([file("recent.txt")]);
   });
+
+  it("une relecture du statut lancée avant une indexation ne remet pas l'ancien statut", async () => {
+    let finishOld!: (files: FileStatus[]) => void;
+    vi.mocked(getStatus).mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; }));
+    vi.mocked(getStatus).mockResolvedValueOnce([{ ...file("README.md"), staged: true }]);
+
+    const watcher = useRepoStore.getState().refreshStatus(); // surveillance du dépôt, avant « Tout indexer »
+    await useRepoStore.getState().refresh(); // relecture après l'indexation
+    finishOld([file("README.md")]);
+    await watcher;
+
+    expect(useRepoStore.getState().status).toEqual([{ ...file("README.md"), staged: true }]);
+  });
+
+  it("une lecture complète plus ancienne garde le statut d'une relecture plus récente", async () => {
+    let finishOld!: (files: FileStatus[]) => void;
+    vi.mocked(getStatus).mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; }));
+    vi.mocked(getStatus).mockResolvedValueOnce([file("recent.txt")]);
+
+    const old = useRepoStore.getState().refresh();
+    await useRepoStore.getState().refreshStatus();
+    finishOld([file("perime.txt")]);
+    await old;
+
+    expect(useRepoStore.getState().status).toEqual([file("recent.txt")]);
+    expect(useRepoStore.getState().loaded).toBe(true);
+  });
 });

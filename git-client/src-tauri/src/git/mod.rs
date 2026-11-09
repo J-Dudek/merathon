@@ -26,7 +26,7 @@ pub use history::{get_commits, get_branches, get_tags, get_commit_details, compa
 pub use status::{get_status, stage_paths, stage_all, unstage_paths, unstage_all, discard_paths, ignore_patterns, FileStatus};
 pub use diff::{get_diff, get_commit_file_diff, get_compare_file_diff, FileDiff};
 pub use remote::{
-    init_repo, clone_repo, fetch, fetch_all, pull, push_branch, delete_remote_branch, push_tag,
+    init_repo, clone_repo, fetch, fetch_all, pull, pull_fast_forward, FastForwardPull, push_branch, delete_remote_branch, push_tag,
     delete_remote_tag, list_remotes, add_remote, remove_remote, RemoteInfo,
 };
 pub use merge::{merge_branch, fast_forward, fast_forward_branch, abort_merge, get_conflict_content, resolve_conflict, MergeResult};

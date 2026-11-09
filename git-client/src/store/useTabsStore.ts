@@ -183,6 +183,14 @@ export function currentSession(): Session {
 let sessionRestored = false;
 
 /** Rouvre les onglets de la dernière session puis les enregistre à chaque changement (fenêtre principale uniquement). */
+/** Restauration de la session précédente en cours (onglets rouverts, onglet actif chargé). */
+let sessionRestoring: Promise<void> = Promise.resolve();
+
+/** Attend que les onglets de la session précédente soient rouverts. */
+export function whenSessionRestored(): Promise<void> {
+  return sessionRestoring.catch(() => {});
+}
+
 export function persistTabSession(restore: boolean) {
   // Une seule restauration, même si l'effet appelant est rejoué (StrictMode).
   if (restore && !sessionRestored) {
@@ -190,7 +198,7 @@ export function persistTabSession(restore: boolean) {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       const saved = raw ? (JSON.parse(raw) as Session) : null;
-      if (saved && Array.isArray(saved.paths)) void useTabsStore.getState().restoreSession(saved.paths, saved.active);
+      if (saved && Array.isArray(saved.paths)) sessionRestoring = useTabsStore.getState().restoreSession(saved.paths, saved.active);
     } catch {
       // session illisible : on démarre sur un onglet vide
     }

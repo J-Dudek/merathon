@@ -14,7 +14,7 @@ describe("stepZoom", () => {
 describe("sanitize", () => {
   it("keeps valid settings and repairs invalid ones", () => {
     expect(sanitize({ zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light" })).toEqual({
-      zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light", language: "fr", languageChosen: false, notifications: defaultNotifications, backgroundInterval: 30, debugMode: false, experimentalSsh: false,
+      zoom: 1.25, terminalFontSize: 14, density: "compact", syncInterval: 0, theme: "light", language: "fr", languageChosen: false, notifications: defaultNotifications, backgroundInterval: 30, debugMode: false, experimentalSsh: false, pullOnLaunch: true,
     });
     expect(sanitize({ zoom: 9, terminalFontSize: 100, density: "énorme", syncInterval: 7, theme: "rose" })).toEqual({
       ...defaultDisplay, terminalFontSize: 24,
@@ -30,6 +30,12 @@ describe("sanitize", () => {
   it("asks for the language when settings saved by an older version have no choice", () => {
     expect(sanitize({ zoom: 1.25, theme: "dark" }).languageChosen).toBe(false);
     expect(sanitize({ language: "en", languageChosen: true })).toMatchObject({ language: "en", languageChosen: true });
+  });
+
+  it("fait le pull au lancement (Android) sauf si l'utilisateur l'a désactivé", () => {
+    expect(sanitize({}).pullOnLaunch).toBe(true);
+    expect(sanitize({ pullOnLaunch: false }).pullOnLaunch).toBe(false);
+    expect(sanitize({ pullOnLaunch: "non" }).pullOnLaunch).toBe(true);
   });
 
   it("ne vérifie les PR en arrière-plan (Android) que sur demande, à un intervalle proposé", () => {

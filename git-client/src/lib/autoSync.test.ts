@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeChanges, pullRequestChanges, remoteBranchChanges } from "./autoSync";
+import { describeChanges, pullRequestChanges, remoteBranchChanges, withoutOwnCommits } from "./autoSync";
 import type { ForgePR } from "../types/forge";
 import type { BranchInfo } from "../types/git";
 
@@ -50,5 +50,24 @@ describe("describeChanges", () => {
   it("résume les changements", () => {
     expect(describeChanges("repo", { ...none, updatedBranches: ["origin/main", "origin/dev"], openedPrs: [pr(4, "Fix")] }, "MR"))
       .toBe("repo : 2 branches mises à jour (origin/main, origin/dev) · MR #4 ouverte « Fix »");
+  });
+});
+
+describe("withoutOwnCommits", () => {
+  const mine = { ...pr(1), author: "Me", sourceBranch: "feat" };
+  const other = { ...pr(2), author: "bob", sourceBranch: "fix" };
+
+  it("ne signale pas les commits de mes PR ni leur branche, mais garde les commentaires", () => {
+    const updated = [
+      { pr: mine, commits: true, comments: false },
+      { pr: { ...mine, number: 3 }, commits: true, comments: true },
+      { pr: other, commits: true, comments: false },
+    ];
+    const r = withoutOwnCommits(updated, ["origin/feat", "origin/fix"], [mine, other], "me");
+    expect(r.updatedPrs).toEqual([
+      { pr: { ...mine, number: 3 }, commits: false, comments: true },
+      { pr: other, commits: true, comments: false },
+    ]);
+    expect(r.updatedBranches).toEqual(["origin/fix"]);
   });
 });

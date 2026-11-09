@@ -1,9 +1,9 @@
 use std::cell::RefCell;
-use git2::{build::RepoBuilder, AutotagOption, BranchType, FetchOptions, FetchPrune, PushOptions, Repository};
+use git2::{build::RepoBuilder, AutotagOption, BranchType, ErrorCode, FetchOptions, FetchPrune, PushOptions, Repository, RepositoryState};
 use serde::Serialize;
 use super::auth::{proxy_options, remote_callbacks, Credentials};
 use super::error::GitError;
-use super::merge::{merge_annotated, MergeResult};
+use super::merge::{advance_head, merge_annotated, MergeResult};
 use super::ops::rebase_onto;
 
 /// Fournit les identifiants à utiliser pour une URL de remote donnée.
@@ -195,6 +195,51 @@ pub fn pull(repo: &Repository, rebase: bool, creds: CredsLookup) -> Result<Merge
     })
 }
 
+/// Résultat d'un pull automatique ([`pull_fast_forward`]) : ce qui a été fait, ou pourquoi rien ne l'a été.
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum FastForwardPull {
+    /// Déjà à jour (après le fetch).
+    UpToDate,
+    /// Branche avancée de `commits` commits.
+    Updated { commits: usize, branch: String },
+    /// Commits locaux et distants : un merge ou un rebase est nécessaire, laissé à l'utilisateur.
+    Diverged { branch: String },
+    /// Des modifications locales seraient écrasées : rien n'a été touché.
+    LocalChanges { branch: String },
+    /// Rien à tirer : HEAD détaché, branche sans suivi, ou merge / rebase en cours.
+    Skipped,
+}
+
+/// Pull sans risque, pour une synchronisation automatique : fetch du remote suivi puis fast-forward seulement.
+/// Jamais de commit de merge, de rebase ni de conflit ; la copie de travail n'est modifiée que si le checkout
+/// « safe » le permet. Seul le fetch peut échouer (réseau, authentification).
+pub fn pull_fast_forward(repo: &Repository, creds: CredsLookup) -> Result<FastForwardPull, GitError> {
+    if repo.state() != RepositoryState::Clean {
+        return Ok(FastForwardPull::Skipped);
+    }
+    let Ok((branch, remote_name, upstream_name)) = head_upstream(repo) else { return Ok(FastForwardPull::Skipped) };
+    fetch(repo, &remote_name, creds)?;
+    // Branche suivie supprimée sur le serveur (retirée par le prune du fetch) : rien à tirer.
+    let Ok(upstream) = repo.find_branch(&upstream_name, BranchType::Remote) else { return Ok(FastForwardPull::Skipped) };
+    let annotated = repo.reference_to_annotated_commit(upstream.get())?;
+    let (analysis, _) = repo.merge_analysis(&[&annotated])?;
+    if analysis.is_up_to_date() {
+        return Ok(FastForwardPull::UpToDate);
+    }
+    if !analysis.is_fast_forward() {
+        return Ok(FastForwardPull::Diverged { branch });
+    }
+    let head = repo.head()?.peel_to_commit()?.id();
+    let (_, commits) = repo.graph_ahead_behind(head, annotated.id())?;
+    match advance_head(repo, &annotated, &upstream_name) {
+        Ok(()) => Ok(FastForwardPull::Updated { commits, branch }),
+        // Le checkout « safe » vérifie tous les fichiers avant d'en écrire un : la copie de travail est intacte.
+        Err(GitError::Git(e)) if e.code() == ErrorCode::Conflict => Ok(FastForwardPull::LocalChanges { branch }),
+        Err(e) => Err(e),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,6 +334,71 @@ mod tests {
         assert_eq!(upstream.name().unwrap(), Some("origin/feat"));
         let (ahead, _) = work.graph_ahead_behind(branch.get().target().unwrap(), upstream.get().target().unwrap()).unwrap();
         assert_eq!(ahead, 0);
+    }
+
+    /// Clone de `url` (dans `root/name`) qui suit `master`.
+    fn clone_of(root: &TempDir, url: &str, name: &str) -> Repository {
+        let path = root.path().join(name);
+        clone_repo(url, path.to_str().unwrap(), &no_creds).unwrap();
+        let clone = Repository::open(&path).unwrap();
+        configure(&clone);
+        clone
+    }
+
+    #[test]
+    fn automatic_pull_fast_forwards() {
+        let (root, work, url) = setup_remote();
+        let clone = clone_of(&root, &url, "work2");
+        assert_eq!(pull_fast_forward(&clone, &no_creds).unwrap(), FastForwardPull::UpToDate);
+
+        commit_file(&work, "b.txt", "b\n", "second");
+        commit_file(&work, "c.txt", "c\n", "third");
+        push_branch(&work, "origin", "master", false, &no_creds).unwrap();
+        // Une modification locale sans rapport ne bloque pas le fast-forward.
+        fs::write(clone.workdir().unwrap().join("a.txt"), "local\n").unwrap();
+
+        assert_eq!(
+            pull_fast_forward(&clone, &no_creds).unwrap(),
+            FastForwardPull::Updated { commits: 2, branch: "master".into() },
+        );
+        assert!(clone.workdir().unwrap().join("c.txt").exists());
+        assert_eq!(fs::read_to_string(clone.workdir().unwrap().join("a.txt")).unwrap(), "local\n");
+    }
+
+    #[test]
+    fn automatic_pull_never_merges() {
+        let (root, work, url) = setup_remote();
+        let clone = clone_of(&root, &url, "work2");
+        commit_file(&work, "b.txt", "b\n", "distant");
+        push_branch(&work, "origin", "master", false, &no_creds).unwrap();
+        commit_file(&clone, "c.txt", "c\n", "local");
+        let head = clone.head().unwrap().target();
+
+        assert_eq!(pull_fast_forward(&clone, &no_creds).unwrap(), FastForwardPull::Diverged { branch: "master".into() });
+        assert_eq!(clone.head().unwrap().target(), head, "branche inchangée");
+    }
+
+    #[test]
+    fn automatic_pull_keeps_conflicting_local_changes() {
+        let (root, work, url) = setup_remote();
+        let clone = clone_of(&root, &url, "work2");
+        commit_file(&work, "a.txt", "distant\n", "second");
+        push_branch(&work, "origin", "master", false, &no_creds).unwrap();
+        let a = clone.workdir().unwrap().join("a.txt");
+        fs::write(&a, "local\n").unwrap();
+        let head = clone.head().unwrap().target();
+
+        assert_eq!(pull_fast_forward(&clone, &no_creds).unwrap(), FastForwardPull::LocalChanges { branch: "master".into() });
+        assert_eq!(fs::read_to_string(&a).unwrap(), "local\n");
+        assert_eq!(clone.head().unwrap().target(), head);
+    }
+
+    #[test]
+    fn automatic_pull_skips_detached_head() {
+        let (root, _work, url) = setup_remote();
+        let clone = clone_of(&root, &url, "work2");
+        clone.set_head_detached(clone.head().unwrap().target().unwrap()).unwrap();
+        assert_eq!(pull_fast_forward(&clone, &no_creds).unwrap(), FastForwardPull::Skipped);
     }
 
     #[test]

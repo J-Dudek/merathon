@@ -1,4 +1,3 @@
-#[cfg(desktop)]
 use tauri::Manager;
 
 #[macro_use]
@@ -31,6 +30,7 @@ mod git;
 #[cfg(desktop)]
 mod terminal;
 mod window;
+mod workdir_watch;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -40,7 +40,8 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init());
+        .plugin(tauri_plugin_notification::init())
+        .manage(workdir_watch::Watchers::default());
 
     // Mises à jour (hors du Play Store, qui les gère lui-même), redémarrage et terminaux : bureau seulement.
     #[cfg(desktop)]
@@ -98,6 +99,8 @@ pub fn run() {
             commands::get_compare_file_diff,
             commands::get_status,
             commands::get_diff,
+            workdir_watch::workdir_watch,
+            workdir_watch::workdir_unwatch,
             commands::stage_files,
             commands::stage_all,
             commands::unstage_files,
@@ -168,6 +171,7 @@ pub fn run() {
             commands::lfs_track,
             commands::fetch_remote,
             commands::pull,
+            commands::pull_fast_forward,
             commands::push,
             commands::delete_remote_branch,
             commands::push_tag,
@@ -195,10 +199,11 @@ pub fn run() {
             commands::terminal_resize,
             commands::terminal_close,
         ])
-        .on_window_event(|_window, _event| {
-            #[cfg(desktop)]
-            if let tauri::WindowEvent::Destroyed = _event {
-                _window.state::<terminal::Terminals>().close_window(_window.label());
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                window.state::<workdir_watch::Watchers>().close_window(window.label());
+                #[cfg(desktop)]
+                window.state::<terminal::Terminals>().close_window(window.label());
             }
         })
         .run(tauri::generate_context!())

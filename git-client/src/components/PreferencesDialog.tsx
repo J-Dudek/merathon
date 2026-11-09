@@ -349,6 +349,7 @@ function SyncSection() {
         <RefreshCw size={13} strokeWidth={1.75} className={syncing ? "animate-spin" : ""} />
         {syncing ? tr("Synchronisation…") : tr("Synchroniser maintenant")}
       </button>
+      {android && <PullOnLaunch />}
       {android && <BackgroundCheck />}
       <NotificationsGroup />
     </>
@@ -367,6 +368,25 @@ const NOTIFICATION_KINDS: { key: Exclude<keyof NotificationSettings, "enabled" |
 /** « Toutes les 30 min », « Toutes les 3 h ». */
 function everyLabel(minutes: number): string {
   return minutes < 60 ? tr("Toutes les {minutes} min", { minutes }) : tr("Toutes les {hours} h", { hours: minutes / 60 });
+}
+
+/** Android : pull des dépôts ouverts au lancement de l'application. */
+function PullOnLaunch() {
+  const enabled = useDisplayStore((s) => s.pullOnLaunch);
+  const update = useDisplayStore((s) => s.update);
+  return (
+    <section className="mt-6">
+      <Group title={tr("Au lancement")} description={tr("Fast-forward seulement : jamais de merge, de rebase ni de conflit.")}>
+        <label className="flex items-center gap-2 font-medium">
+          <input type="checkbox" className="h-4 w-4" checked={enabled} onChange={(e) => update({ pullOnLaunch: e.target.checked })} />
+          {tr("Pull des dépôts ouverts")}
+        </label>
+        <p className="mt-1 pl-6 text-xs text-[var(--color-muted)]">
+          {tr("Une branche avec des commits locaux, ou des modifications locales qui seraient écrasées, sont laissées telles quelles et signalées.")}
+        </p>
+      </Group>
+    </section>
+  );
 }
 
 /** Android : vérification quand l'application est fermée, désactivée par défaut (consommation de batterie). */

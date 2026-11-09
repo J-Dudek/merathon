@@ -288,6 +288,8 @@ export const fetchAllQuietly = (path: string) => tauriInvoke<void>("fetch_remote
 /** Fetch d'un remote en arrière-plan (état d'une PR à l'ouverture) : pas inscrit au journal. */
 export const fetchRemoteQuietly = (path: string, remote: string) => tauriInvoke<void>("fetch_remote", { path, remote });
 export const pull = (path: string, rebase: boolean) => invoke<MergeResult>("pull", { path, rebase });
+/** Pull automatique : fetch puis fast-forward seulement, sans confirmation de la clé SSH de l'appareil. Erreurs non journalisées. */
+export const pullFastForward = (path: string) => tauriInvoke<FastForwardPull>("pull_fast_forward", { path });
 export const push = (path: string, opts: { branch?: string; remote?: string; force?: boolean } = {}) =>
   invoke<void>("push", { path, branch: opts.branch ?? null, remote: opts.remote ?? null, force: opts.force ?? false });
 export const deleteRemoteBranch = (path: string, name: string) => invoke<void>("delete_remote_branch", { path, name });
@@ -348,6 +350,27 @@ export const setDebugLogging = (enabled: boolean) => tauriInvoke<void>("set_debu
 
 /** Outils de développement (sans effet dans les builds de release). */
 export const openDevtools = () => invoke<void>("open_devtools");
+
+/** Résultat d'un pull automatique : ce qui a été fait, ou pourquoi rien ne l'a été (voir remote.rs). */
+export type FastForwardPull =
+  | { kind: "upToDate" }
+  | { kind: "updated"; commits: number; branch: string }
+  | { kind: "diverged"; branch: string }
+  | { kind: "localChanges"; branch: string }
+  | { kind: "skipped" };
+
+// ---------------------------------------------------------------- Surveillance du dépôt
+
+/** Modification externe du dépôt surveillé : `status` pour les fichiers et l'index, `refs` pour HEAD et les références. */
+export type WorkdirChange = { status: boolean; refs: boolean };
+
+/** Surveille le dépôt `path` pour cette fenêtre (remplace la surveillance précédente). */
+export const workdirWatch = (path: string, onChange: (change: WorkdirChange) => void) => {
+  const channel = new Channel<WorkdirChange>();
+  channel.onmessage = onChange;
+  return invoke<void>("workdir_watch", { path, onChange: channel });
+};
+export const workdirUnwatch = () => invoke<void>("workdir_unwatch");
 
 // ---------------------------------------------------------------- Terminal intégré
 

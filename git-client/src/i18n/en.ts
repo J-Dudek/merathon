@@ -1851,4 +1851,12 @@ export const en: Record<string, string> = {
   "Version installée : {currentVersion}. L'APK se télécharge dans le navigateur ; ouvre-le ensuite pour l'installer par-dessus (comptes et dépôts conservés).": "Installed version: {currentVersion}. The APK downloads in the browser; then open it to install over this one (accounts and repositories are kept).",
   "Télécharger": "Download",
   "Ouverture du navigateur impossible : {error}": "Could not open the browser: {error}",
+  "{repo} : {n} nouveau commit récupéré sur {branch}": "{repo}: {n} new commit pulled on {branch}",
+  "{repo} : {n} nouveaux commits récupérés sur {branch}": "{repo}: {n} new commits pulled on {branch}",
+  "{repo} : pull non fait, {branch} a des commits locaux absents du serveur (merge ou rebase à faire)": "{repo}: not pulled, {branch} has local commits missing from the server (merge or rebase needed)",
+  "{repo} : pull non fait, des modifications locales sur {branch} seraient écrasées": "{repo}: not pulled, local changes on {branch} would be overwritten",
+  "Au lancement": "On launch",
+  "Fast-forward seulement : jamais de merge, de rebase ni de conflit.": "Fast-forward only: never a merge, a rebase or a conflict.",
+  "Pull des dépôts ouverts": "Pull open repositories",
+  "Une branche avec des commits locaux, ou des modifications locales qui seraient écrasées, sont laissées telles quelles et signalées.": "A branch with local commits, or local changes that would be overwritten, are left as they are and reported.",
 };

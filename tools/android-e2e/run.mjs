@@ -146,10 +146,21 @@ async function main() {
   });
 
   await step("Compte GitHub Enterprise (faux serveur) ajouté depuis l'interface", async () => {
-    await app.tap("+ Ajouter");
-    await app.tap("GitHub Enterprise");
-    await app.fill("Adresse de l'instance GitHub Enterprise", GITHUB);
-    await app.fill("Token d'accès personnel", "ghp_faux_token_e2e");
+    // Le tiroir des comptes se referme parfois pendant la saisie (vu en CI, cause inconnue) : il est rouvert et
+    // le formulaire repris, au lieu d'attendre en vain un champ qui n'est plus affiché.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        if (!(await app.locate("+ Ajouter")) && !(await app.locate("GitHub Enterprise"))) await menu("Comptes");
+        if (await app.locate("+ Ajouter")) await app.tap("+ Ajouter");
+        await app.tap("GitHub Enterprise", { timeout: 5000 });
+        await app.fill("Adresse de l'instance GitHub Enterprise", GITHUB, { timeout: 5000 });
+        await app.fill("Token d'accès personnel", "ghp_faux_token_e2e", { timeout: 5000 });
+        break;
+      } catch (e) {
+        if (attempt === 3) throw e;
+        process.stdout.write(`(formulaire disparu, essai ${attempt + 1}) `);
+      }
+    }
     await app.blur();
     await app.tap("Connecter");
     await app.waitText("camille · localhost");

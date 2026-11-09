@@ -662,6 +662,34 @@ pub async fn pull(app: AppHandle, path: String, rebase: bool) -> Result<git::Mer
     .await
 }
 
+/// Pull automatique (lancement de l'application sur Android) : fetch puis fast-forward seulement, voir
+/// [`git::pull_fast_forward`]. Comme un fetch d'arrière-plan, aucune confirmation de la clé SSH de l'appareil.
+#[tauri::command]
+pub async fn pull_fast_forward(app: AppHandle, path: String) -> Result<git::FastForwardPull, GitError> {
+    network(&app, move |creds| {
+        let pull = || {
+            with_repo(&path, |r| {
+                let result = git::pull_fast_forward(r, creds)?;
+                if let git::FastForwardPull::Updated { .. } = result {
+                    let head = r.head()?.name().unwrap_or("").to_string();
+                    let remote = r
+                        .branch_upstream_remote(&head)
+                        .ok()
+                        .and_then(|b| b.as_str().ok().map(str::to_string))
+                        .unwrap_or_else(|| "origin".into());
+                    let _ = git::lfs::lfs_pull(r, creds(&remote_url(r, &remote)).as_ref());
+                }
+                Ok(result)
+            })
+        };
+        #[cfg(target_os = "android")]
+        return crate::ssh_signer::without_prompt(pull);
+        #[cfg(not(target_os = "android"))]
+        pull()
+    })
+    .await
+}
+
 /// Push d'une branche (la branche courante par défaut) vers son remote de suivi,
 /// ou vers `remote` / `origin` si elle n'en a pas encore.
 #[tauri::command]

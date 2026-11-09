@@ -77,7 +77,7 @@ pub(crate) fn merge_annotated(repo: &Repository, annotated: &AnnotatedCommit, la
 }
 
 /// Avance la branche courante jusqu'à `annotated`, qui doit en être un descendant.
-fn advance_head(repo: &Repository, annotated: &AnnotatedCommit, label: &str) -> Result<(), GitError> {
+pub(crate) fn advance_head(repo: &Repository, annotated: &AnnotatedCommit, label: &str) -> Result<(), GitError> {
     let target = repo.find_commit(annotated.id())?;
     // Checkout "safe" d'abord : on ne déplace la branche que si la copie de travail le permet.
     repo.checkout_tree(target.as_object(), Some(CheckoutBuilder::default().safe()))?;

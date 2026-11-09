@@ -11,8 +11,19 @@ const CDP_PORT = Number(process.env.E2E_CDP_PORT ?? 9333);
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Appareil momentanément injoignable (vu en CI) : la commande n'a pas été exécutée, elle peut être relancée. */
+const OFFLINE = /device offline|device '.*' not found|no devices\/emulators found/;
+
 export function adb(...args) {
-  return execFileSync("adb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return execFileSync("adb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    } catch (e) {
+      if (attempt === 3 || !OFFLINE.test(`${e.stderr ?? ""}${e.message ?? ""}`)) throw e;
+      process.stderr.write(`(adb : appareil hors ligne, nouvel essai de « adb ${args.join(" ")} »)\n`);
+      execFileSync("adb", ["wait-for-device"], { stdio: "ignore", timeout: 60000 });
+    }
+  }
 }
 
 /** Attend que `fn` renvoie une valeur vraie ; échoue avec `what` après `timeout` ms. */

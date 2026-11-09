@@ -16,6 +16,10 @@ function diffSourceLabel(source: DiffView["source"]): string {
   return source.staged ? tr("indexé") : tr("non indexé");
 }
 
+function sameDiff(a: FileDiff, b: FileDiff): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function CenterDiff({ view }: { view: DiffView }) {
   const repoPath = useRepoStore((s) => s.repoPath);
   const status = useRepoStore((s) => s.status);
@@ -24,8 +28,11 @@ export function CenterDiff({ view }: { view: DiffView }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Le diff de la copie de travail est rechargé quand le statut change (stage, édition…).
-  const statusKey = view.source.type === "workdir" ? JSON.stringify(status) : "";
+  // Le diff de la copie de travail est rechargé à chaque relecture du statut (stage, édition…), même quand le
+  // statut est inchangé : un fichier déjà « modifié » peut l'être encore. Le diff précédent reste affiché pendant
+  // le rechargement, le défilement est donc conservé.
+  const workdirVersion = useRepoStore((s) => s.workdirVersion);
+  const reloadKey = view.source.type === "workdir" ? workdirVersion : 0;
 
   useEffect(() => {
     if (!repoPath) return;
@@ -38,13 +45,14 @@ export function CenterDiff({ view }: { view: DiffView }) {
     else if (source.type === "compare") load = getCompareFileDiff(repoPath, source.base, source.head, view.path);
     else load = getCommitFileDiff(repoPath, source.hash, view.path);
     load
-      .then((d) => !cancelled && setDiff(d))
+      // Contenu identique : on garde l'objet affiché, pour ne pas perdre la sélection de lignes ni la recherche.
+      .then((d) => !cancelled && setDiff((prev) => (prev && sameDiff(prev, d) ? prev : d)))
       .catch((e) => !cancelled && setError(errorMessage(e)))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [repoPath, view, statusKey]);
+  }, [repoPath, view, reloadKey]);
 
   const sourceLabel = diffSourceLabel(view.source);
 

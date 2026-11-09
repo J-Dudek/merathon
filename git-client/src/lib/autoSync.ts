@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { fetchAllQuietly, getBranches, listRemotes } from "../ipc/commands";
+import { fetchAllQuietly, getBranches, listRemotes, pullFastForward, type FastForwardPull } from "../ipc/commands";
 import { linkedForge, refreshOpenPullRequests } from "../components/PullRequestList";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useRepoStore } from "../store/useRepoStore";
@@ -104,6 +104,21 @@ function openRepos(): string[] {
 }
 
 /**
+ * Retire ce que je n'ai pas à apprendre sur mes propres PR / MR : leurs nouveaux commits (les miens, ou ceux
+ * de ma branche) et les « branches mises à jour » correspondantes. Les commentaires restent signalés.
+ */
+export function withoutOwnCommits(
+  updated: UpdatedPr[], branches: string[], open: ForgePR[], me: string,
+): { updatedPrs: UpdatedPr[]; updatedBranches: string[] } {
+  const mine = (pr: ForgePR) => !!me && pr.author.toLowerCase() === me.toLowerCase();
+  const updatedPrs = updated
+    .filter((u) => !(mine(u.pr) && u.commits && !u.comments))
+    .map((u) => (mine(u.pr) ? { ...u, commits: false } : u));
+  const own = open.filter(mine).map((pr) => pr.sourceBranch);
+  return { updatedPrs, updatedBranches: branches.filter((b) => !own.some((src) => b === src || b.endsWith(`/${src}`))) };
+}
+
+/**
  * Fetch d'un dépôt, actualisation de ses PR ouvertes et du graphe s'il est affiché ; renvoie ce qui a changé.
  * Les PR de `followed` (les miennes, déjà notifiées par `syncMyPullRequests`) ne sont pas signalées une seconde fois.
  */
@@ -115,6 +130,7 @@ async function syncRepo(path: string, followed: Set<string>): Promise<{ changes:
   const repo = useRepoStore.getState();
   if (repo.repoPath === path && !useUiStore.getState().busy) await repo.refresh();
 
+  const branchChanges = remoteBranchChanges(before, after);
   let prs: Pick<RepoChanges, "openedPrs" | "closedPrs" | "updatedPrs"> = { openedPrs: [], closedPrs: [], updatedPrs: [] };
   const forge = linkedForge(await listRemotes(path), useAccountsStore.getState().accounts);
   if (forge) {
@@ -124,9 +140,12 @@ async function syncRepo(path: string, followed: Set<string>): Promise<{ changes:
     const isFollowed = (pr: ForgePR) => followed.has(seenKey(forge.account.id, forge.projectPath, pr.number).toLowerCase());
     prs.openedPrs = prs.openedPrs.filter((pr) => !isFollowed(pr));
     prs.updatedPrs = prs.updatedPrs.filter((u) => !isFollowed(u.pr));
+    const own = withoutOwnCommits(prs.updatedPrs, branchChanges.updatedBranches, newPrs, forge.account.username);
+    prs.updatedPrs = own.updatedPrs;
+    branchChanges.updatedBranches = own.updatedBranches;
   }
   return {
-    changes: { ...remoteBranchChanges(before, after), ...prs },
+    changes: { ...branchChanges, ...prs },
     prLabel: forge?.account.provider === "gitlab" ? "MR" : "PR",
   };
 }
@@ -184,15 +203,60 @@ export async function syncOpenRepos() {
         const message = describeChanges(repoName(path), changes, prLabel);
         if (message) useUiStore.getState().notify("info", message);
       } catch (e) {
-        if (isDeviceKeyLocked(e)) {
-          // Android : aucune confirmation en arrière-plan. Signalé une seule fois par dépôt, sans erreur répétée.
-          if (!lockedNotified.has(path)) {
-            lockedNotified.add(path);
-            useUiStore.getState().notify("info", tr("Synchronisation de {repo} en pause : la clé SSH de l'appareil est verrouillée. Un fetch lancé à la main demandera la confirmation.", { repo: repoName(path) }));
-          }
-          continue;
-        }
-        console.warn(`Synchronisation de ${path} impossible :`, e);
+        reportSyncError(path, e);
+      }
+    }
+  } finally {
+    setRunning(false);
+    syncedListeners.forEach((l) => l());
+  }
+}
+
+/** Échec silencieux d'une synchronisation automatique, sauf la clé SSH verrouillée, signalée une fois par dépôt. */
+function reportSyncError(path: string, e: unknown) {
+  if (isDeviceKeyLocked(e)) {
+    // Android : aucune confirmation en arrière-plan. Signalé une seule fois par dépôt, sans erreur répétée.
+    if (!lockedNotified.has(path)) {
+      lockedNotified.add(path);
+      useUiStore.getState().notify("info", tr("Synchronisation de {repo} en pause : la clé SSH de l'appareil est verrouillée. Un fetch lancé à la main demandera la confirmation.", { repo: repoName(path) }));
+    }
+    return;
+  }
+  console.warn(`Synchronisation de ${path} impossible :`, e);
+}
+
+/** Message d'un pull automatique, null quand il n'y a rien à signaler (déjà à jour, rien à tirer). */
+export function describePull(repo: string, result: FastForwardPull): string | null {
+  switch (result.kind) {
+    case "updated":
+      return trn(result.commits, "{repo} : {n} nouveau commit récupéré sur {branch}", "{repo} : {n} nouveaux commits récupérés sur {branch}", { repo, branch: result.branch });
+    case "diverged":
+      return tr("{repo} : pull non fait, {branch} a des commits locaux absents du serveur (merge ou rebase à faire)", { repo, branch: result.branch });
+    case "localChanges":
+      return tr("{repo} : pull non fait, des modifications locales sur {branch} seraient écrasées", { repo, branch: result.branch });
+    default:
+      return null;
+  }
+}
+
+/**
+ * Lancement de l'application (Android) : pull de chaque dépôt ouvert, en fast-forward seulement. Une branche
+ * divergente ou des modifications locales en conflit sont laissées telles quelles et signalées.
+ */
+export async function pullOpenRepos() {
+  if (running) return;
+  setRunning(true);
+  try {
+    for (const path of openRepos()) {
+      if (useUiStore.getState().busy) return;
+      try {
+        const result = await pullFastForward(path);
+        const message = describePull(repoName(path), result);
+        if (message) useUiStore.getState().notify(result.kind === "updated" ? "success" : "info", message);
+        const repo = useRepoStore.getState();
+        if (result.kind === "updated" && repo.repoPath === path && !useUiStore.getState().busy) await repo.refresh();
+      } catch (e) {
+        reportSyncError(path, e);
       }
     }
   } finally {
