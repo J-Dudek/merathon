@@ -7,10 +7,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use std::time::Instant;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use crate::host::{command, Host, HostExt};
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
-static APP: OnceLock<AppHandle> = OnceLock::new();
+static APP: OnceLock<Host> = OnceLock::new();
 
 #[derive(Clone, Serialize)]
 struct Entry {
@@ -20,7 +20,7 @@ struct Entry {
 
 fn emit(level: &'static str, message: String) {
     if let Some(app) = APP.get() {
-        let _ = app.emit("debug-log", Entry { level, message });
+        app.emit_event("debug-log", Entry { level, message });
     }
 }
 
@@ -47,8 +47,8 @@ pub fn timed<T, E: Display>(step: impl Display, f: impl FnOnce() -> Result<T, E>
     result
 }
 
-#[tauri::command]
-pub fn set_debug_logging(app: AppHandle, enabled: bool) {
+#[command]
+pub fn set_debug_logging(app: Host, enabled: bool) {
     APP.get_or_init(|| app);
     ENABLED.store(enabled, Ordering::Relaxed);
 }

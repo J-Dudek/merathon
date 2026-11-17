@@ -15,7 +15,7 @@ import { ignoreDirPattern, ignoreExtensionPattern, ignoreFilePattern, ignoreFold
 import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type MultiSelection } from "../lib/multiSelect";
 import type { FileStatus, InteractiveStop, RepoState } from "../types/git";
 import { fieldLabel } from "../lib/fieldLabel";
-import { isMobile } from "../lib/platform";
+import { isMobile, isServer } from "../lib/platform";
 import { RebaseTimeline } from "./RebaseTimeline";
 import { branchOnRemote, pullRequestsByBranch } from "../lib/branches";
 import { appendThreadTrailers, draftFromMessage, type ThreadLinks } from "../lib/threadTrailers";
@@ -23,6 +23,7 @@ import { useCachedOpenPullRequests, useLinkedForge } from "./PullRequestList";
 import { ReviewThreadPicker } from "./ReviewThreadPicker";
 import { EmojiInput, EmojiTextarea } from "./EmojiAssist";
 import { tr, trn, quoted } from "../i18n";
+import { copyText } from "../lib/clipboard";
 
 const STATE_LABELS: Record<Exclude<RepoState, "clean">, string> = {
   merge: tr("Merge en cours"),
@@ -255,7 +256,7 @@ export function StagingPanel() {
         ? ["separator" as const, { label: tr("Ajouter {n} au .gitignore", { n }), action: () => ignore(files.map((f) => ignoreFilePattern(f.path))) }]
         : []),
       "separator",
-      { label: tr("Copier les chemins"), action: () => navigator.clipboard.writeText(pathsOf(files).join("\n")) },
+      { label: tr("Copier les chemins"), action: () => copyText(pathsOf(files).join("\n")) },
       { label: tr("Annuler la sélection"), action: clearSelection },
     ];
   }
@@ -270,7 +271,7 @@ export function StagingPanel() {
         ? ["separator" as const, { label: tr("Ignorer ce dossier"), hint: pattern, action: () => ignore([pattern]) }]
         : []),
       "separator",
-      { label: tr("Copier le chemin"), action: () => navigator.clipboard.writeText(dir) },
+      { label: tr("Copier le chemin"), action: () => copyText(dir) },
       { label: tr("Afficher dans le gestionnaire de fichiers"), action: () => revealItemInDir(`${path}/${dir}`).catch((e) => notify("error", errorMessage(e))) },
     ];
   }
@@ -291,8 +292,8 @@ export function StagingPanel() {
       ...lfsEntry(f),
       ...ignoreEntries(f),
       "separator" as const,
-      { label: tr("Copier le chemin"), action: () => navigator.clipboard.writeText(f.path) },
-      ...(isMobile() ? [] : [{ label: tr("Afficher dans le gestionnaire de fichiers"), action: () => revealItemInDir(abs).catch((e) => notify("error", errorMessage(e))) }]),
+      { label: tr("Copier le chemin"), action: () => copyText(f.path) },
+      ...(isMobile() || isServer() ? [] : [{ label: tr("Afficher dans le gestionnaire de fichiers"), action: () => revealItemInDir(abs).catch((e) => notify("error", errorMessage(e))) }]),
     ];
   }
 

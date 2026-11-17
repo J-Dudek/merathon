@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "../lib/openExternal";
 import { CircleAlert, CircleCheck, Circle, LoaderCircle } from "lucide-react";
 import { Modal, inputClass } from "./Modal";
 import { sshCheckConnection, sshCreateKey, sshExistingKey, sshHostStatus, sshSetupInfo, sshTrustHost } from "../ipc/commands";
@@ -12,6 +12,7 @@ import { isMobile } from "../lib/platform";
 import type { ForgeAccount } from "../types/forge";
 import type { SshCheck, SshKeyInfo, SshSetupInfo } from "../types/git";
 import { tr, quoted } from "../i18n";
+import { copyText } from "../lib/clipboard";
 
 type StepId = "key" | "upload" | "host" | "check";
 type StepState = "waiting" | "running" | "done" | "failed";
@@ -190,7 +191,7 @@ export function SshSetupDialog({ account, fixedKey, onClose }: {
 
   async function copyPublicKey() {
     if (!key) return;
-    await navigator.clipboard.writeText(key.public_key);
+    await copyText(key.public_key);
     notify("success", tr("Clé publique copiée"));
   }
 

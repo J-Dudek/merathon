@@ -113,18 +113,22 @@ impl TestSshd {
         }
         let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
         let config = dir.path().join("sshd_config");
-        fs::write(
-            &config,
-            format!(
-                "Port {port}\nListenAddress 127.0.0.1\n{host_keys}PidFile {pid}\nAuthorizedKeysFile {keys}\n\
-                 StrictModes no\nUsePAM no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n\
-                 PubkeyAuthentication yes\nPermitRootLogin {root_login}\nLogLevel VERBOSE\n",
-                pid = dir.path().join("sshd.pid").display(),
-                keys = authorized_keys.display(),
-                root_login = if root { "prohibit-password" } else { "no" },
-            ),
-        )
-        .unwrap();
+        let base = format!(
+            "Port {port}\nListenAddress 127.0.0.1\n{host_keys}PidFile {pid}\nAuthorizedKeysFile {keys}\n\
+             StrictModes no\nUsePAM no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n\
+             PubkeyAuthentication yes\nPermitRootLogin {root_login}\nLogLevel VERBOSE\n",
+            pid = dir.path().join("sshd.pid").display(),
+            keys = authorized_keys.display(),
+            root_login = if root { "prohibit-password" } else { "no" },
+        );
+        // OpenSSH 9.8+ bannit l'adresse source d'une authentification échouée (`PerSourcePenalties`, 17 s) : les tests en font
+        // volontairement échouer une (clé non autorisée), et la connexion suivante depuis 127.0.0.1 était coupée avant la bannière
+        // (« Failed getting banner »). Les versions plus anciennes ignorent l'option… en refusant la configuration : `sshd -t` tranche.
+        fs::write(&config, format!("{base}PerSourcePenalties no\n")).unwrap();
+        let accepted = Command::new(&sshd).arg("-t").arg("-f").arg(&config).stderr(Stdio::null()).status().is_ok_and(|s| s.success());
+        if !accepted {
+            fs::write(&config, &base).unwrap();
+        }
         let log = fs::File::create(dir.path().join("sshd.log")).unwrap();
         let child = Command::new(&sshd)
             .args(["-D", "-e", "-f"])

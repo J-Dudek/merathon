@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "../lib/openExternal";
 import { ArrowRight, Check, CircleDashed, CircleX, ExternalLink, MinusCircle, Pencil, RotateCw } from "lucide-react";
 import { forgeClient } from "../api/forge";
 import { draftTitle } from "../api/gitlab";

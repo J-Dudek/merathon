@@ -1,12 +1,15 @@
 //! Commandes exposées au frontend.
 //!
-//! Les opérations Git locales sont synchrones mais déclarées `#[tauri::command(async)]` : Tauri
+//! Les opérations Git locales sont synchrones mais déclarées `#[command(async)]` : Tauri
 //! exécute sinon les commandes synchrones sur le thread principal, et l'UI se fige dès que le
 //! disque est lent (dépôt WSL ouvert depuis Windows via `\\wsl.localhost\…`). Les opérations
 //! réseau (clone, fetch, pull, push) sont `async` et s'exécutent dans un thread dédié.
 
 use git2::Repository;
-use tauri::{AppHandle, Manager};
+use crate::host::{command, Channel, Host, HostExt};
+// Seul le terminal du bureau reçoit la fenêtre appelante : sur mobile, l'import ne servirait à rien.
+#[cfg(desktop)]
+use crate::host::Window;
 use crate::accounts::{Account, AccountStore, AuthKind, Provider, SavedAccount};
 use crate::oauth;
 use crate::ssh_setup;
@@ -35,22 +38,22 @@ fn with_repo_mut<T>(path: &str, f: impl FnOnce(&mut Repository) -> Result<T, Git
     f(&mut repo)
 }
 
-fn account_store(app: &AppHandle) -> Result<AccountStore, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+fn account_store(app: &Host) -> Result<AccountStore, String> {
+    let dir = app.config_dir()?;
     Ok(AccountStore::new(dir))
 }
 
 async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, GitError> + Send + 'static,
 ) -> Result<T, GitError> {
-    tauri::async_runtime::spawn_blocking(f)
+    crate::host::spawn_blocking(f)
         .await
         .map_err(|e| GitError::Other(e.to_string()))?
 }
 
 /// Exécute une opération réseau avec les identifiants des comptes enregistrés.
 async fn network<T: Send + 'static>(
-    app: &AppHandle,
+    app: &Host,
     f: impl FnOnce(&dyn Fn(&str) -> Option<git::Credentials>) -> Result<T, GitError> + Send + 'static,
 ) -> Result<T, GitError> {
     let store = account_store(app).map_err(GitError::Other)?;
@@ -59,49 +62,62 @@ async fn network<T: Send + 'static>(
 
 // ---------------------------------------------------------------- Dépôt
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn open_repository(path: String) -> Result<git::RepoInfo, GitError> {
-    with_repo(&path, git::repo_info)
+    with_repo(&path, |repo| {
+        // Dossier partagé de NAS (ACL) : tous les fichiers sortent exécutables et apparaîtraient modifiés. Sur le bureau, un tel dépôt
+        // est exceptionnel et son réglage Git n'est pas touché sans que l'utilisateur le demande.
+        if cfg!(feature = "server") {
+            git::fix_unreliable_filemode(repo)?;
+        }
+        git::repo_info(repo)
+    })
 }
 
 /// Ajoute un dépôt appartenant à un autre utilisateur à `safe.directory` pour pouvoir l'ouvrir.
-#[tauri::command(async)]
+#[command(async)]
 pub fn trust_repository(path: String) -> Result<(), GitError> {
     git::trust_repo(&path)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_repo_info(path: String) -> Result<git::RepoInfo, GitError> {
     with_repo(&path, git::repo_info)
 }
 
-/// Dossier privé de l'application où vont les dépôts sur mobile (voir device_storage.rs).
-fn device_root(app: &AppHandle) -> Result<std::path::PathBuf, GitError> {
-    let data = app.path().app_data_dir().map_err(|e| GitError::Other(e.to_string()))?;
+/// Dossier privé de l'application où vont les dépôts sur mobile (voir device_storage.rs). Sur le NAS, ce sont les
+/// dossiers autorisés par l'administrateur : celui qui contient `dir`, ou le premier.
+fn device_root(app: &Host, dir: Option<&str>) -> Result<std::path::PathBuf, GitError> {
+    #[cfg(feature = "server")]
+    if let Some(root) = crate::server::paths::root_for(&app.config().allowed_roots, dir) {
+        return crate::device_storage::prepare_root(&root);
+    }
+    let _ = dir;
+    let data = app.data_dir().map_err(GitError::Other)?;
     crate::device_storage::prepare_root(&data.join("repos"))
 }
 
-#[tauri::command(async)]
-pub fn device_repos_root(app: AppHandle) -> Result<String, GitError> {
-    Ok(device_root(&app)?.to_string_lossy().into_owned())
+#[command(async)]
+pub fn device_repos_root(app: Host) -> Result<String, GitError> {
+    Ok(device_root(&app, None)?.to_string_lossy().into_owned())
 }
 
-#[tauri::command(async)]
-pub fn list_device_folders(app: AppHandle, dir: String) -> Result<Vec<crate::device_storage::DeviceFolder>, GitError> {
-    crate::device_storage::list_folders(&device_root(&app)?, &dir)
+#[command(async)]
+pub fn list_device_folders(app: Host, dir: String) -> Result<Vec<crate::device_storage::DeviceFolder>, GitError> {
+    crate::device_storage::list_folders(&device_root(&app, Some(&dir))?, &dir)
 }
 
-#[tauri::command(async)]
-pub fn create_device_folder(app: AppHandle, dir: String, name: String) -> Result<String, GitError> {
-    crate::device_storage::create_folder(&device_root(&app)?, &dir, &name)
+#[command(async)]
+pub fn create_device_folder(app: Host, dir: String, name: String) -> Result<String, GitError> {
+    crate::device_storage::create_folder(&device_root(&app, Some(&dir))?, &dir, &name)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn init_repository(path: String) -> Result<(), GitError> {
     git::init_repo(&path)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_identity(path: Option<String>) -> Result<git::Identity, GitError> {
     match path {
         Some(p) => with_repo(&p, git::get_identity),
@@ -116,7 +132,7 @@ pub fn get_identity(path: Option<String>) -> Result<git::Identity, GitError> {
 }
 
 /// `path` absent : configuration globale de l'utilisateur.
-#[tauri::command(async)]
+#[command(async)]
 pub fn set_identity(path: Option<String>, name: String, email: String) -> Result<(), GitError> {
     match path {
         Some(p) => with_repo(&p, |r| git::set_identity(Some(r), &name, &email)),
@@ -125,82 +141,83 @@ pub fn set_identity(path: Option<String>, name: String, email: String) -> Result
 }
 
 /// Ouvre une nouvelle fenêtre, éventuellement directement sur le dépôt `repo`.
-#[tauri::command]
-pub fn open_new_window(app: AppHandle, repo: Option<String>) -> Result<(), String> {
+#[cfg(feature = "tauri-app")]
+#[command]
+pub fn open_new_window(app: Host, repo: Option<String>) -> Result<(), String> {
     crate::window::open_new_window(&app, repo.as_deref())
 }
 
 // ---------------------------------------------------------------- Historique
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_commits(path: String, limit: usize) -> Result<Vec<git::CommitInfo>, GitError> {
     with_repo(&path, |r| git::get_commits(r, limit))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_branches(path: String) -> Result<Vec<git::BranchInfo>, GitError> {
     with_repo(&path, git::get_branches)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_tags(path: String) -> Result<Vec<git::TagInfo>, GitError> {
     with_repo(&path, git::get_tags)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_commit_details(path: String, hash: String) -> Result<git::CommitDetails, GitError> {
     with_repo(&path, |r| git::get_commit_details(r, &hash))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_commit_file_diff(path: String, hash: String, file_path: String) -> Result<git::FileDiff, GitError> {
     with_repo(&path, |r| git::get_commit_file_diff(r, &hash, &file_path))
 }
 
 /// Fichiers modifiés par `head` depuis son ancêtre commun avec `base` (diff d'une pull request).
-#[tauri::command(async)]
+#[command(async)]
 pub fn compare_refs(path: String, base: String, head: String) -> Result<git::RefComparison, GitError> {
     with_repo(&path, |r| git::compare_refs(r, &base, &head))
 }
 
 /// Fichiers modifiés entre deux commits quelconques (comparaison de deux commits du graphe).
-#[tauri::command(async)]
+#[command(async)]
 pub fn diff_commits(path: String, base: String, head: String) -> Result<Vec<git::CommitFile>, GitError> {
     with_repo(&path, |r| git::diff_commits(r, &base, &head))
 }
 
 /// Trailers des commits de `to` absents de `from` : fils de revue traités par les commits poussés.
-#[tauri::command(async)]
+#[command(async)]
 pub fn commit_trailers(path: String, from: Option<String>, to: String) -> Result<Vec<git::CommitTrailers>, GitError> {
     with_repo(&path, |r| git::commit_trailers(r, from.as_deref(), &to))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_compare_file_diff(path: String, base: String, head: String, file_path: String) -> Result<git::FileDiff, GitError> {
     with_repo(&path, |r| git::get_compare_file_diff(r, &base, &head, &file_path))
 }
 
 // ---------------------------------------------------------------- Mise à jour d'une branche de PR
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn branch_divergence(path: String, base: String, head: String) -> Result<git::BranchDivergence, GitError> {
     with_repo(&path, |r| git::branch_divergence(r, &base, &head))
 }
 
 /// Rebase en mémoire : la copie de travail n'est pas touchée.
-#[tauri::command(async)]
+#[command(async)]
 pub fn rebase_pull_request(path: String, onto: String, head: String, branch: String) -> Result<git::PrRebase, GitError> {
     with_repo(&path, |r| git::rebase_pull_request(r, &onto, &head, &branch))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn discard_pull_request_rebase(path: String, branch: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::discard_pull_request_rebase(r, &branch))
 }
 
-#[tauri::command]
+#[command]
 pub async fn force_push_pull_request(
-    app: AppHandle,
+    app: Host,
     path: String,
     remote: String,
     branch: String,
@@ -212,49 +229,49 @@ pub async fn force_push_pull_request(
 
 // ---------------------------------------------------------------- Copie de travail
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_status(path: String) -> Result<Vec<git::FileStatus>, GitError> {
     with_repo(&path, git::get_status)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_diff(path: String, file_path: String, staged: bool) -> Result<git::FileDiff, GitError> {
     with_repo(&path, |r| git::get_diff(r, &file_path, staged))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn stage_files(path: String, paths: Vec<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::stage_paths(r, &paths))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn stage_all(path: String) -> Result<(), GitError> {
     with_repo(&path, git::stage_all)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn unstage_files(path: String, paths: Vec<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::unstage_paths(r, &paths))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn unstage_all(path: String) -> Result<(), GitError> {
     with_repo(&path, git::unstage_all)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn discard_files(path: String, paths: Vec<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::discard_paths(r, &paths))
 }
 
 /// Ajoute des motifs au .gitignore racine du dépôt.
-#[tauri::command(async)]
+#[command(async)]
 pub fn ignore_patterns(path: String, patterns: Vec<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::ignore_patterns(r, &patterns))
 }
 
 /// Indexe / désindexe / annule un bloc (`lines` absent) ou des lignes d'un bloc.
-#[tauri::command(async)]
+#[command(async)]
 pub fn apply_lines(
     path: String,
     file_path: String,
@@ -265,23 +282,23 @@ pub fn apply_lines(
     with_repo(&path, |r| git::apply_lines(r, &file_path, hunk, lines, action))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn create_commit(path: String, message: String, amend: bool) -> Result<String, GitError> {
     with_repo(&path, |r| git::create_commit(r, &message, amend))
 }
 
 /// Nouveau message pour le dernier commit, contenu inchangé.
-#[tauri::command(async)]
+#[command(async)]
 pub fn reword_head(path: String, message: String) -> Result<String, GitError> {
     with_repo(&path, |r| git::reword_head(r, &message))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn get_conflict_content(path: String, file_path: String) -> Result<String, GitError> {
     with_repo(&path, |r| git::get_conflict_content(r, &file_path))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn resolve_conflict(path: String, file_path: String, content: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::resolve_conflict(r, &file_path, &content))
 }
@@ -289,40 +306,40 @@ pub fn resolve_conflict(path: String, file_path: String, content: String) -> Res
 // ---------------------------------------------------------------- Fichiers de la copie de travail
 
 /// Fichiers suivis et non suivis (hors `.gitignore`), pour les parcourir dans l'application.
-#[tauri::command(async)]
+#[command(async)]
 pub fn list_files(path: String) -> Result<Vec<String>, GitError> {
     with_repo(&path, git::list_files)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn read_file(path: String, file_path: String) -> Result<String, GitError> {
     with_repo(&path, |r| git::read_file(r, &file_path))
 }
 
 /// `create` : nouveau fichier, refusé s'il existe déjà.
-#[tauri::command(async)]
+#[command(async)]
 pub fn write_file(path: String, file_path: String, content: String, create: bool) -> Result<(), GitError> {
     with_repo(&path, |r| git::write_file(r, &file_path, &content, create))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn delete_file(path: String, file_path: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::delete_file(r, &file_path))
 }
 
 // ---------------------------------------------------------------- Stash
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn list_stashes(path: String) -> Result<Vec<git::StashInfo>, GitError> {
     with_repo_mut(&path, git::list_stashes)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn stash_save(path: String, message: Option<String>, include_untracked: bool) -> Result<(), GitError> {
     with_repo_mut(&path, |r| git::stash_save(r, message.as_deref(), include_untracked))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn stash_apply(path: String, index: usize, pop: bool) -> Result<(), GitError> {
     with_repo_mut(&path, |r| {
         git::stash_apply(r, index, pop)?;
@@ -331,29 +348,29 @@ pub fn stash_apply(path: String, index: usize, pop: bool) -> Result<(), GitError
     })
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn stash_drop(path: String, index: usize) -> Result<(), GitError> {
     with_repo_mut(&path, |r| git::stash_drop(r, index))
 }
 
 // ---------------------------------------------------------------- Branches & commits
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn checkout_branch(path: String, name: String) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| git::checkout_branch(r, &name))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn checkout_remote_branch(path: String, name: String) -> Result<String, GitError> {
     with_repo_lfs(&path, |r| git::checkout_remote_branch(r, &name))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn checkout_commit(path: String, hash: String) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| git::checkout_commit(r, &hash))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn create_branch(path: String, name: String, from_ref: String, checkout: bool) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| {
         git::create_branch(r, &name, &from_ref)?;
@@ -364,65 +381,65 @@ pub fn create_branch(path: String, name: String, from_ref: String, checkout: boo
     })
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn delete_branch(path: String, name: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::delete_branch(r, &name))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn rename_branch(path: String, old_name: String, new_name: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::rename_branch(r, &old_name, &new_name))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn set_upstream(path: String, name: String, upstream: Option<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::set_upstream(r, &name, upstream.as_deref()))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn merge_branch(path: String, branch: String) -> Result<git::MergeResult, GitError> {
     with_repo_lfs(&path, |r| git::merge_branch(r, &branch))
 }
 
 /// Avance la branche courante jusqu'à `branch` sans jamais créer de commit de merge.
-#[tauri::command(async)]
+#[command(async)]
 pub fn fast_forward(path: String, branch: String) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| git::fast_forward(r, &branch))
 }
 
 /// Avance une branche locale jusqu'à `target` sans la checkout.
-#[tauri::command(async)]
+#[command(async)]
 pub fn fast_forward_branch(path: String, branch: String, target: String) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| git::fast_forward_branch(r, &branch, &target))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn abort_merge(path: String) -> Result<(), GitError> {
     with_repo_lfs(&path, git::abort_merge)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn rebase_onto(path: String, onto: String) -> Result<git::RebaseResult, GitError> {
     with_repo_lfs(&path, |r| git::rebase_onto(r, &onto))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn continue_rebase(path: String) -> Result<git::RebaseResult, GitError> {
     with_repo_lfs(&path, git::continue_rebase)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn abort_rebase(path: String) -> Result<(), GitError> {
     with_repo_lfs(&path, git::abort_rebase)
 }
 
 /// Commits réécrits par un rebase interactif sur `base`, du plus ancien au plus récent.
-#[tauri::command(async)]
+#[command(async)]
 pub fn rebase_todo(path: String, base: String) -> Result<Vec<git::TodoCommit>, GitError> {
     with_repo(&path, |r| git::rebase_todo(r, &base))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn interactive_rebase(
     path: String,
     base: String,
@@ -432,62 +449,62 @@ pub fn interactive_rebase(
     with_repo_lfs(&path, |r| git::interactive_rebase(r, &base, &steps, mode))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn continue_interactive_rebase(path: String) -> Result<git::InteractiveOutcome, GitError> {
     with_repo_lfs(&path, git::continue_interactive)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn abort_interactive_rebase(path: String) -> Result<(), GitError> {
     with_repo_lfs(&path, git::abort_interactive)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn reset_to(path: String, hash: String, mode: String) -> Result<(), GitError> {
     with_repo_lfs(&path, |r| git::reset_to(r, &hash, &mode))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn cherry_pick(path: String, hash: String) -> Result<git::MergeResult, GitError> {
     with_repo_lfs(&path, |r| git::cherry_pick(r, &hash))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn revert_commit(path: String, hash: String) -> Result<git::MergeResult, GitError> {
     with_repo_lfs(&path, |r| git::revert_commit(r, &hash))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn create_tag(path: String, name: String, target: String, message: Option<String>) -> Result<(), GitError> {
     with_repo(&path, |r| git::create_tag(r, &name, &target, message.as_deref()))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn delete_tag(path: String, name: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::delete_tag(r, &name))
 }
 
 // ---------------------------------------------------------------- Remotes
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn list_remotes(path: String) -> Result<Vec<git::RemoteInfo>, GitError> {
     with_repo(&path, git::list_remotes)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn add_remote(path: String, name: String, url: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::add_remote(r, &name, &url))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn remove_remote(path: String, name: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::remove_remote(r, &name))
 }
 
 /// Clone puis initialise les sous-modules. Renvoie un avertissement si ces derniers échouent
 /// (le dépôt principal reste cloné et utilisable).
-#[tauri::command]
-pub async fn clone_repository(app: AppHandle, url: String, path: String) -> Result<Option<String>, GitError> {
+#[command]
+pub async fn clone_repository(app: Host, url: String, path: String) -> Result<Option<String>, GitError> {
     network(&app, move |creds| {
         git::clone_repo(&url, &path, creds)?;
         let mut warnings = Vec::new();
@@ -502,76 +519,76 @@ pub async fn clone_repository(app: AppHandle, url: String, path: String) -> Resu
     .await
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_setup_info() -> Result<ssh_setup::SshSetupInfo, String> {
     Ok(ssh_setup::setup_info(&ssh_setup::ssh_dir()?))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_create_key(name: Option<String>, comment: String, passphrase: Option<String>) -> Result<ssh_setup::SshKeyInfo, String> {
     ssh_setup::create_key(&ssh_setup::ssh_dir()?, name.as_deref(), &comment, passphrase.as_deref())
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_all_keys() -> Result<Vec<ssh_setup::SshKeyInfo>, String> {
     Ok(ssh_setup::all_keys(&ssh_setup::ssh_dir()?))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn list_git_profiles() -> Result<git::ProfilesInfo, GitError> {
     git::list_profiles(&git::home_dir()?)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn save_git_profile(profile: git::ProfileInput) -> Result<git::GitProfile, GitError> {
     git::save_profile(&git::home_dir()?, &profile)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn delete_git_profile(id: String) -> Result<(), GitError> {
     git::delete_profile(&git::home_dir()?, &id)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn git_identity_status(path: String) -> Result<git::IdentityStatus, GitError> {
     with_repo(&path, |r| git::identity_status(&git::home_dir()?, r))
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn clear_local_identity(path: String) -> Result<(), GitError> {
     with_repo(&path, git::clear_local_identity)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_existing_key(name: String) -> Result<ssh_setup::SshKeyInfo, String> {
     ssh_setup::existing_key(&ssh_setup::ssh_dir()?, &name)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_host_status(host: String) -> Result<ssh_setup::HostStatus, String> {
     ssh_setup::host_status(&ssh_setup::ssh_dir()?, &host)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_trust_host(host: String, fingerprint: String) -> Result<(), String> {
     ssh_setup::trust_host(&ssh_setup::ssh_dir()?, &host, &fingerprint)
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_check_connection(host: String, key: String) -> Result<ssh_setup::SshCheck, String> {
     ssh_setup::check_connection(&ssh_setup::ssh_dir()?, &host, &key)
 }
 
 /// Clé SSH de l'appareil (Android Keystore) : état et description, sans demander de confirmation.
 #[cfg(target_os = "android")]
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_device_key_status() -> Result<crate::android_keystore::DeviceKeyStatus, String> {
     crate::android_keystore::status()
 }
 
 /// Supprime la clé SSH de l'appareil (par exemple invalidée). Elle reste à retirer de la forge.
 #[cfg(target_os = "android")]
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_device_key_delete() -> Result<(), String> {
     crate::android_keystore::delete()
 }
@@ -582,42 +599,42 @@ fn device_key_unavailable() -> String {
 }
 
 #[cfg(not(target_os = "android"))]
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_device_key_status() -> Result<serde_json::Value, String> {
     Err(device_key_unavailable())
 }
 
 #[cfg(not(target_os = "android"))]
-#[tauri::command(async)]
+#[command(async)]
 pub fn ssh_device_key_delete() -> Result<(), String> {
     Err(device_key_unavailable())
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn list_submodules(path: String) -> Result<Vec<git::SubmoduleInfo>, GitError> {
     with_repo(&path, git::list_submodules)
 }
 
 /// `names` vide : tous les sous-modules.
-#[tauri::command]
-pub async fn update_submodules(app: AppHandle, path: String, names: Vec<String>) -> Result<(), GitError> {
+#[command]
+pub async fn update_submodules(app: Host, path: String, names: Vec<String>) -> Result<(), GitError> {
     network(&app, move |creds| with_repo(&path, |r| git::update_submodules(r, &names, creds))).await
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn list_worktrees(path: String) -> Result<Vec<git::WorktreeInfo>, GitError> {
     with_repo(&path, git::list_worktrees)
 }
 
 /// `create` : crée d'abord `branch` depuis HEAD. Les fichiers LFS écrits par libgit2 sont des pointeurs : on remet leur contenu.
-#[tauri::command(async)]
+#[command(async)]
 pub fn add_worktree(path: String, target: String, branch: String, create: bool) -> Result<(), GitError> {
     with_repo(&path, |r| git::add_worktree(r, &target, &branch, create))?;
     let _ = with_repo(&target, git::lfs::lfs_checkout);
     Ok(())
 }
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn remove_worktree(path: String, name: String) -> Result<(), GitError> {
     with_repo(&path, |r| git::remove_worktree(r, &name))
 }
@@ -625,8 +642,8 @@ pub fn remove_worktree(path: String, name: String) -> Result<(), GitError> {
 /// `remote` absent : fetch de tous les remotes.
 /// `background` : synchronisation automatique. Sur Android, la clé SSH de l'appareil ne peut alors demander aucune
 /// confirmation : verrouillée, elle fait échouer le fetch (ignoré sans bruit par l'interface). Sans effet ailleurs.
-#[tauri::command]
-pub async fn fetch_remote(app: AppHandle, path: String, remote: Option<String>, background: Option<bool>) -> Result<(), GitError> {
+#[command]
+pub async fn fetch_remote(app: Host, path: String, remote: Option<String>, background: Option<bool>) -> Result<(), GitError> {
     network(&app, move |creds| {
         let fetch = || {
             with_repo(&path, |r| match &remote {
@@ -644,8 +661,8 @@ pub async fn fetch_remote(app: AppHandle, path: String, remote: Option<String>, 
     .await
 }
 
-#[tauri::command]
-pub async fn pull(app: AppHandle, path: String, rebase: bool) -> Result<git::MergeResult, GitError> {
+#[command]
+pub async fn pull(app: Host, path: String, rebase: bool) -> Result<git::MergeResult, GitError> {
     network(&app, move |creds| {
         with_repo(&path, |r| {
             let result = git::pull(r, rebase, creds)?;
@@ -664,8 +681,8 @@ pub async fn pull(app: AppHandle, path: String, rebase: bool) -> Result<git::Mer
 
 /// Pull automatique (lancement de l'application sur Android) : fetch puis fast-forward seulement, voir
 /// [`git::pull_fast_forward`]. Comme un fetch d'arrière-plan, aucune confirmation de la clé SSH de l'appareil.
-#[tauri::command]
-pub async fn pull_fast_forward(app: AppHandle, path: String) -> Result<git::FastForwardPull, GitError> {
+#[command]
+pub async fn pull_fast_forward(app: Host, path: String) -> Result<git::FastForwardPull, GitError> {
     network(&app, move |creds| {
         let pull = || {
             with_repo(&path, |r| {
@@ -692,9 +709,9 @@ pub async fn pull_fast_forward(app: AppHandle, path: String) -> Result<git::Fast
 
 /// Push d'une branche (la branche courante par défaut) vers son remote de suivi,
 /// ou vers `remote` / `origin` si elle n'en a pas encore.
-#[tauri::command]
+#[command]
 pub async fn push(
-    app: AppHandle,
+    app: Host,
     path: String,
     branch: Option<String>,
     remote: Option<String>,
@@ -740,31 +757,31 @@ fn default_push_remote(repo: &Repository, branch: &str) -> Result<String, GitErr
         .ok_or_else(|| GitError::Other(tr!("Aucun remote configuré : ajoute-en un avant de pousser", "No remote configured: add one before pushing")))
 }
 
-#[tauri::command]
-pub async fn delete_remote_branch(app: AppHandle, path: String, name: String) -> Result<(), GitError> {
+#[command]
+pub async fn delete_remote_branch(app: Host, path: String, name: String) -> Result<(), GitError> {
     network(&app, move |creds| with_repo(&path, |r| git::delete_remote_branch(r, &name, creds))).await
 }
 
-#[tauri::command]
-pub async fn push_tag(app: AppHandle, path: String, remote: String, tag: String) -> Result<(), GitError> {
+#[command]
+pub async fn push_tag(app: Host, path: String, remote: String, tag: String) -> Result<(), GitError> {
     network(&app, move |creds| with_repo(&path, |r| git::push_tag(r, &remote, &tag, creds))).await
 }
 
-#[tauri::command]
-pub async fn delete_remote_tag(app: AppHandle, path: String, remote: String, tag: String) -> Result<(), GitError> {
+#[command]
+pub async fn delete_remote_tag(app: Host, path: String, remote: String, tag: String) -> Result<(), GitError> {
     network(&app, move |creds| with_repo(&path, |r| git::delete_remote_tag(r, &remote, &tag, creds))).await
 }
 
 // ---------------------------------------------------------------- LFS
 
-#[tauri::command(async)]
+#[command(async)]
 pub fn lfs_status(path: String) -> Result<git::lfs::LfsStatus, GitError> {
     with_repo(&path, git::lfs::lfs_status)
 }
 
 /// Télécharge les fichiers LFS de la révision courante.
-#[tauri::command]
-pub async fn lfs_pull(app: AppHandle, path: String) -> Result<(), GitError> {
+#[command]
+pub async fn lfs_pull(app: Host, path: String) -> Result<(), GitError> {
     network(&app, move |creds| {
         with_repo(&path, |r| {
             let remote = if r.find_remote("origin").is_ok() {
@@ -779,15 +796,15 @@ pub async fn lfs_pull(app: AppHandle, path: String) -> Result<(), GitError> {
 }
 
 /// Suit (ou ne suit plus, si `untrack`) un motif de fichiers avec LFS.
-#[tauri::command(async)]
+#[command(async)]
 pub fn lfs_track(path: String, pattern: String, untrack: bool) -> Result<(), GitError> {
     with_repo(&path, |r| git::lfs::lfs_track(r, &pattern, untrack))
 }
 
 // ---------------------------------------------------------------- Comptes
 
-#[tauri::command]
-pub fn list_accounts(app: AppHandle) -> Result<Vec<Account>, String> {
+#[command]
+pub fn list_accounts(app: Host) -> Result<Vec<Account>, String> {
     account_store(&app)?.list()
 }
 
@@ -798,13 +815,13 @@ fn username_for_token(provider: Provider, base_url: &str, token: &str) -> Result
 }
 
 async fn blocking_str<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
-    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+    crate::host::spawn_blocking(f).await.map_err(|e| e.to_string())?
 }
 
 /// Ajoute un compte avec un token personnel, après l'avoir validé auprès de l'instance.
-#[tauri::command]
+#[command]
 pub async fn add_pat_account(
-    app: AppHandle,
+    app: Host,
     provider: Provider,
     base_url: String,
     token: String,
@@ -829,8 +846,8 @@ pub async fn add_pat_account(
 }
 
 /// Remplace le token personnel d'un compte (validé auprès de l'instance).
-#[tauri::command]
-pub async fn update_account_token(app: AppHandle, id: String, token: String) -> Result<SavedAccount, String> {
+#[command]
+pub async fn update_account_token(app: Host, id: String, token: String) -> Result<SavedAccount, String> {
     let store = account_store(&app)?;
     blocking_str(move || {
         let mut account = store.get(&id)?;
@@ -841,8 +858,8 @@ pub async fn update_account_token(app: AppHandle, id: String, token: String) -> 
     .await
 }
 
-#[tauri::command]
-pub fn rename_account(app: AppHandle, id: String, label: String) -> Result<SavedAccount, String> {
+#[command]
+pub fn rename_account(app: Host, id: String, label: String) -> Result<SavedAccount, String> {
     let store = account_store(&app)?;
     let mut account = store.get(&id)?;
     let label = label.trim();
@@ -853,14 +870,14 @@ pub fn rename_account(app: AppHandle, id: String, label: String) -> Result<Saved
     store.save(account, None)
 }
 
-#[tauri::command]
-pub fn remove_account(app: AppHandle, id: String) -> Result<(), String> {
+#[command]
+pub fn remove_account(app: Host, id: String) -> Result<(), String> {
     account_store(&app)?.remove(&id)
 }
 
 /// Requête GET sur l'API GitHub / GitLab du compte. Le token reste côté Rust.
-#[tauri::command]
-pub async fn forge_api(app: AppHandle, account_id: String, path: String) -> Result<serde_json::Value, String> {
+#[command]
+pub async fn forge_api(app: Host, account_id: String, path: String) -> Result<serde_json::Value, String> {
     let store = account_store(&app)?;
     blocking_str(move || {
         let account = store.get(&account_id)?;
@@ -871,9 +888,9 @@ pub async fn forge_api(app: AppHandle, account_id: String, path: String) -> Resu
 }
 
 /// Requête d'écriture (POST / PUT / PATCH) sur l'API du compte : création de pull / merge requests…
-#[tauri::command]
+#[command]
 pub async fn forge_api_send(
-    app: AppHandle,
+    app: Host,
     account_id: String,
     method: String,
     path: String,
@@ -889,9 +906,9 @@ pub async fn forge_api_send(
 }
 
 /// Requête GraphQL GitHub (opérations absentes de l'API REST, comme le passage brouillon ↔ prête).
-#[tauri::command]
+#[command]
 pub async fn forge_graphql(
-    app: AppHandle,
+    app: Host,
     account_id: String,
     query: String,
     variables: serde_json::Value,
@@ -924,7 +941,7 @@ fn client_id_default(runtime: Option<String>, built_in: Option<&str>) -> Option<
 
 /// Identifiants client OAuth par défaut (MERATHON_GITHUB_CLIENT_ID, MERATHON_GITLAB_CLIENT_ID).
 /// Les anciens noms GIT_CLIENT_* restent acceptés.
-#[tauri::command]
+#[command]
 pub fn oauth_defaults() -> OAuthDefaults {
     let env = |name: &str, legacy: &str| std::env::var(name).or_else(|_| std::env::var(legacy)).ok();
     OAuthDefaults {
@@ -953,18 +970,18 @@ mod tests {
 }
 
 /// Démarre une connexion : renvoie le code à saisir dans le navigateur.
-#[tauri::command]
+#[command]
 pub async fn oauth_start(provider: Provider, base_url: String, client_id: String) -> Result<oauth::DeviceCode, String> {
     crate::accounts::validate_base_url(&base_url)?;
-    tauri::async_runtime::spawn_blocking(move || oauth::start(&oauth::endpoints(provider, &base_url), client_id.trim()))
+    crate::host::spawn_blocking(move || oauth::start(&oauth::endpoints(provider, &base_url), client_id.trim()))
         .await
         .map_err(|e| e.to_string())?
 }
 
 /// Attend la validation du code, puis enregistre le compte.
-#[tauri::command]
+#[command]
 pub async fn oauth_complete(
-    app: AppHandle,
+    app: Host,
     provider: Provider,
     base_url: String,
     client_id: String,
@@ -973,7 +990,7 @@ pub async fn oauth_complete(
 ) -> Result<SavedAccount, String> {
     crate::accounts::validate_base_url(&base_url)?;
     let store = account_store(&app)?;
-    tauri::async_runtime::spawn_blocking(move || {
+    crate::host::spawn_blocking(move || {
         let endpoints = oauth::endpoints(provider, &base_url);
         let cancel = oauth::register_cancel(&device.device_code);
         let token = oauth::wait_for_token(&endpoints, client_id.trim(), &device, &cancel);
@@ -995,7 +1012,7 @@ pub async fn oauth_complete(
     .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
+#[command]
 pub fn oauth_cancel(device_code: String) {
     oauth::cancel(&device_code);
 }
@@ -1009,7 +1026,7 @@ pub struct AppInfo {
     debug: bool,
 }
 
-#[tauri::command]
+#[command]
 pub fn app_info() -> AppInfo {
     let (major, minor, patch) = git2::Version::get().libgit2_version();
     AppInfo {
@@ -1021,7 +1038,8 @@ pub fn app_info() -> AppInfo {
 }
 
 /// Outils de développement du webview (builds de debug uniquement).
-#[tauri::command]
+#[cfg(feature = "tauri-app")]
+#[command]
 pub fn open_devtools(window: tauri::WebviewWindow) {
     #[cfg(debug_assertions)]
     window.open_devtools();
@@ -1032,34 +1050,33 @@ pub fn open_devtools(window: tauri::WebviewWindow) {
 // ---------------------------------------------------------------- Terminal intégré
 
 #[cfg(desktop)]
-#[tauri::command]
+#[command]
 pub fn terminal_open(
-    app: AppHandle,
-    window: tauri::Window,
+    window: Window,
     cwd: String,
     cols: u16,
     rows: u16,
-    on_event: tauri::ipc::Channel<crate::terminal::TerminalEvent>,
+    on_event: Channel<crate::terminal::TerminalEvent>,
 ) -> Result<u32, String> {
-    crate::terminal::open(&app, window.label(), &cwd, cols, rows, on_event)
+    crate::terminal::open(window.label(), &cwd, cols, rows, on_event)
 }
 
 #[cfg(desktop)]
-#[tauri::command]
-pub fn terminal_write(app: AppHandle, id: u32, data: String) -> Result<(), String> {
-    crate::terminal::write(&app, id, &data)
+#[command]
+pub fn terminal_write(id: u32, data: String) -> Result<(), String> {
+    crate::terminal::write(id, &data)
 }
 
 #[cfg(desktop)]
-#[tauri::command]
-pub fn terminal_resize(app: AppHandle, id: u32, cols: u16, rows: u16) -> Result<(), String> {
-    crate::terminal::resize(&app, id, cols, rows)
+#[command]
+pub fn terminal_resize(id: u32, cols: u16, rows: u16) -> Result<(), String> {
+    crate::terminal::resize(id, cols, rows)
 }
 
 #[cfg(desktop)]
-#[tauri::command]
-pub fn terminal_close(app: AppHandle, id: u32) {
-    crate::terminal::close(&app, id)
+#[command]
+pub fn terminal_close(id: u32) {
+    crate::terminal::close(id)
 }
 
 // Sur mobile (Android, iOS), il n'y a pas de shell exploitable : les commandes existent toujours, pour que le
@@ -1071,23 +1088,23 @@ fn terminal_unavailable() -> String {
 }
 
 #[cfg(not(desktop))]
-#[tauri::command]
-pub fn terminal_open(_cwd: String, _cols: u16, _rows: u16, _on_event: tauri::ipc::Channel<serde_json::Value>) -> Result<u32, String> {
+#[command]
+pub fn terminal_open(_cwd: String, _cols: u16, _rows: u16, _on_event: Channel<serde_json::Value>) -> Result<u32, String> {
     Err(terminal_unavailable())
 }
 
 #[cfg(not(desktop))]
-#[tauri::command]
+#[command]
 pub fn terminal_write(_id: u32, _data: String) -> Result<(), String> {
     Err(terminal_unavailable())
 }
 
 #[cfg(not(desktop))]
-#[tauri::command]
+#[command]
 pub fn terminal_resize(_id: u32, _cols: u16, _rows: u16) -> Result<(), String> {
     Err(terminal_unavailable())
 }
 
 #[cfg(not(desktop))]
-#[tauri::command]
+#[command]
 pub fn terminal_close(_id: u32) {}

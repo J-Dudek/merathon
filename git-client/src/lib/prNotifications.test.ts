@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { comparisonBase, filterEvents, notificationText, pullRequestEvents, readNotifications, type PrEvent } from "./prNotifications";
 import { defaultNotifications } from "../store/useDisplayStore";
 import type { MyPullRequests, PrSummary } from "../types/forge";
@@ -99,5 +99,30 @@ describe("comparisonBase", () => {
     expect(comparisonBase(local, undefined)).toBe(local);
     expect(comparisonBase(undefined, task)).toBe(task);
     expect(comparisonBase(undefined, undefined)).toBeUndefined();
+  });
+});
+
+describe("NAS (navigateur)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("n'envoie aucune notification système et ne demande aucune autorisation au navigateur", async () => {
+    vi.stubEnv("VITE_TARGET", "server");
+    const requestPermission = vi.fn(async () => "granted");
+    const BrowserNotification = Object.assign(vi.fn(), { permission: "granted", requestPermission });
+    vi.stubGlobal("Notification", BrowserNotification);
+    // Module neuf : l'autorisation est mémorisée pour la session.
+    vi.resetModules();
+    const { notificationsAllowed, sendTestNotification } = await import("./prNotifications");
+    const { notifyDesktop } = await import("../ipc/commands");
+
+    expect(await notificationsAllowed()).toBe(false);
+    expect(await sendTestNotification()).toBe(false);
+    expect(await notifyDesktop("Merathon", "essai")).toBeNull();
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(BrowserNotification).not.toHaveBeenCalled();
   });
 });

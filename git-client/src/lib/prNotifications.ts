@@ -6,7 +6,7 @@ import { prFreshness, seenKey, useSeenPrsStore, type SeenPr } from "../store/use
 import { useUiStore } from "../store/useUiStore";
 import { cachedMyPullRequests, fetchMyPullRequests, publishMyPullRequests } from "./myPullRequests";
 import type { ForgeAccount, MyPullRequests, PrSummary } from "../types/forge";
-import { isAndroid } from "./platform";
+import { isAndroid, isServer } from "./platform";
 import { tr, trn, COLON } from "../i18n";
 
 export type PrEventKind =
@@ -117,7 +117,12 @@ let permission: Promise<boolean> | null = null;
 
 /** Autorisation d'afficher des notifications système, demandée une seule fois par session. */
 export function notificationsAllowed(): Promise<boolean> {
-  permission ??= (async () => (await isPermissionGranted()) || (await requestPermission()) === "granted")().catch(() => false);
+  permission ??= (async () => {
+    // NAS : jamais de notification système. Celles du navigateur n'existent qu'en HTTPS et onglet ouvert ;
+    // l'activité des PR / MR y est signalée par un bandeau, sans demander d'autorisation au navigateur.
+    if (isServer()) return false;
+    return (await isPermissionGranted()) || (await requestPermission()) === "granted";
+  })().catch(() => false);
   return permission;
 }
 

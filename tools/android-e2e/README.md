@@ -91,3 +91,9 @@ await step("Ce que fait l'étape", async () => {
 ```
 
 Vérifier aussi l'effet côté serveur (`serverGit`, `serverState`) ou appareil (`onDevice`), pas seulement l'affichage.
+
+`app.tap` attend que l'élément soit activé, immobile (pas de défilement ni de panneau qui glisse) et non recouvert au point touché (notification, fond d'une fenêtre) : un vrai doigt toucherait sinon autre chose. Pour une action dont l'effet doit être constaté avant la suite (indexer, commiter, pousser, ouvrir un écran), utiliser `app.tapUntil(libellé, effet)` : un toucher resté sans effet est rejoué, trois fois au plus, et tracé dans le journal (« toucher sans effet… ») ; une erreur affichée par l'application fait échouer l'étape au lieu d'être masquée.
+
+```js
+await app.tapUntil("Tout indexer", () => app.locate("^Commiter 1"), { what: "fichier indexé" });
+```

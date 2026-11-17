@@ -25,6 +25,7 @@ import { dispatchContextMenu, isContextMenuKey, listKeyIndex } from "../lib/keyb
 import type { BranchInfo, CommitInfo, MergeResult, RefLabel } from "../types/git";
 import { resizeKeyDelta } from "../lib/resizeKeys";
 import { tr, trn, locale } from "../i18n";
+import { copyText } from "../lib/clipboard";
 
 const INFO_OFFSET = 20;
 const OVERSCAN = 10;
@@ -421,9 +422,9 @@ export function CommitGraph() {
       { label: tr("Reset {head} ici — mixed", { head }), action: reset("mixed") },
       { label: tr("Reset {head} ici — hard", { head }), action: reset("hard"), danger: true },
       "separator",
-      { label: tr("Copier le hash complet"), action: () => navigator.clipboard.writeText(commit.hash) },
-      { label: tr("Copier le hash court"), action: () => navigator.clipboard.writeText(commit.short_hash) },
-      { label: tr("Copier le message"), action: () => navigator.clipboard.writeText(commit.message) },
+      { label: tr("Copier le hash complet"), action: () => copyText(commit.hash) },
+      { label: tr("Copier le hash court"), action: () => copyText(commit.short_hash) },
+      { label: tr("Copier le message"), action: () => copyText(commit.message) },
     ];
   }
 

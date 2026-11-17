@@ -3,8 +3,9 @@ import {
   Accessibility, Bell, BookOpen, Bug, Check, Copy, ExternalLink, FolderCog, FolderGit2, Info, KeyRound, Keyboard, Languages, Monitor, Moon, Palette, RefreshCw, RotateCcw, Scale, ScrollText,
   SquareTerminal, Sun, Trophy, type LucideIcon,
 } from "lucide-react";
-import { getTauriVersion, getVersion } from "@tauri-apps/api/app";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { getTauriVersion } from "@tauri-apps/api/app";
+import { appVersion } from "../lib/nativeWindow";
+import { openUrl } from "../lib/openExternal";
 import { Modal, inputClass } from "./Modal";
 import { GitProfilesSection } from "./GitProfilesSection";
 import { DeviceSshSection } from "./DeviceSshSection";
@@ -22,16 +23,19 @@ import {
 import { syncOpenRepos, useSyncRunning } from "../lib/autoSync";
 import { notificationsAllowed, sendTestNotification } from "../lib/prNotifications";
 import { checkForUpdates } from "../lib/updater";
-import { hasDesktopFeatures, isAndroid, isMobile } from "../lib/platform";
+import { hasNativeShell, isAndroid, isMobile, isServer } from "../lib/platform";
 import { errorMessage } from "../lib/actions";
 import { aboutReport, osLabel, REPO_URL, releaseUrl, versionLabel } from "../lib/about";
 import {
   AUDIT, EVALUATED_VIEWS, ISSUES_URL, ORCA_PROTOCOL_URL, RGAA_GRID_URL, conformity, criteria, declaration, declarationMarkdown, formatPercent, scoreAfter,
   viewsAtFullScore, type Finding,
 } from "../lib/accessibility";
-import { appInfo, type AppInfo } from "../ipc/commands";
+import { appInfo, serverInfo, type AppInfo } from "../ipc/commands";
+import { useTerminalAvailable } from "../lib/terminalAvailability";
 import logo from "../assets/logo.webp";
 import { LANGUAGE_NAMES, LANGUAGES, tr, trn, locale, percent } from "../i18n";
+import { copyText } from "../lib/clipboard";
+import { tabShortcuts } from "../lib/tabShortcuts";
 
 const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "appearance", label: tr("Apparence"), icon: Palette },
@@ -55,7 +59,8 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
   // « Mon activité » n'apparaît qu'après la première récompense : avant, elle gâcherait la surprise.
   const hasRewards = useCelebrationStore((s) => s.milestones.rewards.length > 0);
   const newRewards = useCelebrationStore((s) => hasNewRewards(s.milestones));
-  const sections = SECTIONS.filter((s) => (s.id !== "activity" || hasRewards) && (s.id !== "terminal" || hasDesktopFeatures()) && (s.id !== "shortcuts" || !isMobile()) && (s.id !== "ssh" || isMobile()));
+  const terminalAvailable = useTerminalAvailable();
+  const sections = SECTIONS.filter((s) => (s.id !== "activity" || hasRewards) && (s.id !== "terminal" || terminalAvailable) && (s.id !== "shortcuts" || !isMobile()) && (s.id !== "ssh" || isMobile()));
 
   return (
     <Modal title={tr("Préférences")} onClose={onClose} width="w-[720px]">
@@ -191,8 +196,18 @@ function AppearanceSection() {
         </div>
       </Group>
 
+      {/* NAS : la taille est celle du zoom du navigateur, seul (un zoom de Merathon s'y multiplierait). */}
+      {isServer() && (
+        <Group title={tr("Taille de l'interface")} description={tr("Dans un navigateur, la taille de l'interface est celle du zoom du navigateur, qu'il mémorise pour l'adresse de Merathon.")}>
+          <p className="flex items-center gap-1.5 text-[10px] text-[var(--color-muted)]">
+            <Kbd keys="Ctrl+=" />{" "}{tr("agrandir")}{" "}<span className="mx-1">·</span>
+            <Kbd keys="Ctrl+-" />{" "}{tr("réduire")}{" "}<span className="mx-1">·</span>
+            <Kbd keys="Ctrl+0" /> {percent(100)}
+          </p>
+        </Group>
+      )}
       {/* Mobile : la taille suit le réglage du système. */}
-      {!isMobile() && (
+      {!isMobile() && !isServer() && (
         <Group
           title={tr("Taille de l'interface")}
           description={tr("Agrandit ou réduit tout : textes, panneaux, graphe et terminal.")}
@@ -325,9 +340,7 @@ function SyncSection() {
       <SectionTitle title={tr("Synchronisation")} subtitle={tr("Surveillance des dépôts ouverts dans les onglets.")} />
       <Group
         title={android ? tr("Pendant l'utilisation") : tr("Intervalle")}
-        description={android
-          ? tr("Fetch des dépôts ouverts et actualisation des PR / MR tant que Merathon est à l'écran.")
-          : tr("Fetch de chaque dépôt ouvert et actualisation de ses PR / MR ; une notification résume les changements.")}
+        description={syncDescription(android)}
         value={syncLabel(interval)}
       >
         <Slider
@@ -389,6 +402,14 @@ function PullOnLaunch() {
   );
 }
 
+/** Ce que fait la synchronisation périodique, selon la plateforme. */
+function syncDescription(android: boolean): string {
+  if (android) return tr("Fetch des dépôts ouverts et actualisation des PR / MR tant que Merathon est à l'écran.");
+  // NAS : seulement page ouverte, et fetch regroupés entre les pages (voir server/repo_queue.rs).
+  if (isServer()) return tr("Fetch de chaque dépôt ouvert et actualisation de ses PR / MR, tant qu'une page Merathon est ouverte ; un bandeau résume les changements. Le NAS regroupe les pages : un fetch fait par une autre page il y a moins d'une minute n'est pas refait.");
+  return tr("Fetch de chaque dépôt ouvert et actualisation de ses PR / MR ; une notification résume les changements.");
+}
+
 /** Android : vérification quand l'application est fermée, désactivée par défaut (consommation de batterie). */
 function BackgroundCheck() {
   const settings = useDisplayStore((s) => s.notifications);
@@ -440,6 +461,7 @@ function NotificationsGroup() {
   const update = useDisplayStore((s) => s.update);
   const notify = useUiStore((s) => s.notify);
   const set = (patch: Partial<NotificationSettings>) => update({ notifications: { ...settings, ...patch } });
+  const server = isServer();
 
   async function test() {
     try {
@@ -451,17 +473,20 @@ function NotificationsGroup() {
 
   return (
     <section className="mt-6">
+      {/* NAS : ni notification système ni pastille d'icône dans un navigateur ; l'activité reste signalée par un bandeau. */}
       <Group
-        title="Notifications"
-        description={tr("À chaque synchronisation, l'activité de mes PR / MR (tous projets) : notification système si Merathon est en arrière-plan, simple bandeau sinon.")}
+        title={server ? tr("Activité de mes PR / MR") : "Notifications"}
+        description={server
+          ? tr("À chaque synchronisation, l'activité de mes PR / MR (tous projets), signalée par un bandeau dans Merathon. La version NAS n'envoie pas de notification système.")
+          : tr("À chaque synchronisation, l'activité de mes PR / MR (tous projets) : notification système si Merathon est en arrière-plan, simple bandeau sinon.")}
       >
         <label className="flex items-center gap-2 mb-3 font-medium">
           <input type="checkbox" className="h-4 w-4" checked={settings.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
-          {tr("Activer les notifications")}
+          {server ? tr("Signaler l'activité de mes PR / MR") : tr("Activer les notifications")}
         </label>
-        <div role="group" aria-label={tr("Notifier pour")} className={`flex flex-col gap-2.5 pl-6 ${settings.enabled ? "" : "opacity-50"}`}>
-          {/* Android : la pastille de l'icône vient des notifications elles-mêmes, pas de ce réglage. */}
-          {NOTIFICATION_KINDS.filter(({ key }) => !(key === "badge" && isAndroid())).map(({ key, label }) => (
+        <div role="group" aria-label={server ? tr("Signaler") : tr("Notifier pour")} className={`flex flex-col gap-2.5 pl-6 ${settings.enabled ? "" : "opacity-50"}`}>
+          {/* Android : la pastille de l'icône vient des notifications elles-mêmes, pas de ce réglage. NAS : pas d'icône d'application. */}
+          {NOTIFICATION_KINDS.filter(({ key }) => !(key === "badge" && (isAndroid() || server))).map(({ key, label }) => (
             <label key={key} className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -475,74 +500,85 @@ function NotificationsGroup() {
           ))}
         </div>
       </Group>
-      <button
-        onClick={() => void test()}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/10 hover:bg-overlay/10"
-      >
-        <Bell size={13} strokeWidth={1.75} />
-        {tr("Envoyer une notification d'essai")}
-      </button>
+      {!server && (
+        <button
+          onClick={() => void test()}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-overlay/10 hover:bg-overlay/10"
+        >
+          <Bell size={13} strokeWidth={1.75} />
+          {tr("Envoyer une notification d'essai")}
+        </button>
+      )}
     </section>
   );
 }
 
 // ---------------------------------------------------------------- Raccourcis
 
-const SHORTCUTS: { group: string; items: [string, string][] }[] = [
-  {
-    group: tr("Général"),
-    items: [
-      [tr("Ouvrir un dépôt"), "Ctrl+O"],
-      [tr("Préférences"), "Ctrl+,"],
-      [tr("Rafraîchir le dépôt"), "F5"],
-      [tr("Revenir au graphe"), tr("Échap")],
-    ],
-  },
-  {
-    group: tr("Navigation au clavier"),
-    items: [
-      [tr("Menu contextuel de l'élément actif"), "Maj+F10"],
-      [tr("Graphe : commit précédent / suivant"), "↑ / ↓"],
-      [tr("Graphe : premier / dernier commit"), "Origine / Fin"],
-      [tr("Barre latérale : sélectionner"), tr("Espace")],
-      [tr("Barre latérale : extraire, appliquer, ouvrir"), tr("Entrée")],
-      [tr("Menu : choix précédent / suivant"), "↑ / ↓"],
-      [tr("Sortir du terminal intégré"), "Ctrl+Maj+J"],
-    ],
-  },
-  {
-    group: tr("Onglets et fenêtres"),
-    items: [
-      [tr("Nouvel onglet"), "Ctrl+T"],
-      [tr("Fermer l'onglet"), "Ctrl+W"],
-      [tr("Onglet suivant"), "Ctrl+Tab"],
-      [tr("Onglet précédent"), "Ctrl+Maj+Tab"],
-      [tr("Nouvelle fenêtre"), "Ctrl+Maj+N"],
-    ],
-  },
-  {
-    group: tr("Affichage"),
-    items: [
-      [tr("Agrandir l'interface"), "Ctrl+="],
-      [tr("Réduire l'interface"), "Ctrl+-"],
-      [tr("Taille par défaut"), "Ctrl+0"],
-      [tr("Afficher / masquer le panneau du bas"), "Ctrl+J"],
-    ],
-  },
-  {
-    group: "Terminal",
-    items: [
-      [tr("Copier la sélection"), "Ctrl+Maj+C"],
-      [tr("Coller"), "Ctrl+Maj+V"],
-    ],
-  },
+/** Groupes de raccourcis ; ceux des onglets dépendent de la plateforme (Alt dans un navigateur, voir tabShortcuts). */
+function shortcutGroups(): { group: string; items: [string, string][] }[] {
+  const keys = tabShortcuts();
+  return [
+    {
+      group: tr("Général"),
+      items: [
+        [tr("Ouvrir un dépôt"), "Ctrl+O"],
+        [tr("Préférences"), "Ctrl+,"],
+        [tr("Rafraîchir le dépôt"), "F5"],
+        [tr("Revenir au graphe"), tr("Échap")],
+      ],
+    },
+    {
+      group: tr("Navigation au clavier"),
+      items: [
+        [tr("Menu contextuel de l'élément actif"), "Maj+F10"],
+        [tr("Graphe : commit précédent / suivant"), "↑ / ↓"],
+        [tr("Graphe : premier / dernier commit"), "Origine / Fin"],
+        [tr("Barre latérale : sélectionner"), tr("Espace")],
+        [tr("Barre latérale : extraire, appliquer, ouvrir"), tr("Entrée")],
+        [tr("Menu : choix précédent / suivant"), "↑ / ↓"],
+        [tr("Sortir du terminal intégré"), "Ctrl+Maj+J"],
+      ],
+    },
+    {
+      group: tr("Onglets et fenêtres"),
+      items: [
+        [tr("Nouvel onglet"), keys.newTab],
+        [tr("Fermer l'onglet"), keys.closeTab],
+        [tr("Onglet suivant"), keys.nextTab],
+        [tr("Onglet précédent"), keys.previousTab],
+        ...(keys.newWindow ? [[tr("Nouvelle fenêtre"), keys.newWindow] as [string, string]] : []),
+      ],
+    },
+    {
+      group: tr("Affichage"),
+      items: [
+        [tr("Agrandir l'interface"), "Ctrl+="],
+        [tr("Réduire l'interface"), "Ctrl+-"],
+        [tr("Taille par défaut"), "Ctrl+0"],
+        [tr("Afficher / masquer le panneau du bas"), "Ctrl+J"],
+      ],
+    },
+    {
+      group: "Terminal",
+      items: [
+        [tr("Copier la sélection"), "Ctrl+Maj+C"],
+        [tr("Coller"), "Ctrl+Maj+V"],
+      ],
+    },
 ];
+}
 
 function ShortcutsSection() {
   return (
     <>
       <SectionTitle title={tr("Raccourcis clavier")} subtitle={tr("Quand le terminal a le focus, les touches vont au shell, sauf Ctrl+Maj+C, Ctrl+Maj+V et Ctrl+Maj+J (sortir du terminal).")} />
-      {SHORTCUTS.map(({ group, items }) => (
+      {isServer() && (
+        <p className="-mt-2 mb-4 text-[var(--color-muted)]">
+          {tr("Dans un onglet du navigateur, Ctrl+T, Ctrl+W, Ctrl+Tab et Ctrl+PgSuiv / PgPréc restent au navigateur : Merathon utilise Alt pour ses onglets. Ctrl+W ferme l'onglet du navigateur, même depuis le terminal intégré : tant qu'un terminal est ouvert, le navigateur demande confirmation.")}
+        </p>
+      )}
+      {shortcutGroups().map(({ group, items }) => (
         <div key={group} className="mb-5">
           <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">{group}</h4>
           <div className="rounded-lg border border-overlay/10 divide-y divide-overlay/5">
@@ -580,8 +616,8 @@ function AboutSection() {
 
   useEffect(() => {
     // Hors de Tauri (tests, aperçu navigateur) : les champs restent vides.
-    getVersion().then(setVersion).catch(() => {});
-    getTauriVersion().then(setTauri).catch(() => {});
+    appVersion(() => serverInfo().then((i) => i.version)).then(setVersion).catch(() => {});
+    if (!isServer()) getTauriVersion().then(setTauri).catch(() => {});
     appInfo().then(setInfo).catch(() => {});
   }, []);
 
@@ -595,7 +631,7 @@ function AboutSection() {
   }
 
   async function copy() {
-    await navigator.clipboard.writeText(aboutReport(version, tauri, info));
+    await copyText(aboutReport(version, tauri, info));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
@@ -603,7 +639,7 @@ function AboutSection() {
   const rows: [string, string][] = [
     ["Version", version ? versionLabel(version, info) : "…"],
     [tr("Système"), info ? `${osLabel(info.os)} · ${info.arch}` : "…"],
-    ["Tauri", tauri || "…"],
+    ...(isServer() ? [] : [["Tauri", tauri || "…"] as [string, string]]),
     ["libgit2", info?.libgit2 ?? "…"],
   ];
 
@@ -629,8 +665,8 @@ function AboutSection() {
           ))}
         </div>
         <div className="mt-2.5 flex gap-2">
-          {/* Android : l'APK est distribué hors store ; Merathon prévient d'une nouvelle version (updater.ts). */}
-          {(hasDesktopFeatures() || isAndroid()) && (
+          {/* Android et NAS : pas d'installation par Merathon, qui prévient seulement d'une nouvelle version (updater.ts). */}
+          {(hasNativeShell() || isAndroid() || isServer()) && (
             <button
               onClick={check}
               disabled={checking}
@@ -819,7 +855,7 @@ function AccessibilitySection() {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    await navigator.clipboard.writeText(declarationMarkdown());
+    await copyText(declarationMarkdown());
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }

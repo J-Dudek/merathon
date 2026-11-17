@@ -13,8 +13,9 @@ import { LEAVE_TERMINAL_HINT } from "../lib/terminalHint";
 /** xterm.js n'est chargé qu'à l'ouverture du terminal (jamais sur mobile, où il n'existe pas). */
 const loadTerminals = () => import("../lib/terminals");
 import { resizeKeyDelta } from "../lib/resizeKeys";
-import { hasDesktopFeatures } from "../lib/platform";
+import { useTerminalAvailable } from "../lib/terminalAvailability";
 import { tr, trn, locale, COLON } from "../i18n";
+import { copyText } from "../lib/clipboard";
 
 const HEADER_HEIGHT = 28;
 const MIN_HEIGHT = 120;
@@ -34,7 +35,7 @@ export function BottomPanel() {
   // Onglet mémorisé alors que le mode débug était actif : il n'existe plus une fois désactivé.
   const wantedTab = panel.tab === "logs" && !debugMode ? "terminal" : panel.tab;
   // Pas de terminal sur mobile : on retombe sur le journal, même si la préférence enregistrée était « terminal ».
-  const terminalAvailable = hasDesktopFeatures();
+  const terminalAvailable = useTerminalAvailable();
   const tab: BottomPanelState["tab"] = wantedTab === "terminal" && !terminalAvailable ? "journal" : wantedTab;
 
   const journalVisible = panel.open && tab === "journal";
@@ -50,7 +51,7 @@ export function BottomPanel() {
 
   function copyLogs() {
     const text = useDebugLogStore.getState().entries.map(logLine).join("\n");
-    navigator.clipboard.writeText(text).catch((e) => useUiStore.getState().notify("error", errorMessage(e)));
+    copyText(text).catch((e) => useUiStore.getState().notify("error", errorMessage(e)));
   }
 
   // Redimensionnement en tirant la bordure haute.

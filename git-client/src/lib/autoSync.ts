@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { fetchAllQuietly, getBranches, listRemotes, pullFastForward, type FastForwardPull } from "../ipc/commands";
+import { knownRemoteBranches, rememberRemoteBranches } from "./remoteSnapshots";
 import { linkedForge, refreshOpenPullRequests } from "../components/PullRequestList";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useRepoStore } from "../store/useRepoStore";
@@ -123,9 +124,11 @@ export function withoutOwnCommits(
  * Les PR de `followed` (les miennes, déjà notifiées par `syncMyPullRequests`) ne sont pas signalées une seconde fois.
  */
 async function syncRepo(path: string, followed: Set<string>): Promise<{ changes: RepoChanges; prLabel: string }> {
-  const before = await getBranches(path);
+  // NAS : depuis ce que la page connaissait, même si une autre page a fetché avant elle (voir remoteSnapshots).
+  const before = knownRemoteBranches(path) ?? (await getBranches(path));
   await fetchAllQuietly(path);
   const after = await getBranches(path);
+  rememberRemoteBranches(path, after);
 
   const repo = useRepoStore.getState();
   if (repo.repoPath === path && !useUiStore.getState().busy) await repo.refresh();

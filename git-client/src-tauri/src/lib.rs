@@ -1,7 +1,8 @@
-use tauri::Manager;
-
 #[macro_use]
 mod i18n;
+pub mod host;
+#[cfg(feature = "server")]
+pub mod server;
 mod latest_release;
 mod accounts;
 mod commands;
@@ -9,6 +10,7 @@ mod debug_log;
 mod device_storage;
 mod forge;
 mod http;
+#[cfg(feature = "tauri-app")]
 mod notifications;
 mod oauth;
 mod pr_watch;
@@ -29,9 +31,11 @@ mod bench;
 mod git;
 #[cfg(desktop)]
 mod terminal;
+#[cfg(feature = "tauri-app")]
 mod window;
 mod workdir_watch;
 
+#[cfg(feature = "tauri-app")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
@@ -40,13 +44,11 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
-        .manage(workdir_watch::Watchers::default());
+        .plugin(tauri_plugin_notification::init());
 
     // Mises à jour (hors du Play Store, qui les gère lui-même), redémarrage et terminaux : bureau seulement.
     #[cfg(desktop)]
     let builder = builder
-        .manage(terminal::Terminals::default())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build());
 
@@ -201,9 +203,9 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
-                window.state::<workdir_watch::Watchers>().close_window(window.label());
+                workdir_watch::watchers().close_window(window.label());
                 #[cfg(desktop)]
-                window.state::<terminal::Terminals>().close_window(window.label());
+                terminal::terminals().close_window(window.label());
             }
         })
         .run(tauri::generate_context!())
@@ -215,7 +217,7 @@ pub fn run() {
 ///   en X11 (XWayland), l'icône de la fenêtre est transmise.
 /// - `WEBKIT_DISABLE_DMABUF_RENDERER=1` et `LIBGL_ALWAYS_SOFTWARE=1` : selon le GPU et son pilote Windows, le rendu
 ///   accéléré de WebKitGTK laisse des zones non redessinées (rectangles blancs sur le graphe) ; rendu logiciel à la place.
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "tauri-app"))]
 const WSL_ENV: [(&str, &str); 3] = [
     ("GDK_BACKEND", "x11"),
     ("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
@@ -223,7 +225,7 @@ const WSL_ENV: [(&str, &str); 3] = [
 ];
 
 /// Pose les variables de [`WSL_ENV`] sous WSL ; une variable déjà définie par l'utilisateur est respectée.
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "tauri-app"))]
 fn configure_wsl_environment() {
     if !is_wsl() {
         return;
@@ -237,19 +239,19 @@ fn configure_wsl_environment() {
 }
 
 /// Merathon tourne dans WSL (1 ou 2).
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "tauri-app"))]
 pub(crate) fn is_wsl() -> bool {
     let osrelease = std::fs::read_to_string("/proc/sys/kernel/osrelease").unwrap_or_default();
     std::env::var_os("WSL_DISTRO_NAME").is_some() || is_wsl_kernel(&osrelease)
 }
 
 /// Noyau de WSL : « 5.15.167.4-microsoft-standard-WSL2 », « 4.4.0-19041-Microsoft » (WSL 1).
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "tauri-app"))]
 fn is_wsl_kernel(osrelease: &str) -> bool {
     osrelease.to_lowercase().contains("microsoft")
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, target_os = "linux", feature = "tauri-app"))]
 mod wsl_tests {
     use super::is_wsl_kernel;
 

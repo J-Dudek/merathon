@@ -1,13 +1,13 @@
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { currentWindowLabel } from "./nativeWindow";
 import { getVersion } from "@tauri-apps/api/app";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { latestRelease, type LatestRelease } from "../ipc/commands";
+import { openUrl } from "./openExternal";
+import { latestRelease, serverInfo, type LatestRelease } from "../ipc/commands";
 import { useUiStore, type DialogSection } from "../store/useUiStore";
 import { errorMessage } from "./actions";
 import { tr, percent } from "../i18n";
-import { hasDesktopFeatures, isAndroid } from "./platform";
+import { hasNativeShell, isAndroid, isServer } from "./platform";
 
 /** Libellé de progression du téléchargement (pourcentage connu seulement si le serveur annonce la taille). */
 export function downloadLabel(received: number, total: number): string {
@@ -105,8 +105,9 @@ function stripLinks(text: string): string {
  */
 export async function checkForUpdates(manual = false) {
   if (isAndroid()) return checkAndroidUpdate(manual);
+  if (isServer()) return checkServerUpdate(manual);
   // Sur iOS, le store gère les mises à jour : le plugin n'existe pas.
-  if (!hasDesktopFeatures()) return;
+  if (!hasNativeShell()) return;
   const ui = useUiStore.getState();
   let update;
   try {
@@ -184,8 +185,81 @@ async function checkAndroidUpdate(manual: boolean) {
   }
 }
 
+/** Dernière vérification au chargement d'une page du NAS, et dernière version annoncée, propres à ce navigateur. */
+const SERVER_CHECK_KEY = "merathon.update-check";
+/** Une vérification par jour au plus au chargement : l'API publique de GitHub limite les appels par adresse (celle du NAS). */
+const SERVER_CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
+
+interface ServerCheck {
+  at: number;
+  announced: string | null;
+}
+
+function readServerCheck(): ServerCheck {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SERVER_CHECK_KEY) ?? "null") as Partial<ServerCheck> | null;
+    return { at: typeof saved?.at === "number" ? saved.at : 0, announced: typeof saved?.announced === "string" ? saved.announced : null };
+  } catch {
+    return { at: 0, announced: null };
+  }
+}
+
+function saveServerCheck(check: ServerCheck) {
+  try {
+    localStorage.setItem(SERVER_CHECK_KEY, JSON.stringify(check));
+  } catch {
+    // stockage indisponible (navigation privée) : la vérification sera refaite au prochain chargement
+  }
+}
+
+/**
+ * NAS : Merathon n'installe rien, le Centre de paquets de DSM (ou une nouvelle image Docker) s'en charge. Comme sur Android,
+ * Merathon lit la dernière release publique (depuis le serveur : la CSP de la page interdit l'appel) et annonce seulement
+ * qu'une version plus récente existe.
+ *
+ * Au chargement de la page : une fois par jour au plus, et un simple bandeau, une seule fois par version et par navigateur
+ * (plusieurs personnes ouvrent Merathon, toutes ne peuvent pas mettre à jour le NAS). Demandée à la main : toujours, avec les
+ * notes de la version et un lien vers sa page.
+ */
+async function checkServerUpdate(manual: boolean) {
+  const ui = useUiStore.getState();
+  const saved = readServerCheck();
+  if (!manual && Date.now() - saved.at < SERVER_CHECK_EVERY_MS) return;
+  let latest: LatestRelease;
+  let current: string;
+  try {
+    [latest, current] = await Promise.all([latestRelease(), serverInfo().then((info) => info.version)]);
+  } catch (e) {
+    if (manual) ui.notify("error", tr("Impossible de vérifier les mises à jour : {error}", { error: errorMessage(e) }));
+    return;
+  }
+  saveServerCheck({ ...saved, at: Date.now() });
+  if (compareVersions(latest.version, current) <= 0) {
+    if (manual) ui.notify("success", tr("Merathon est à jour"));
+    return;
+  }
+  if (!manual) {
+    if (saved.announced === latest.version) return;
+    saveServerCheck({ at: Date.now(), announced: latest.version });
+    ui.notify("info", tr("Merathon {version} est disponible (version du NAS : {currentVersion}) : mise à jour par le Centre de paquets de DSM, ou par une nouvelle image Docker.", { version: latest.version, currentVersion: current }));
+    return;
+  }
+  const answer = await ui.ask({
+    title: tr("Merathon {version} est disponible", { version: latest.version }),
+    message: tr("Version du NAS : {currentVersion}. Merathon ne s'installe pas depuis cette page : mise à jour par le Centre de paquets de DSM (ou le paquet .spk de la release), ou par une nouvelle image Docker.", { currentVersion: current }),
+    sections: releaseNoteSections(latest.notes, current),
+    confirmLabel: tr("Voir la release"),
+  });
+  if (!answer || !latest.pageUrl) return;
+  try {
+    await openUrl(latest.pageUrl);
+  } catch (e) {
+    ui.notify("error", tr("Ouverture du navigateur impossible : {error}", { error: errorMessage(e) }));
+  }
+}
+
 /** Vérification silencieuse au démarrage : version installée uniquement, depuis la fenêtre principale. */
 export function checkForUpdatesOnStartup() {
-  if (import.meta.env.DEV || getCurrentWindow().label !== "main") return;
+  if (import.meta.env.DEV || currentWindowLabel() !== "main") return;
   checkForUpdates();
 }

@@ -6,6 +6,7 @@ import { errorMessage } from "../lib/actions";
 import { CommitFileRow, LineCounts } from "./CommitDetails";
 import type { CommitFile, CommitInfo } from "../types/git";
 import { tr, trn, COLON } from "../i18n";
+import { copyText } from "../lib/clipboard";
 
 /** Différences entre deux commits du graphe (`git diff base head`), à la place du détail d'un commit. */
 export function CompareDetails({ comparison }: { comparison: Comparison }) {
@@ -90,7 +91,7 @@ function CommitLine({ label, commit }: { label: string; commit: CommitInfo }) {
         className="font-mono text-[var(--color-accent-text)] hover:underline shrink-0"
         title={tr("Copier le hash complet")}
         aria-label={tr("{short_hash}, copier le hash complet", { short_hash: commit.short_hash })}
-        onClick={() => navigator.clipboard.writeText(commit.hash)}
+        onClick={() => copyText(commit.hash)}
       >
         {commit.short_hash}
       </button>

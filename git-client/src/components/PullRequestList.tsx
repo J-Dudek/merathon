@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "../lib/openExternal";
 import { GitCommitHorizontal, GitMerge, GitPullRequestArrow, GitPullRequestClosed, MessageSquare, type LucideIcon } from "lucide-react";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useRepoStore } from "../store/useRepoStore";

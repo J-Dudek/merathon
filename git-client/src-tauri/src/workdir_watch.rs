@@ -12,14 +12,14 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, RecvTimeoutError};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use git2::Repository;
 use notify::event::EventKind;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
-use tauri::ipc::Channel;
+use crate::host::{command, Channel, Window};
 
 /// Délai de regroupement des événements.
 const DEBOUNCE: Duration = Duration::from_millis(300);
@@ -42,6 +42,12 @@ impl WorkdirChange {
 /// Surveillances en cours, par fenêtre. Supprimer l'entrée arrête la surveillance et son fil.
 #[derive(Default)]
 pub struct Watchers(Mutex<HashMap<String, RecommendedWatcher>>);
+
+/// Surveillances de toutes les fenêtres (ou onglets du navigateur).
+pub fn watchers() -> &'static Watchers {
+    static WATCHERS: LazyLock<Watchers> = LazyLock::new(Watchers::default);
+    &WATCHERS
+}
 
 impl Watchers {
     /// Arrête la surveillance d'une fenêtre fermée.
@@ -173,25 +179,20 @@ fn watch(path: &str, on_change: Channel<WorkdirChange>) -> Result<RecommendedWat
 }
 
 /// Surveille le dépôt `path` pour la fenêtre appelante, à la place du dépôt surveillé jusque-là.
-#[tauri::command(async)]
-pub fn workdir_watch(
-    window: tauri::Window,
-    watchers: tauri::State<'_, Watchers>,
-    path: String,
-    on_change: Channel<WorkdirChange>,
-) -> Result<(), String> {
+#[command(async)]
+pub fn workdir_watch(window: Window, path: String, on_change: Channel<WorkdirChange>) -> Result<(), String> {
     let label = window.label().to_string();
     // L'ancienne surveillance est arrêtée même si la nouvelle échoue.
-    watchers.close_window(&label);
+    watchers().close_window(&label);
     let watcher = watch(&path, on_change)?;
-    watchers.0.lock().unwrap().insert(label, watcher);
+    watchers().0.lock().unwrap().insert(label, watcher);
     Ok(())
 }
 
 /// Arrête la surveillance de la fenêtre appelante (plus aucun dépôt affiché).
-#[tauri::command]
-pub fn workdir_unwatch(window: tauri::Window, watchers: tauri::State<'_, Watchers>) {
-    watchers.close_window(window.label());
+#[command]
+pub fn workdir_unwatch(window: Window) {
+    watchers().close_window(window.label());
 }
 
 #[cfg(test)]
@@ -248,11 +249,7 @@ mod tests {
     fn ignored_files_are_silent() {
         let (dir, _repo, _l) = setup();
         fs::create_dir_all(dir.path().join("target")).unwrap();
-        let (tx, rx) = mpsc::channel();
-        let channel = Channel::new(move |body| {
-            let _ = tx.send(body);
-            Ok(())
-        });
+        let (channel, rx) = crate::host::test_channel();
         let _watcher = watch(dir.path().to_str().unwrap(), channel).unwrap();
         fs::write(dir.path().join("target/out"), "ignoré").unwrap();
         fs::write(dir.path().join("build.log"), "ignoré").unwrap();
@@ -262,20 +259,12 @@ mod tests {
     #[test]
     fn signals_external_edit() {
         let (dir, _repo, _l) = setup();
-        let (tx, rx) = mpsc::channel();
-        let channel = Channel::new(move |body| {
-            let _ = tx.send(body);
-            Ok(())
-        });
+        let (channel, rx) = crate::host::test_channel();
         let _watcher = watch(dir.path().to_str().unwrap(), channel).unwrap();
         fs::create_dir_all(dir.path().join("target")).unwrap();
         fs::write(dir.path().join("target/out"), "ignoré").unwrap();
         fs::write(dir.path().join("a.txt"), "modifié").unwrap();
-        let body = rx.recv_timeout(Duration::from_secs(5)).expect("aucun signal");
-        let json = match body {
-            tauri::ipc::InvokeResponseBody::Json(s) => s,
-            other => panic!("réponse inattendue : {other:?}"),
-        };
+        let json = rx.recv_timeout(Duration::from_secs(5)).expect("aucun signal");
         assert!(json.contains("\"status\":true"), "{json}");
     }
 }

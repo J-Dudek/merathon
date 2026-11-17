@@ -28,7 +28,7 @@
 
 Packages for each version are published in the [GitHub releases](https://github.com/J-Dudek/merathon/releases/latest):
 
-- **Linux**: `.deb` (Debian/Ubuntu) or `.AppImage` (universal). The `.deb` package automatically replaces the old `j6n` package.
+- **Linux**: `.deb` (Debian/Ubuntu) or `.AppImage` (universal).
 - **Windows**: `.msi` or `.exe`. The installers are not signed yet: on first launch, click **More info** then **Run anyway**.
 - **Android**: `.apk` for arm64 phones and tablets, installed outside the Play Store (see [Android](#android)).
 
@@ -78,6 +78,12 @@ Desktop only: the integrated terminal, new windows, automatic installation of up
 > The Windows version can open a repository located in WSL (`\\wsl.localhost\<distribution>\…`), but it will be **noticeably slower** there than on a Windows disk. This is normal: each file read crosses the boundary between Windows and the WSL virtual machine (9P protocol), and displaying the state of a repository requires examining each of its files. For WSL repositories, prefer the Linux version launched in WSL: it reads the disk directly.
 
 Seen from Windows, these repositories belong to another user: Git refuses to open them until they are declared safe (`safe.directory`). On the first opening, Merathon offers to trust them and adds the entry to the global Git configuration (`%USERPROFILE%\.gitconfig`).
+
+### Synology NAS and Docker
+
+Merathon can also run on a NAS: a windowless service serves the interface to your browser, and repositories stay on the NAS.
+An `.spk` package installs from the DSM 7 Package Center (x86_64 and 64-bit ARM), and a Docker image is provided.
+See [Merathon on a NAS](docs/nas.en.md).
 
 ## Features
 
@@ -248,7 +254,7 @@ npm run tauri dev
 
 > Port 1420 must be free (`strictPort` is enabled in `vite.config.ts`).
 
-> To use the application on its own repository (rebase, merge…), go through the installed version or run dev mode from a separate worktree (`git worktree add ../git-management-dev main`): a conflict writes `<<<<<<<` markers into the sources that Vite compiles, and the application under development no longer starts.
+> To use the application on its own repository (rebase, merge…), go through the installed version or run dev mode from a separate worktree (`git worktree add ../merathon-dev main`): a conflict writes `<<<<<<<` markers into the sources that Vite compiles, and the application under development no longer starts.
 
 ## Tests and checks
 
@@ -283,7 +289,7 @@ Installers are generated in `git-client/src-tauri/target/release/bundle/` (`.deb
 
 ## Continuous integration and releases
 
-- **On pull requests**: Rust and frontend tests on Linux, lint, dependency audit (`.github/workflows/ci.yml`). A new push cancels the tests of the previous one, and a PR that only changes documentation (`*.md`, `docs/`) does not run them. Windows tests run on merge, with the release.
+- **On pull requests**: Rust and frontend tests on Linux, lint, dependency audit, and the NAS server (tests, interface, `.spk` package assembly) (`.github/workflows/ci.yml`). A new push cancels the tests of the previous one, and a PR that only changes documentation (`*.md`, `docs/`) does not run them. A PR that touches Android-specific code also runs the emulator walkthrough (`android-e2e.yml`). Windows tests run on merge, with the release, or on a PR by adding the `tests-windows` label to it (`ci-windows.yml`).
 - **On each merge to `main`** (`.github/workflows/release.yml`):
   1. the same tests, on Linux and Windows, and, **in parallel**, computing the next version and generating the packages;
   2. version computed from commit messages since the last tag ([Conventional Commits](https://www.conventionalcommits.org)):
@@ -291,8 +297,8 @@ Installers are generated in `git-client/src-tauri/target/release/bundle/` (`.deb
      - `feat:` → minor version,
      - `fix:`, `perf:`, `refactor:`, `build:` or free-form message → patch,
      - only `docs:`, `ci:`, `test:`, `chore:`, `style:` → no release;
-  3. generation of Linux (`.deb`, `.AppImage`), Windows (`.msi`, `.exe`) and Android (signed arm64 `.apk`) packages with the new version applied (`package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`), while the tests run; nothing is published yet;
-  4. only if **the tests and all packages** succeed: `chore(release): vX.Y.Z` commit on `main`, `vX.Y.Z` tag and GitHub release, published automatically. The version commit is verified to be identical to the files the packages were generated from. If a test or a platform fails, nothing is tagged or published.
+  3. generation of Linux (`.deb`, `.AppImage`), Windows (`.msi`, `.exe`), Android (signed arm64 `.apk`) and NAS (x86_64 and 64-bit ARM `.spk`, web interface for the SynoCommunity recipe, Docker image on `ghcr.io`) packages with the new version applied (`package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`), while the tests run; nothing is published yet;
+  4. only if **the tests and all packages** succeed: `chore(release): vX.Y.Z` commit on `main`, `vX.Y.Z` tag and GitHub release, published automatically. The version commit is verified to be identical to the files the packages were generated from. If a test or a platform fails, nothing is tagged or published; the NAS is the only exception: its failure does not block the desktop and Android release, which then comes out without its packages. The release also publishes `packages.json`, the package source to add in the DSM Package Center.
 
 Since the `main` branch is protected, the version commit is pushed with the `RELEASE_TOKEN` secret: a token allowed to bypass the protection (GitHub App or *fine-grained* token limited to this repository, "Contents: read and write" permission).
 
@@ -323,8 +329,11 @@ git-client/
 │   │                    # viewed files, .gitignore patterns, git cheat sheet content…
 │   └── api/             # GitHub / GitLab clients (PR / MR, reviews, CI, templates) and common interface
 └── src-tauri/           # Rust backend
+    ├── macros/          # #[command] macro: one command serves both Tauri and the NAS server
     └── src/
         ├── lib.rs       # Tauri command registration
+        ├── host.rs      # Command host: Tauri (desktop, Android) or the NAS server
+        ├── server/      # NAS server (merathon-server): HTTP, WebSocket, authentication, queued network operations
         ├── commands.rs  # Commands exposed to the frontend (network off the UI thread)
         ├── accounts.rs  # GitHub / GitLab accounts and token storage
         ├── forge.rs     # Calls to the GitHub / GitLab APIs (REST, GraphQL) with the account's token
@@ -333,6 +342,8 @@ git-client/
         ├── window.rs    # Multi-window management
         └── git/         # Git operations (git2): status, diff (including PR diff), patch (hunks), history, merge, rebase,
                          # interactive (rebase -i), stash, submodule, lfs, remote, auth…
+packaging/               # NAS: Synology package (.spk), SynoCommunity recipe (spksrc), Docker image
+tools/                   # Android end-to-end tests, demo recording
 ```
 
 ## License

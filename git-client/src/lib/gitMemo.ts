@@ -1,4 +1,5 @@
 import { tr } from "../i18n";
+import { keysInText, tabShortcuts } from "./tabShortcuts";
 
 /** Une opération git du mémo : ce qu'elle fait, un cas d'usage, et comment la faire dans l'application. */
 export interface MemoEntry {
@@ -18,6 +19,14 @@ export interface MemoGroup {
   id: string;
   label: string;
   entries: MemoEntry[];
+}
+
+/** Raccourcis des onglets, et des fenêtres là où il y en a (pas sur le NAS). */
+function newTabTip(): string {
+  const { newTab, newWindow } = tabShortcuts();
+  return newWindow
+    ? tr("{newTab} ouvre un nouvel onglet, {newWindow} une nouvelle fenêtre.", { newTab: keysInText(newTab), newWindow: keysInText(newWindow) })
+    : tr("{newTab} ouvre un nouvel onglet.", { newTab: keysInText(newTab) });
 }
 
 export const GIT_MEMO: MemoGroup[] = [
@@ -50,7 +59,7 @@ export const GIT_MEMO: MemoGroup[] = [
         example: tr("Tu travailles sur deux projets en parallèle et tu veux passer de l'un à l'autre sans les refermer."),
         steps: [
           tr("Menu du dépôt → « Ouvrir… » (Ctrl+O), ou un dépôt de la liste « Récents »."),
-          tr("Ctrl+T ouvre un nouvel onglet, Ctrl+Maj+N une nouvelle fenêtre."),
+          newTabTip(),
         ],
       },
     ],

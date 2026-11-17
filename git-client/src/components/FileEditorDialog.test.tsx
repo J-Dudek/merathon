@@ -106,8 +106,13 @@ describe("FileEditorDialog", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     await screen.findByTitle("README.md");
     expect(onClose).not.toHaveBeenCalled();
-    fireEvent.keyDown(document, { key: "Escape" });
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    // Le retour à la liste est asynchrone : l'écouteur d'Échap du fichier n'est retiré qu'après le rendu, et un Échap envoyé avant
+    // est avalé par lui (stopImmediatePropagation). Un utilisateur ne peut pas appuyer deux fois dans la même image, un test oui,
+    // et sur un exécuteur lent la course se perdait de temps en temps : on renvoie la touche jusqu'à la fermeture.
+    await waitFor(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(onClose).toHaveBeenCalled();
+    });
   });
 
   it("affiche l'erreur d'un fichier qui ne peut pas être modifié", async () => {

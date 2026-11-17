@@ -30,34 +30,34 @@ fn keyring_secret(id: &str) -> Option<String> {
 /// Accès au trousseau du système. Sur mobile (Android, iOS), la crate `keyring` n'a pas de coffre : elle se rabattrait
 /// sur un coffre factice en mémoire, qui accepterait le token puis le perdrait au redémarrage. Ces fonctions y sont
 /// donc sans effet, et les tokens passent par le fichier de secours (voir `store_token`).
-#[cfg(desktop)]
+#[cfg(all(desktop, feature = "tauri-app"))]
 fn keyring_get(service: &str, id: &str) -> Option<String> {
     keyring::Entry::new(service, id).and_then(|e| e.get_password()).ok()
 }
 
-#[cfg(desktop)]
+#[cfg(all(desktop, feature = "tauri-app"))]
 fn keyring_set(service: &str, id: &str, secret: &str) -> bool {
     keyring::Entry::new(service, id).and_then(|e| e.set_password(secret)).is_ok()
 }
 
-#[cfg(desktop)]
+#[cfg(all(desktop, feature = "tauri-app"))]
 fn keyring_delete(service: &str, id: &str) {
     if let Ok(entry) = keyring::Entry::new(service, id) {
         let _ = entry.delete_credential();
     }
 }
 
-#[cfg(not(desktop))]
+#[cfg(not(all(desktop, feature = "tauri-app")))]
 fn keyring_get(_service: &str, _id: &str) -> Option<String> {
     None
 }
 
-#[cfg(not(desktop))]
+#[cfg(not(all(desktop, feature = "tauri-app")))]
 fn keyring_set(_service: &str, _id: &str, _secret: &str) -> bool {
     false
 }
 
-#[cfg(not(desktop))]
+#[cfg(not(all(desktop, feature = "tauri-app")))]
 fn keyring_delete(_service: &str, _id: &str) {}
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]

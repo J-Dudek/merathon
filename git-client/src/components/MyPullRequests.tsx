@@ -1,6 +1,6 @@
 import { RotateCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "../lib/openExternal";
 import { prFreshness, seenKey, useSeenPrsStore } from "../store/useSeenPrsStore";
 import { errorMessage } from "../lib/actions";
 import { onSynced } from "../lib/autoSync";

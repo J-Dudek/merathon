@@ -1,0 +1,89 @@
+#!/bin/sh
+# Démarrage, arrêt et état du service Merathon (DSM 7 : exécuté par l'utilisateur du paquet, jamais root).
+
+PKGVAR="${SYNOPKG_PKGVAR:-/var/packages/Merathon/var}"
+PKGDEST="${SYNOPKG_PKGDEST:-/var/packages/Merathon/target}"
+PIDFILE="$PKGVAR/merathon.pid"
+LOGFILE="$PKGVAR/merathon.log"
+CONFIG="$PKGVAR/config.env"
+# Le journal ne grossit pas indéfiniment : au-delà de 5 Mo, l'ancien est gardé une fois.
+MAX_LOG=5242880
+
+# Le service est lancé par DSM avec un PATH minimal : ssh-keygen (clés SSH) est dans /usr/bin, les outils Synology dans /usr/syno.
+PATH="/usr/local/bin:/usr/bin:/bin:/usr/syno/bin:/usr/syno/sbin:$PATH"
+export PATH
+
+# Adresse que l'icône du menu DSM ouvre (voir app/index.html) : celle de config.env, revalidée (le fichier a pu être modifié à la main),
+# et le port du service. Réécrite à chaque démarrage : une mise à jour remplace le dossier du paquet.
+write_icon_address() {
+    url="$MERATHON_PUBLIC_URL"
+    case "$url" in
+        http://?* | https://?*)
+            case "$url" in *[!A-Za-z0-9._~:/?#@!\$\&\(\)*+,\;=%-]*) url="" ;; esac ;;
+        *) url="" ;;
+    esac
+    port="${MERATHON_BIND##*:}"
+    case "$port" in "" | *[!0-9]*) port=8765 ;; esac
+    printf 'window.MERATHON_URL = "%s";\nwindow.MERATHON_PORT = "%s";\n' "$url" "$port" > "$PKGDEST/app/address.js" 2>> "$LOGFILE" \
+        || echo "Adresse de l'icône non écrite : $PKGDEST/app/address.js" >> "$LOGFILE"
+}
+
+is_running() {
+    [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+case "$1" in
+    start)
+        if is_running; then
+            exit 0
+        fi
+        [ -f "$CONFIG" ] || { echo "Configuration absente : $CONFIG" >> "$LOGFILE"; exit 1; }
+        if [ -f "$LOGFILE" ] && [ "$(wc -c < "$LOGFILE")" -gt "$MAX_LOG" ]; then
+            mv -f "$LOGFILE" "$LOGFILE.1"
+        fi
+        # La configuration est d'abord lue dans un sous-shell : une erreur (fichier illisible, syntaxe) est alors écrite dans le
+        # journal au lieu d'arrêter ce script sans un mot, ce que DSM n'affiche que comme « échec de lancement ».
+        if ! ( . "$CONFIG" ) >> "$LOGFILE" 2>&1; then
+            echo "Configuration illisible ou invalide : $CONFIG" >> "$LOGFILE"
+            exit 1
+        fi
+        # shellcheck disable=SC1090
+        set -a
+        . "$CONFIG"
+        set +a
+        write_icon_address
+        MERATHON_DATA_DIR="$PKGVAR/data" \
+        MERATHON_WEB_DIR="$PKGDEST/web" \
+        nohup "$PKGDEST/bin/merathon-server" >> "$LOGFILE" 2>&1 &
+        echo $! > "$PIDFILE"
+        sleep 1
+        is_running || { rm -f "$PIDFILE"; exit 1; }
+        exit 0
+        ;;
+    stop)
+        if is_running; then
+            kill "$(cat "$PIDFILE")"
+            # Arrêt propre (terminaux fermés) : on attend jusqu'à 10 s avant de forcer.
+            i=0
+            while is_running && [ "$i" -lt 20 ]; do
+                sleep 0.5
+                i=$((i + 1))
+            done
+            is_running && kill -9 "$(cat "$PIDFILE")"
+        fi
+        rm -f "$PIDFILE"
+        exit 0
+        ;;
+    status)
+        is_running && exit 0
+        exit 3
+        ;;
+    log)
+        echo "$LOGFILE"
+        exit 0
+        ;;
+    *)
+        echo "usage: $0 {start|stop|status}" >&2
+        exit 1
+        ;;
+esac

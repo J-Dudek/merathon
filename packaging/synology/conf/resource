@@ -1,0 +1,14 @@
+{
+    "data-share": {
+        "shares": [
+            {
+                "name": "{{wizard_repos_share}}",
+                "permission": {
+                    "rw": [
+                        "merathon"
+                    ]
+                }
+            }
+        ]
+    }
+}

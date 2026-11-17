@@ -5,6 +5,7 @@ import { getCommitDetails } from "../ipc/commands";
 import { errorMessage } from "../lib/actions";
 import type { CommitDetails as Details, CommitFile, CommitInfo } from "../types/git";
 import { tr, trn, locale, COLON } from "../i18n";
+import { copyText } from "../lib/clipboard";
 
 const STATUS_LETTER: Record<CommitFile["status"], { letter: string; label: string; color: string }> = {
   added: { letter: "A", label: tr("ajouté"), color: "text-green-400" },
@@ -71,7 +72,7 @@ export function CommitDetails({ commit }: { commit: CommitInfo }) {
           className="font-mono text-[11px] text-[var(--color-accent-text)] hover:underline"
           title={tr("Copier le hash complet")}
           aria-label={tr("{short_hash}, copier le hash complet", { short_hash: commit.short_hash })}
-          onClick={() => navigator.clipboard.writeText(commit.hash)}
+          onClick={() => copyText(commit.hash)}
         >
           {commit.short_hash}
         </button>

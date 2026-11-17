@@ -1,4 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
+import { listenEvent } from "../ipc/transport";
 import { appInfo, setDebugLogging } from "../ipc/commands";
 import { debugLog, useDebugLogStore, type DebugLevel, type DebugLogEntry } from "../store/useDebugLogStore";
 import { errorMessage } from "./actions";
@@ -52,7 +52,7 @@ export function startDebugLogging(): () => void {
     .catch(() => {});
 
   // Le backend n'émet qu'une fois l'écoute en place : aucune ligne n'est perdue.
-  const unlisten = listen<{ level: DebugLevel; message: string }>("debug-log", (e) => debugLog(e.payload.level, e.payload.message));
+  const unlisten = listenEvent<{ level: DebugLevel; message: string }>("debug-log", (payload) => debugLog(payload.level, payload.message));
   unlisten
     .then(() => setDebugLogging(true))
     .catch((e) => console.warn("Debug logs from the backend unavailable:", e));

@@ -5,7 +5,7 @@ vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ label: "main" }) }));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(async () => "2.15.0") }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(async () => {}) }));
-vi.mock("../ipc/commands", () => ({ latestRelease: vi.fn() }));
+vi.mock("../ipc/commands", () => ({ latestRelease: vi.fn(), serverInfo: vi.fn(async () => ({ version: "2.17.0" })) }));
 
 const { check } = await import("@tauri-apps/plugin-updater");
 const { openUrl } = await import("@tauri-apps/plugin-opener");
@@ -169,5 +169,76 @@ describe("checkForUpdates", () => {
     expect(notify).not.toHaveBeenCalled();
     await checkForUpdates(true);
     expect(notify).toHaveBeenCalledWith("error", expect.stringContaining("hors ligne"));
+  });
+});
+
+describe("checkForUpdates sur le NAS", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  const nas = () => vi.stubEnv("VITE_TARGET", "server");
+  const release = (version: string) =>
+    vi.mocked(latestRelease).mockResolvedValue({ version, notes: "### Nouveautés\n\n- truc", pageUrl: `https://x/releases/v${version}`, apkUrl: null });
+
+  it("demandée à la main : à jour, sans plugin de mise à jour", async () => {
+    nas();
+    release("2.17.0");
+    const notify = vi.spyOn(useUiStore.getState(), "notify");
+    await checkForUpdates(true);
+    expect(check).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith("success", "Merathon est à jour");
+  });
+
+  it("demandée à la main : annonce la version, ses notes, et ouvre la page de la release", async () => {
+    nas();
+    release("2.18.0");
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    const ask = vi.spyOn(useUiStore.getState(), "ask").mockResolvedValue({ value: "", checked: false });
+    await checkForUpdates(true);
+    expect(ask.mock.calls[0][0]).toMatchObject({ title: "Merathon 2.18.0 est disponible", confirmLabel: "Voir la release" });
+    expect(String(ask.mock.calls[0][0].message)).toContain("Centre de paquets");
+    expect(ask.mock.calls[0][0].sections).toEqual([{ title: "Nouveautés", items: ["truc"] }]);
+    expect(open).toHaveBeenCalledWith("https://x/releases/v2.18.0", "_blank", "noopener,noreferrer");
+  });
+
+  it("au chargement : un bandeau, une seule fois par version, et une vérification par jour au plus", async () => {
+    nas();
+    release("2.18.0");
+    const notify = vi.spyOn(useUiStore.getState(), "notify");
+    const ask = vi.spyOn(useUiStore.getState(), "ask");
+    await checkForUpdates(); // vérification du démarrage (checkForUpdatesOnStartup, sautée en développement)
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify.mock.calls[0][0]).toBe("info");
+    expect(String(notify.mock.calls[0][1])).toContain("Merathon 2.18.0 est disponible");
+    expect(ask).not.toHaveBeenCalled();
+
+    vi.mocked(latestRelease).mockClear();
+    await checkForUpdates();
+    expect(latestRelease).not.toHaveBeenCalled(); // moins d'un jour après
+
+    // Le lendemain, même version : déjà annoncée.
+    localStorage.setItem("merathon.update-check", JSON.stringify({ at: 0, announced: "2.18.0" }));
+    await checkForUpdates();
+    expect(latestRelease).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledTimes(1);
+
+    // Une version plus récente encore : annoncée.
+    localStorage.setItem("merathon.update-check", JSON.stringify({ at: 0, announced: "2.18.0" }));
+    release("2.19.0");
+    await checkForUpdates();
+    expect(notify).toHaveBeenCalledTimes(2);
+  });
+
+  it("au chargement : silencieux hors ligne", async () => {
+    nas();
+    vi.mocked(latestRelease).mockRejectedValue(new Error("hors ligne"));
+    const notify = vi.spyOn(useUiStore.getState(), "notify");
+    await checkForUpdates();
+    expect(notify).not.toHaveBeenCalled();
   });
 });

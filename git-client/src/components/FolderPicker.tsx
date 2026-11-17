@@ -5,6 +5,7 @@ import { errorMessage } from "../lib/actions";
 import { useUiStore } from "../store/useUiStore";
 import { Button, Modal, inputClass } from "./Modal";
 import { fieldLabel } from "../lib/fieldLabel";
+import { isServer } from "../lib/platform";
 import { tr } from "../i18n";
 
 /** Sélecteur de dossiers sur mobile, limité au dossier privé de l'application (voir device_storage.rs). */
@@ -59,7 +60,7 @@ export function FolderPicker() {
             <ChevronUp size={20} strokeWidth={1.75} />
           </button>
           <span className="text-sm text-[var(--color-text)] truncate" dir="rtl">
-            <bdi>{tr("Dépôts de Merathon")}{relative}</bdi>
+            <bdi>{isServer() ? root : tr("Dépôts de Merathon")}{relative}</bdi>
           </span>
         </div>
 
@@ -100,7 +101,9 @@ export function FolderPicker() {
         )}
 
         <p className="px-4 py-2 text-[11px] text-[var(--color-muted)] border-t border-overlay/10">
-          {tr("Ces dossiers sont privés à Merathon et supprimés à la désinstallation de l'application.")}
+          {isServer()
+            ? tr("Dossiers du NAS que l'administrateur a autorisés pour Merathon.")
+            : tr("Ces dossiers sont privés à Merathon et supprimés à la désinstallation de l'application.")}
         </p>
 
         <div className="flex flex-wrap justify-end gap-2 px-4 pb-4">

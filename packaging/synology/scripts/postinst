@@ -1,0 +1,76 @@
+#!/bin/sh
+# Après l'installation : écrit la configuration choisie dans l'assistant (variables wizard_*), lisible par le seul
+# utilisateur du paquet puisqu'elle contient le jeton d'accès.
+
+PKGVAR="${SYNOPKG_PKGVAR:-/var/packages/Merathon/var}"
+CONFIG="$PKGVAR/config.env"
+
+mkdir -p "$PKGVAR/data"
+
+# Une mise à jour (silencieuse : l'assistant n'est pas affiché, donc aucune variable wizard_*) garde la configuration existante.
+# Une installation, elle, passe par l'assistant : ses réponses remplacent toujours un config.env resté d'une installation
+# précédente (DSM peut garder le dossier var d'un paquet désinstallé), qui sinon ferait démarrer l'ancienne configuration.
+[ -f "$CONFIG" ] && [ -z "$wizard_repos_share" ] && exit 0
+
+# Valeur entre apostrophes : le fichier est lu par `.`, et un jeton avec un espace, un `;`, un `$` ou un guillemet
+# serait sinon coupé ou interprété (le serveur refuserait alors un jeton « trop court »).
+quote() {
+    printf "'"
+    printf '%s' "$1" | sed -e "s/'/'\"'\"'/g"
+    printf "'"
+}
+
+# Chemin du dossier partagé choisi dans l'assistant : `synoshare` le donne, sinon on cherche sur les volumes.
+resolve_share() {
+    name="$1"
+    if command -v synoshare >/dev/null 2>&1; then
+        path=$(synoshare --get "$name" 2>/dev/null | awk 'NR==4' | cut -d] -f1 | cut -d[ -f2)
+        [ -n "$path" ] && [ -d "$path" ] && { echo "$path"; return 0; }
+    fi
+    for volume in ${MERATHON_VOLUMES:-/volume*}; do
+        [ -d "$volume/$name" ] && { echo "$volume/$name"; return 0; }
+    done
+    return 1
+}
+
+# Première version : connexion par jeton seulement (le mode « session DSM » du serveur reste expérimental, hors assistant).
+auth=token
+if [ "${#wizard_token}" -lt 16 ]; then
+    echo "Le jeton d'accès doit faire 16 caractères au moins. / The access token needs 16 characters or more." > "$SYNOPKG_TEMP_LOGFILE"
+    exit 1
+fi
+
+share="${wizard_repos_share:-git}"
+if ! repos=$(resolve_share "$share"); then
+    echo "Dossier partagé introuvable : $share. / Shared folder not found: $share." > "$SYNOPKG_TEMP_LOGFILE"
+    exit 1
+fi
+
+# Adresse ouverte par l'icône du menu DSM (facultative) : seulement http(s) et des caractères d'URL, elle finit dans une page web.
+public_url="$wizard_public_url"
+case "$public_url" in
+    "") ;;
+    http://?* | https://?*)
+        case "$public_url" in
+            *[!A-Za-z0-9._~:/?#@!\$\&\(\)*+,\;=%-]*)
+                echo "Adresse de Merathon invalide. / Invalid Merathon address." > "$SYNOPKG_TEMP_LOGFILE"
+                exit 1 ;;
+        esac ;;
+    *)
+        echo "L'adresse de Merathon doit commencer par http:// ou https://. / The Merathon address must start with http:// or https://." > "$SYNOPKG_TEMP_LOGFILE"
+        exit 1 ;;
+esac
+
+terminal=0
+[ "$wizard_terminal" = "true" ] && terminal=1
+
+umask 077
+{
+    echo "MERATHON_BIND=0.0.0.0:8765"
+    echo "MERATHON_AUTH=$(quote "$auth")"
+    echo "MERATHON_TOKEN=$(quote "$wizard_token")"
+    echo "MERATHON_ALLOWED_ROOTS=$(quote "$repos")"
+    echo "MERATHON_TERMINAL=$terminal"
+    echo "MERATHON_PUBLIC_URL=$(quote "$public_url")"
+} > "$CONFIG"
+exit 0

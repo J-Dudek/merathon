@@ -1,0 +1,14 @@
+{
+    ".url": {
+        "com.merathon.Merathon": {
+            "type": "url",
+            "title": "Merathon",
+            "desc": "Merathon \u2014 Git Repository Manager",
+            "icon": "images/merathon-{0}.png",
+            "url": "/webman/3rdparty/Merathon/index.html",
+            "allUsers": true,
+            "grantPrivilege": "all",
+            "advanceGrantPrivilege": true
+        }
+    }
+}

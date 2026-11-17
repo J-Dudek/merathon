@@ -1,4 +1,5 @@
-import { Channel, invoke as tauriInvoke, type InvokeArgs } from "@tauri-apps/api/core";
+import { createChannel, invokeRaw, type InvokeArgs } from "./transport";
+import { RECONNECTED_EVENT } from "./serverTransport";
 import type {
   BranchDivergence, BranchInfo, CommitDetails, CommitFile, CommitTrailers, PrPush, PrRebase, CommitInfo, FileDiff, FileStatus, GitProfile, GitProfileInput, GitProfilesInfo, Identity, IdentityStatus, MergeResult,
   InteractiveOutcome, LfsStatus, RefComparison, RemoteInfo, RepoInfo, DeviceKeyStatus, SshCheck, SshHostStatus, SshKeyInfo, SshSetupInfo, StashInfo, SubmoduleInfo, TagInfo, TodoCommit, WorktreeInfo,
@@ -11,6 +12,8 @@ import { useCelebrationStore } from "../store/useCelebrationStore";
 import { debugLog } from "../store/useDebugLogStore";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { tr } from "../i18n";
+import { isServer } from "../lib/platform";
+import { forgetRemoteBranches } from "../lib/remoteSnapshots";
 
 function errorText(e: unknown): string {
   if (typeof e === "string") return e;
@@ -25,13 +28,13 @@ const NOT_LOGGED = new Set(["terminal_write", "terminal_resize"]);
  * Seuls le nom de la commande et le dépôt sont inscrits : les autres arguments peuvent contenir des données personnelles ou des secrets.
  */
 async function loggedInvoke<T>(cmd: string, args?: InvokeArgs): Promise<T> {
-  if (!useDisplayStore.getState().debugMode || NOT_LOGGED.has(cmd)) return tauriInvoke<T>(cmd, args);
+  if (!useDisplayStore.getState().debugMode || NOT_LOGGED.has(cmd)) return invokeRaw<T>(cmd, args);
   const path = (args as { path?: unknown } | undefined)?.path;
   const label = typeof path === "string" ? `${cmd} ${path}` : cmd;
   debugLog("debug", `${label}: start`);
   const started = Date.now();
   try {
-    const result = await tauriInvoke<T>(cmd, args);
+    const result = await invokeRaw<T>(cmd, args);
     debugLog("debug", `${label}: done in ${Date.now() - started} ms`);
     return result;
   } catch (e) {
@@ -80,14 +83,18 @@ export const deviceReposRoot = () => invoke<string>("device_repos_root");
 export const listDeviceFolders = (dir: string) => invoke<DeviceFolder[]>("list_device_folders", { dir });
 export const createDeviceFolder = (dir: string, name: string) => invoke<string>("create_device_folder", { dir, name });
 export const initRepository = (path: string) => invoke<void>("init_repository", { path });
-/** `repo` : dépôt à ouvrir directement dans la nouvelle fenêtre. */
+/** `repo` : dépôt à ouvrir directement dans la nouvelle fenêtre. Bureau seulement (voir hasNativeShell). */
 export const openNewWindow = (repo: string | null = null) => invoke<void>("open_new_window", { repo });
 
 /** Notification du système (voir notifications.rs pour Linux) ; son identifiant quand elle peut être retirée ensuite. */
-export const notifyDesktop = (title: string, body: string) => invoke<number | null>("notify_desktop", { title, body });
+export const notifyDesktop = async (title: string, body: string): Promise<number | null> => {
+  // NAS : pas de notification système (voir notificationsAllowed) ; le serveur n'a pas cette commande.
+  if (isServer()) return null;
+  return invoke<number | null>("notify_desktop", { title, body });
+};
 /** Retire une notification de la liste du système. */
-export const closeDesktopNotification = (id: number) => invoke<void>("close_desktop_notification", { id });
-export const isWsl = () => invoke<boolean>("is_wsl");
+export const closeDesktopNotification = (id: number) => (isServer() ? Promise.resolve() : invoke<void>("close_desktop_notification", { id }));
+export const isWsl = () => (isServer() ? Promise.resolve(false) : invoke<boolean>("is_wsl"));
 
 /** Android : réglages de la vérification des PR en arrière-plan (pr_watch.rs) ; null : désactivée. */
 export interface PrWatchSettings {
@@ -158,7 +165,7 @@ export const discardPullRequestRebase = (path: string, branch: string) =>
   invoke<void>("discard_pull_request_rebase", { path, branch });
 /** Force push du rebase préparé, refusé si la branche distante n'est plus à `expected` (--force-with-lease). */
 export const forcePushPullRequest = (path: string, remote: string, branch: string, expected: string) =>
-  invoke<PrPush>("force_push_pull_request", { path, remote, branch, expected });
+  ownNetwork(path, invoke<PrPush>("force_push_pull_request", { path, remote, branch, expected }));
 
 // ---------------------------------------------------------------- Copie de travail
 
@@ -252,24 +259,24 @@ export const addRemote = (path: string, name: string, url: string) => invoke<voi
 export const removeRemote = (path: string, name: string) => invoke<void>("remove_remote", { path, name });
 /** Renvoie un avertissement si les sous-modules n'ont pas pu être récupérés. */
 export const cloneRepository = (url: string, path: string) => invoke<string | null>("clone_repository", { url, path });
-// Hors journal (`tauriInvoke`) : ces commandes ne touchent pas au dépôt, et la passphrase ne doit être conservée nulle part.
-export const sshSetupInfo = () => tauriInvoke<SshSetupInfo>("ssh_setup_info");
+// Hors journal (`invokeRaw`) : ces commandes ne touchent pas au dépôt, et la passphrase ne doit être conservée nulle part.
+export const sshSetupInfo = () => invokeRaw<SshSetupInfo>("ssh_setup_info");
 /** `name` absent : `id_ed25519`. */
 export const sshCreateKey = (comment: string, passphrase: string | null, name?: string) =>
-  tauriInvoke<SshKeyInfo>("ssh_create_key", { name: name ?? null, comment, passphrase });
-export const sshAllKeys = () => tauriInvoke<SshKeyInfo[]>("ssh_all_keys");
-export const listGitProfiles = () => tauriInvoke<GitProfilesInfo>("list_git_profiles");
-export const saveGitProfile = (profile: GitProfileInput) => tauriInvoke<GitProfile>("save_git_profile", { profile });
-export const deleteGitProfile = (id: string) => tauriInvoke<void>("delete_git_profile", { id });
-export const gitIdentityStatus = (path: string) => tauriInvoke<IdentityStatus>("git_identity_status", { path });
+  invokeRaw<SshKeyInfo>("ssh_create_key", { name: name ?? null, comment, passphrase });
+export const sshAllKeys = () => invokeRaw<SshKeyInfo[]>("ssh_all_keys");
+export const listGitProfiles = () => invokeRaw<GitProfilesInfo>("list_git_profiles");
+export const saveGitProfile = (profile: GitProfileInput) => invokeRaw<GitProfile>("save_git_profile", { profile });
+export const deleteGitProfile = (id: string) => invokeRaw<void>("delete_git_profile", { id });
+export const gitIdentityStatus = (path: string) => invokeRaw<IdentityStatus>("git_identity_status", { path });
 /** Retire le nom et l'e-mail propres au dépôt : il reprend ceux de son profil. */
-export const clearLocalIdentity = (path: string) => tauriInvoke<void>("clear_local_identity", { path });
-export const sshExistingKey = (name: string) => tauriInvoke<SshKeyInfo>("ssh_existing_key", { name });
-export const sshHostStatus = (host: string) => tauriInvoke<SshHostStatus>("ssh_host_status", { host });
-export const sshTrustHost = (host: string, fingerprint: string) => tauriInvoke<void>("ssh_trust_host", { host, fingerprint });
-export const sshCheckConnection = (host: string, key: string) => tauriInvoke<SshCheck>("ssh_check_connection", { host, key });
-export const sshDeviceKeyStatus = () => tauriInvoke<DeviceKeyStatus>("ssh_device_key_status");
-export const sshDeviceKeyDelete = () => tauriInvoke<void>("ssh_device_key_delete");
+export const clearLocalIdentity = (path: string) => invokeRaw<void>("clear_local_identity", { path });
+export const sshExistingKey = (name: string) => invokeRaw<SshKeyInfo>("ssh_existing_key", { name });
+export const sshHostStatus = (host: string) => invokeRaw<SshHostStatus>("ssh_host_status", { host });
+export const sshTrustHost = (host: string, fingerprint: string) => invokeRaw<void>("ssh_trust_host", { host, fingerprint });
+export const sshCheckConnection = (host: string, key: string) => invokeRaw<SshCheck>("ssh_check_connection", { host, key });
+export const sshDeviceKeyStatus = () => invokeRaw<DeviceKeyStatus>("ssh_device_key_status");
+export const sshDeviceKeyDelete = () => invokeRaw<void>("ssh_device_key_delete");
 export const listSubmodules = (path: string) => invoke<SubmoduleInfo[]>("list_submodules", { path });
 /** `names` vide : tous les sous-modules. */
 export const updateSubmodules = (path: string, names: string[] = []) => invoke<void>("update_submodules", { path, names });
@@ -279,23 +286,30 @@ export const addWorktree = (path: string, target: string, branch: string, create
   invoke<void>("add_worktree", { path, target, branch, create });
 /** Supprime le worktree lié et son dossier. */
 export const removeWorktree = (path: string, name: string) => invoke<void>("remove_worktree", { path, name });
+/**
+ * Opération réseau lancée par la page (pas la synchronisation automatique) : ses effets sur les branches distantes ne
+ * seront pas annoncés par le bandeau de la synchronisation suivante (NAS, voir remoteSnapshots).
+ */
+function ownNetwork<T>(path: string, call: Promise<T>): Promise<T> {
+  return call.finally(() => forgetRemoteBranches(path));
+}
 /** `remote` null : tous les remotes. */
 export const fetchRemote = (path: string, remote: string | null = null) =>
-  invoke<void>("fetch_remote", { path, remote });
+  ownNetwork(path, invoke<void>("fetch_remote", { path, remote }));
 /** Fetch de tous les remotes en arrière-plan (synchronisation périodique) : pas inscrit au journal. */
 /** Synchronisation automatique : sur Android, la clé SSH de l'appareil n'y demande jamais de confirmation. */
-export const fetchAllQuietly = (path: string) => tauriInvoke<void>("fetch_remote", { path, remote: null, background: true });
+export const fetchAllQuietly = (path: string) => invokeRaw<void>("fetch_remote", { path, remote: null, background: true });
 /** Fetch d'un remote en arrière-plan (état d'une PR à l'ouverture) : pas inscrit au journal. */
-export const fetchRemoteQuietly = (path: string, remote: string) => tauriInvoke<void>("fetch_remote", { path, remote });
-export const pull = (path: string, rebase: boolean) => invoke<MergeResult>("pull", { path, rebase });
+export const fetchRemoteQuietly = (path: string, remote: string) => ownNetwork(path, invokeRaw<void>("fetch_remote", { path, remote }));
+export const pull = (path: string, rebase: boolean) => ownNetwork(path, invoke<MergeResult>("pull", { path, rebase }));
 /** Pull automatique : fetch puis fast-forward seulement, sans confirmation de la clé SSH de l'appareil. Erreurs non journalisées. */
-export const pullFastForward = (path: string) => tauriInvoke<FastForwardPull>("pull_fast_forward", { path });
+export const pullFastForward = (path: string) => ownNetwork(path, invokeRaw<FastForwardPull>("pull_fast_forward", { path }));
 export const push = (path: string, opts: { branch?: string; remote?: string; force?: boolean } = {}) =>
-  invoke<void>("push", { path, branch: opts.branch ?? null, remote: opts.remote ?? null, force: opts.force ?? false });
-export const deleteRemoteBranch = (path: string, name: string) => invoke<void>("delete_remote_branch", { path, name });
-export const pushTag = (path: string, remote: string, tag: string) => invoke<void>("push_tag", { path, remote, tag });
+  ownNetwork(path, invoke<void>("push", { path, branch: opts.branch ?? null, remote: opts.remote ?? null, force: opts.force ?? false }));
+export const deleteRemoteBranch = (path: string, name: string) => ownNetwork(path, invoke<void>("delete_remote_branch", { path, name }));
+export const pushTag = (path: string, remote: string, tag: string) => ownNetwork(path, invoke<void>("push_tag", { path, remote, tag }));
 export const deleteRemoteTag = (path: string, remote: string, tag: string) =>
-  invoke<void>("delete_remote_tag", { path, remote, tag });
+  ownNetwork(path, invoke<void>("delete_remote_tag", { path, remote, tag }));
 
 // ---------------------------------------------------------------- LFS
 
@@ -346,7 +360,7 @@ export interface AppInfo {
 /** Environnement d'exécution : système, architecture et version de libgit2 embarquée. */
 export const appInfo = () => invoke<AppInfo>("app_info");
 /** Hors logs : c'est la commande qui les active. */
-export const setDebugLogging = (enabled: boolean) => tauriInvoke<void>("set_debug_logging", { enabled });
+export const setDebugLogging = (enabled: boolean) => invokeRaw<void>("set_debug_logging", { enabled });
 
 /** Outils de développement (sans effet dans les builds de release). */
 export const openDevtools = () => invoke<void>("open_devtools");
@@ -366,25 +380,36 @@ export type WorkdirChange = { status: boolean; refs: boolean };
 
 /** Surveille le dépôt `path` pour cette fenêtre (remplace la surveillance précédente). */
 export const workdirWatch = (path: string, onChange: (change: WorkdirChange) => void) => {
-  const channel = new Channel<WorkdirChange>();
-  channel.onmessage = onChange;
-  return invoke<void>("workdir_watch", { path, onChange: channel });
+  lastWatch = { path, onChange };
+  return invoke<void>("workdir_watch", { path, onChange: createChannel<WorkdirChange>(onChange) });
 };
-export const workdirUnwatch = () => invoke<void>("workdir_unwatch");
+export const workdirUnwatch = () => {
+  lastWatch = null;
+  return invoke<void>("workdir_unwatch");
+};
+
+/** Dépôt surveillé : sur le NAS, la surveillance s'arrête avec le WebSocket, et doit être reprise à sa reconnexion. */
+let lastWatch: { path: string; onChange: (change: WorkdirChange) => void } | null = null;
+if (typeof window !== "undefined") {
+  window.addEventListener(RECONNECTED_EVENT, () => {
+    if (lastWatch) workdirWatch(lastWatch.path, lastWatch.onChange).catch(() => {});
+  });
+}
 
 // ---------------------------------------------------------------- Terminal intégré
 
 export type TerminalEvent = { kind: "output"; data: string } | { kind: "exit"; code: number | null };
 
 /** Lance le shell de l'utilisateur dans `cwd` ; ses sorties arrivent dans `onEvent`. */
-export const terminalOpen = (cwd: string, cols: number, rows: number, onEvent: (e: TerminalEvent) => void) => {
-  const channel = new Channel<TerminalEvent>();
-  channel.onmessage = onEvent;
-  return invoke<number>("terminal_open", { cwd, cols, rows, onEvent: channel });
-};
+export const terminalOpen = (cwd: string, cols: number, rows: number, onEvent: (e: TerminalEvent) => void) =>
+  invoke<number>("terminal_open", { cwd, cols, rows, onEvent: createChannel<TerminalEvent>(onEvent) });
 export const terminalWrite = (id: number, data: string) => invoke<void>("terminal_write", { id, data });
 export const terminalResize = (id: number, cols: number, rows: number) => invoke<void>("terminal_resize", { id, cols, rows });
 export const terminalClose = (id: number) => invoke<void>("terminal_close", { id });
 
 /** Langue des messages d'erreur du backend. */
-export const setBackendLanguage = (language: string) => tauriInvoke<void>("set_language", { language });
+export const setBackendLanguage = (language: string) => invokeRaw<void>("set_language", { language });
+
+/** Ce que l'interface doit savoir du serveur du NAS (version, utilisateur, terminal autorisé, dossiers). */
+export type ServerInfo = { version: string; user: string | null; terminal: boolean; roots: string[]; auth: "none" | "token" | "dsm" };
+export const serverInfo = () => invoke<ServerInfo>("server_info");

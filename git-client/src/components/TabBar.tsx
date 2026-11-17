@@ -3,6 +3,7 @@ import { usePendingByRepo } from "../lib/pendingPullRequests";
 import { useRepoStore } from "../store/useRepoStore";
 import { useTabsStore, type RepoTab } from "../store/useTabsStore";
 import { tr } from "../i18n";
+import { keysInText, tabShortcuts } from "../lib/tabShortcuts";
 
 /** Onglets des dépôts ouverts dans la fenêtre. */
 export function TabBar() {
@@ -51,7 +52,7 @@ export function TabBar() {
                 }}
                 data-touch-target
                 aria-label={tr("Fermer l'onglet {name}", { name })}
-                title={tr("Fermer l'onglet (Ctrl+W)")}
+                title={tr("Fermer l'onglet ({keys})", { keys: keysInText(tabShortcuts().closeTab) })}
               >
                 <X size={12} className="mx-auto" />
               </button>
@@ -62,7 +63,7 @@ export function TabBar() {
       <button
         className="px-3 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/5"
         onClick={newTab}
-        title={tr("Nouvel onglet (Ctrl+T)")}
+        title={tr("Nouvel onglet ({keys})", { keys: keysInText(tabShortcuts().newTab) })}
         aria-label={tr("Nouvel onglet")}
       >
         <Plus size={14} />

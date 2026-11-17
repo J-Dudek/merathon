@@ -10,6 +10,7 @@ import { errorMessage } from "./actions";
 import { themeColor, useThemeStore } from "./theme";
 import { LEAVE_TERMINAL_HINT, leaveTerminal } from "./terminalHint";
 import { tr, COLON } from "../i18n";
+import { copyText } from "./clipboard";
 
 /**
  * Terminaux intégrés, un par onglet de dépôt. Ils vivent hors de React : changer d'onglet ou
@@ -133,7 +134,7 @@ function createSession(path: string): Session {
     }
     if (key === "c") {
       const text = term.getSelection();
-      if (text) navigator.clipboard.writeText(text).catch(() => {});
+      if (text) copyText(text).catch(() => {});
       return false;
     }
     if (key === "v") {
@@ -170,6 +171,14 @@ function dispose(tabId: number) {
   s.term.dispose();
   s.host.remove();
   sessions.delete(tabId);
+}
+
+/**
+ * NAS : Ctrl+W ferme l'onglet du navigateur, même depuis le terminal intégré où il efface d'habitude un mot (le navigateur
+ * ne transmet jamais cette touche à la page). Tant qu'un shell tourne, le navigateur demande confirmation avant de partir.
+ */
+export function confirmLeavingWithTerminal(e: Pick<BeforeUnloadEvent, "preventDefault">) {
+  if ([...sessions.values()].some((s) => s.ptyId !== null && !s.exited && !s.disposed)) e.preventDefault();
 }
 
 /**

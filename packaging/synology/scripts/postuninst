@@ -1,0 +1,4 @@
+#!/bin/sh
+# Les données (comptes, clés SSH, configuration) sont supprimées par DSM avec le dossier var du paquet, sauf si
+# l'utilisateur a choisi de les conserver. Les dépôts, eux, sont dans un dossier partagé : jamais touchés.
+exit 0

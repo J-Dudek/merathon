@@ -8,7 +8,7 @@ pub fn is_english() -> bool {
     ENGLISH.load(Ordering::Relaxed)
 }
 
-#[tauri::command]
+#[crate::host::command]
 pub fn set_language(language: String) {
     ENGLISH.store(language == "en", Ordering::Relaxed);
 }

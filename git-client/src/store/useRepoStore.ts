@@ -6,6 +6,7 @@ import {
   getBranches, getCommits, getRepoInfo, gitIdentityStatus, getStatus, getTags, lfsStatus, listRemotes, listStashes, listSubmodules, listWorktrees, openRepository,
 } from "../ipc/commands";
 import type { ThreadLinks } from "../lib/threadTrailers";
+import { rememberRemoteBranchesIfUnknown } from "../lib/remoteSnapshots";
 
 /** Deux commits comparés (`base` le plus ancien), affichés à la place du détail d'un commit. */
 export interface Comparison {
@@ -172,6 +173,8 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
       throw e;
     });
     if (get().repoPath !== path) return; // un autre dépôt a été ouvert entre-temps
+    // NAS : point de départ du bandeau de la synchronisation, à l'ouverture ou après une opération réseau de la page.
+    rememberRemoteBranchesIfUnknown(path, branches);
     if (current !== lastRefresh) return; // une lecture plus récente (ex. à la fin d'un pull) fait foi
     const selected = get().selectedCommit;
     set({

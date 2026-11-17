@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "../lib/openExternal";
 import { CircleCheck, CircleDot, Ellipsis, ExternalLink, RotateCw } from "lucide-react";
 import { useAccountsStore, defaultBaseUrl } from "../store/useAccountsStore";
 import { useRepoStore } from "../store/useRepoStore";
@@ -19,6 +19,7 @@ import { PanelSection as Section } from "./PanelSection";
 import type { DeviceCode, ForgeAccount, ForgeIssue, Provider } from "../types/forge";
 import { fieldLabel } from "../lib/fieldLabel";
 import { tr } from "../i18n";
+import { copyText } from "../lib/clipboard";
 
 type Kind = "github" | "github-self" | "gitlab" | "gitlab-self";
 
@@ -371,7 +372,7 @@ function DeviceCodePanel({ device, onCancel }: { device: DeviceCode; onCancel: (
       <button
         className="font-mono text-lg tracking-widest text-[var(--color-text)] bg-overlay/10 rounded py-1 hover:bg-overlay/15"
         title={tr("Copier le code")}
-        onClick={() => navigator.clipboard.writeText(device.user_code)}
+        onClick={() => copyText(device.user_code)}
       >
         {device.user_code}
       </button>

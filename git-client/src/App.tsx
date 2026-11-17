@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { exit, onBackButtonPress } from "@tauri-apps/api/app";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { browserTabShortcut } from "./lib/tabShortcuts";
+import { currentWindowLabel, setViewZoom } from "./lib/nativeWindow";
 import { Toolbar } from "./components/Toolbar";
 import { MobileNav, type MobilePane } from "./components/MobileNav";
 import { TabBar } from "./components/TabBar";
@@ -34,7 +34,7 @@ import { chooseAndOpenRepo as openRepoDialog } from "./lib/repoActions";
 import { errorMessage } from "./lib/actions";
 import { chooseAndInitRepo, chooseAndOpenRepo, openRepoAt } from "./lib/repoActions";
 import { checkForUpdatesOnStartup } from "./lib/updater";
-import { hasDesktopFeatures, isAndroid, isMobile, isPhone } from "./lib/platform";
+import { hasNativeShell, isAndroid, isMobile, isPhone, isServer } from "./lib/platform";
 import { backAction, closeOverlay, overlayOpen, paneAfterCenterChange } from "./lib/androidBack";
 import { pullOpenRepos, startAutoSync } from "./lib/autoSync";
 import { startDebugLogging } from "./lib/debugLog";
@@ -148,7 +148,7 @@ export default function App() {
   // Android : au lancement, pull (fast-forward seulement) des dépôts rouverts, une fois les onglets restaurés.
   const launchPulled = useRef(false);
   useEffect(() => {
-    if (launchPulled.current || !isAndroid() || getCurrentWindow().label !== "main" || !useDisplayStore.getState().pullOnLaunch) return;
+    if (launchPulled.current || !isAndroid() || currentWindowLabel() !== "main" || !useDisplayStore.getState().pullOnLaunch) return;
     launchPulled.current = true;
     void whenSessionRestored().then(pullOpenRepos);
   }, []);
@@ -163,7 +163,7 @@ export default function App() {
   // Taille de l'interface : zoom du webview (net, y compris le graphe dessiné en canvas).
   useEffect(() => {
     if (device) return;
-    getCurrentWebview().setZoom(zoom).catch((e) => notify("error", tr("Zoom : {error}", { error: errorMessage(e) })));
+    setViewZoom(zoom).catch((e) => notify("error", tr("Zoom : {error}", { error: errorMessage(e) })));
   }, [zoom, notify, device]);
 
   // Titre de la page (RGAA 8.6) : le dépôt de l'onglet actif, restitué par les technologies d'assistance.
@@ -177,7 +177,7 @@ export default function App() {
   useEffect(() => {
     const repo = (window as { __MERATHON_OPEN_REPO__?: string | null }).__MERATHON_OPEN_REPO__;
     if (repo) openRepoAt(repo);
-    if (getCurrentWindow().label === "main") return persistTabSession(!repo);
+    if (currentWindowLabel() === "main") return persistTabSession(!repo);
   }, []);
 
   // Données des emojis hors du démarrage : chargées une fois l'interface affichée et au repos, pour que le premier « : »
@@ -444,7 +444,8 @@ const SHORTCUTS: Record<string, () => void> = {
   ",": () => useUiStore.getState().setPreferencesOpen(true),
   o: () => openRepoDialog(),
   "shift+n": () => {
-    if (hasDesktopFeatures()) openNewWindow().catch(() => {});
+    // Pas sur le NAS : dans un navigateur, les onglets de Merathon (et ceux du navigateur) en tiennent lieu.
+    if (hasNativeShell()) openNewWindow().catch(() => {});
   },
   "=": () => zoomBy(1),
   "+": () => zoomBy(1),
@@ -466,10 +467,20 @@ const SHORTCUTS: Record<string, () => void> = {
   pageup: () => cycleTab(-1),
 };
 
+const ZOOM_KEYS = new Set(["=", "+", "-", "0"]);
+
 /** Exécute le raccourci correspondant à la touche ; renvoie vrai s'il y en avait un. */
 function windowShortcut(e: KeyboardEvent): boolean {
+  // NAS : les onglets passent aussi par Alt, le navigateur gardant Ctrl+T, Ctrl+W, Ctrl+Tab… (voir tabShortcuts).
+  const browserTab = browserTabShortcut(e);
+  if (browserTab) {
+    SHORTCUTS[browserTab]();
+    return true;
+  }
   if (!e.ctrlKey && !e.metaKey) return false;
   const key = e.key.toLowerCase();
+  // NAS : Ctrl+= / - / 0 restent au navigateur, dont le zoom est la seule taille de l'interface (voir setViewZoom).
+  if (isServer() && ZOOM_KEYS.has(key)) return false;
   const action = (e.shiftKey && SHORTCUTS[`shift+${key}`]) || SHORTCUTS[key];
   if (!action || (key === "n" && !e.shiftKey)) return false;
   action();

@@ -5,7 +5,9 @@ import tailwindcss from "@tailwindcss/vite";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
-export default defineConfig(async () => ({
+export default defineConfig(async ({ mode }) => ({
+  // Construction pour le NAS : l'interface est servie par merathon-server, éventuellement derrière un préfixe (/merathon/).
+  base: mode === "server" ? "./" : "/",
   plugins: [react(), tailwindcss()],
   test: {
     environment: "jsdom",
@@ -18,7 +20,7 @@ export default defineConfig(async () => ({
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
   // Application de bureau : les fichiers sont lus sur le disque, la taille du bundle (xterm.js inclus) importe peu.
-  build: { chunkSizeWarningLimit: 1700 },
+  build: { chunkSizeWarningLimit: 1700, ...(mode === "server" ? { outDir: "dist-server" } : {}) },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,

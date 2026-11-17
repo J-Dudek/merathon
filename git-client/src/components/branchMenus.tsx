@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "../lib/openExternal";
 import { useRepoStore } from "../store/useRepoStore";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useUiStore, confirmAction, promptText } from "../store/useUiStore";
@@ -20,6 +20,7 @@ import { PullRequestDialog } from "./lazy";
 import type { MenuEntry } from "./ContextMenu";
 import type { BranchInfo } from "../types/git";
 import { tr } from "../i18n";
+import { copyText } from "../lib/clipboard";
 
 /**
  * Menus d'une branche locale ou distante, communs à la barre latérale et au graphe des commits.
@@ -203,7 +204,7 @@ export function useBranchMenus() {
       ...(b.upstream
         ? [{ label: tr("Ne plus suivre de branche distante"), action: () => runGit(() => setUpstream(path, b.name, null)) }]
         : []),
-      { label: tr("Copier le nom"), action: () => navigator.clipboard.writeText(b.name) },
+      { label: tr("Copier le nom"), action: () => copyText(b.name) },
       "separator",
       ...graphEntries(b),
       "separator",
@@ -227,7 +228,7 @@ export function useBranchMenus() {
       ...pullRequestEntries(b),
       "separator",
       { label: tr("Créer une branche depuis {name}…", { name: b.name }), action: () => newBranchFrom(b.name) },
-      { label: tr("Copier le nom"), action: () => navigator.clipboard.writeText(b.name) },
+      { label: tr("Copier le nom"), action: () => copyText(b.name) },
       "separator",
       ...graphEntries(b),
       "separator",

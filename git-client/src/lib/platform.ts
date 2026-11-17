@@ -4,16 +4,30 @@
  * fois pour toutes) pour pouvoir simuler une plateforme dans les tests.
  */
 export function isAndroid(): boolean {
-  return /Android/i.test(navigator.userAgent);
+  return !isServer() && /Android/i.test(navigator.userAgent);
 }
 
 export function isMobile(): boolean {
-  return isAndroid() || /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return isAndroid() || (!isServer() && /iPhone|iPad|iPod/i.test(navigator.userAgent));
+}
+
+/**
+ * Merathon servi par `merathon-server` (NAS Synology) et ouvert dans un navigateur, sans l'enveloppe Tauri. Choisi à la
+ * construction (`vite build --mode server`, voir .env.server). Un navigateur de téléphone y affiche la même interface
+ * que celui d'un ordinateur : ce que Merathon fait de propre à Android (clé de l'appareil, tâche de fond) n'y existe pas.
+ */
+export function isServer(): boolean {
+  return import.meta.env.VITE_TARGET === "server";
 }
 
 /** Terminal intégré, nouvelles fenêtres et mises à jour automatiques : bureau seulement. */
 export function hasDesktopFeatures(): boolean {
   return !isMobile();
+}
+
+/** Enveloppe native (Tauri) : mises à jour, pastille de l'icône, thème de la barre de titre. Pas dans un navigateur. */
+export function hasNativeShell(): boolean {
+  return hasDesktopFeatures() && !isServer();
 }
 
 /**

@@ -620,18 +620,18 @@ pub extern "system" fn Java_com_gitclient_app_MerathonPrWatch_check<'local>(
 
 // ---------------------------------------------------------------- Commandes du frontend
 
-fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    use tauri::Manager;
-    app.path().app_config_dir().map_err(|e| e.to_string())
+fn config_dir(app: &crate::host::Host) -> Result<PathBuf, String> {
+    use crate::host::HostExt;
+    app.config_dir()
 }
 
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
-    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+    crate::host::spawn_blocking(f).await.map_err(|e| e.to_string())?
 }
 
 /// Active (avec ces réglages) ou désactive la vérification en arrière-plan, et (re)programme la tâche Android.
-#[tauri::command]
-pub async fn pr_watch_configure(app: tauri::AppHandle, settings: Option<WatchSettings>) -> Result<(), String> {
+#[crate::host::command]
+pub async fn pr_watch_configure(app: crate::host::Host, settings: Option<WatchSettings>) -> Result<(), String> {
     let dir = config_dir(&app)?;
     blocking(move || {
         let minutes = settings.as_ref().map(|s| s.minutes);
@@ -642,8 +642,8 @@ pub async fn pr_watch_configure(app: tauri::AppHandle, settings: Option<WatchSet
 }
 
 /// Liste « mes PR » que le frontend vient de charger.
-#[tauri::command]
-pub async fn pr_watch_snapshot(app: tauri::AppHandle, account_id: String, snapshot: Snapshot) -> Result<(), String> {
+#[crate::host::command]
+pub async fn pr_watch_snapshot(app: crate::host::Host, account_id: String, snapshot: Snapshot) -> Result<(), String> {
     let dir = config_dir(&app)?;
     blocking(move || store_snapshot(&dir, &account_id, snapshot)).await
 }
@@ -655,14 +655,14 @@ pub struct WatchState {
 }
 
 /// Dernières listes de la tâche et notifications qu'elle a affichées.
-#[tauri::command]
-pub async fn pr_watch_state(app: tauri::AppHandle) -> Result<WatchState, String> {
+#[crate::host::command]
+pub async fn pr_watch_state(app: crate::host::Host) -> Result<WatchState, String> {
     let dir = config_dir(&app)?;
     blocking(move || Ok(WatchState { snapshots: snapshots(&dir), shown: shown(&dir) })).await
 }
 
 /// Retire une notification de la tâche (ses PR ont été consultées) ; sans effet pour un autre identifiant.
-pub fn dismiss(app: &tauri::AppHandle, id: i32) -> Result<(), String> {
+pub fn dismiss(app: &crate::host::Host, id: i32) -> Result<(), String> {
     if forget_shown(&config_dir(app)?, id)? {
         android::dismiss(id)?;
     }

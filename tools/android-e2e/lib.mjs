@@ -81,8 +81,15 @@ export class App {
   /** (Re)lance l'application et se connecte à sa WebView. */
   static async launch() {
     adb("shell", "am", "force-stop", PKG);
-    adb("shell", "am", "start", "-n", ACTIVITY);
-    const pid = await waitUntil(() => adb("shell", "pidof", PKG), { what: "processus de l'application" });
+    // Juste après l'installation ou un « pm clear », Android peut ignorer le lancement (vu en local) : relancé toutes les 5 s.
+    let started = 0;
+    const pid = await waitUntil(() => {
+      if (Date.now() - started > 5000) {
+        adb("shell", "am", "start", "-n", ACTIVITY);
+        started = Date.now();
+      }
+      return adb("shell", "pidof", PKG);
+    }, { timeout: 40000, what: "processus de l'application" });
     const socket = `webview_devtools_remote_${pid}`;
     await waitUntil(() => adb("shell", "cat", "/proc/net/unix").includes(socket), { what: "WebView en mode débogage (APK de debug ?)" });
     try {
@@ -135,15 +142,61 @@ export class App {
       return { x: Math.round((b.left + b.width / 2) * devicePixelRatio), y: Math.round((b.top + b.height / 2) * devicePixelRatio) };`);
   }
 
-  /** Touche l'élément (vrai geste, via adb), en l'attendant au besoin. */
+  /**
+   * Point à toucher, ou null tant que le toucher risquerait d'être perdu : élément désactivé, encore en mouvement (défilement,
+   * panneau qui glisse, liste rafraîchie) ou recouvert par un autre (notification, fond d'une fenêtre). Le toucher d'un vrai doigt
+   * irait alors ailleurs ; c'est la cause des échecs intermittents vus en CI (« Tout indexer », « Push » sans effet).
+   */
+  async target(want, { within = null, nth = 0 } = {}) {
+    return this.eval(`
+      const e = (${FINDER})(${JSON.stringify(want)}, ${JSON.stringify(within)}, ${nth});
+      if (!e) return null;
+      const control = e.closest("button,input,select,textarea,[role=button],[role=menuitem],[role=tab],[role=option],[role=checkbox]");
+      if (control && (control.disabled || control.getAttribute("aria-disabled") === "true")) return null;
+      e.scrollIntoView({ block: "center", inline: "nearest" });
+      await new Promise((r) => setTimeout(r, 200));
+      const a = e.getBoundingClientRect();
+      await new Promise((r) => setTimeout(r, 150));
+      const b = e.getBoundingClientRect();
+      if (Math.abs(a.left - b.left) > 1 || Math.abs(a.top - b.top) > 1 || Math.abs(a.width - b.width) > 1 || Math.abs(a.height - b.height) > 1) return null;
+      const x = b.left + b.width / 2, y = b.top + b.height / 2;
+      // elementFromPoint ignore, comme le doigt, les éléments en pointer-events: none.
+      const hit = document.elementFromPoint(x, y);
+      // Le texte trouvé peut être un libellé masqué (sr-only) dans le bouton : tout point du bouton qui le porte convient.
+      if (!hit || !(e.contains(hit) || hit.contains(e) || e.control === hit || control?.contains(hit))) return null;
+      return { x: Math.round(x * devicePixelRatio), y: Math.round(y * devicePixelRatio) };`);
+  }
+
+  /** Touche l'élément (vrai geste, via adb), en l'attendant au besoin : visible, activé, immobile et non recouvert. */
   async tap(want, options = {}) {
-    const at = await waitUntil(() => this.locate(want, options), { timeout: options.timeout ?? 15000, what: `élément « ${want} »` });
+    const at = await waitUntil(() => this.target(want, options), { timeout: options.timeout ?? 15000, what: `élément « ${want} » (activé, immobile, non recouvert)` });
     adb("shell", "input", "tap", String(at.x), String(at.y));
     await sleep(options.settle ?? 400);
   }
 
+  /**
+   * Touche l'élément puis attend `effect`. Un toucher resté sans effet est rejoué (trois essais au plus, tracés dans le journal),
+   * seulement si `retryIf` l'autorise (par défaut : l'élément est toujours là) et qu'aucune erreur n'est affichée : une vraie
+   * erreur de l'application fait échouer l'étape au lieu d'être masquée par un nouvel essai.
+   */
+  async tapUntil(want, effect, { what = `effet du toucher sur « ${want} »`, wait = 8000, retryIf = null, ...options } = {}) {
+    for (let attempt = 1; ; attempt++) {
+      await this.tap(want, options);
+      try {
+        return await waitUntil(effect, { timeout: wait, what });
+      } catch (e) {
+        const error = await this.eval(`return [...document.querySelectorAll("[role=alert]")].map((a) => a.textContent.trim()).filter(Boolean).join(" | ");`);
+        if (error) throw new Error(`${e.message} ; erreur affichée : ${error}`);
+        const retry = retryIf ? await retryIf() : await this.locate(want, options);
+        if (!retry) return waitUntil(effect, { timeout: 30000, what }); // l'action a démarré : elle est seulement lente
+        if (attempt === 3) throw e;
+        process.stdout.write(`(toucher sans effet sur « ${want} », essai ${attempt + 1}) `);
+      }
+    }
+  }
+
   async longPress(want, options = {}) {
-    const at = await waitUntil(() => this.locate(want, options), { what: `élément « ${want} »` });
+    const at = await waitUntil(() => this.target(want, options), { what: `élément « ${want} »` });
     adb("shell", "input", "swipe", String(at.x), String(at.y), String(at.x), String(at.y), "900");
     await sleep(600);
   }

@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
-use tauri::ipc::Channel;
-use tauri::{AppHandle, Manager};
+use std::sync::LazyLock;
+use crate::host::Channel;
 
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -32,6 +32,12 @@ struct Session {
 pub struct Terminals {
     next_id: AtomicU32,
     sessions: Mutex<HashMap<u32, Session>>,
+}
+
+/// Terminaux ouverts, partagés par toutes les fenêtres (ou onglets du navigateur).
+pub fn terminals() -> &'static Terminals {
+    static TERMINALS: LazyLock<Terminals> = LazyLock::new(Terminals::default);
+    &TERMINALS
 }
 
 impl Terminals {
@@ -99,7 +105,6 @@ impl Utf8Stream {
 }
 
 pub fn open(
-    app: &AppHandle,
     window: &str,
     cwd: &str,
     cols: u16,
@@ -124,14 +129,13 @@ pub fn open(
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
 
-    let state = app.state::<Terminals>();
+    let state = terminals();
     let id = state.next_id.fetch_add(1, Ordering::Relaxed) + 1;
     state.sessions.lock().unwrap().insert(
         id,
         Session { master: pair.master, writer, child, window: window.to_string() },
     );
 
-    let app = app.clone();
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
         let mut decoder = Utf8Stream::default();
@@ -147,7 +151,7 @@ pub fn open(
             }
         }
         // Fin du shell (exit) ou terminal fermé par `close`.
-        let session = app.state::<Terminals>().sessions.lock().unwrap().remove(&id);
+        let session = terminals().sessions.lock().unwrap().remove(&id);
         let code = session.and_then(|mut s| s.child.wait().ok()).map(|status| status.exit_code());
         let _ = on_event.send(TerminalEvent::Exit { code });
     });
@@ -155,17 +159,15 @@ pub fn open(
     Ok(id)
 }
 
-pub fn write(app: &AppHandle, id: u32, data: &str) -> Result<(), String> {
-    let state = app.state::<Terminals>();
-    let mut sessions = state.sessions.lock().unwrap();
+pub fn write(id: u32, data: &str) -> Result<(), String> {
+    let mut sessions = terminals().sessions.lock().unwrap();
     let session = sessions.get_mut(&id).ok_or(tr!("Terminal fermé", "Terminal closed"))?;
     session.writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
     session.writer.flush().map_err(|e| e.to_string())
 }
 
-pub fn resize(app: &AppHandle, id: u32, cols: u16, rows: u16) -> Result<(), String> {
-    let state = app.state::<Terminals>();
-    let sessions = state.sessions.lock().unwrap();
+pub fn resize(id: u32, cols: u16, rows: u16) -> Result<(), String> {
+    let sessions = terminals().sessions.lock().unwrap();
     let session = sessions.get(&id).ok_or(tr!("Terminal fermé", "Terminal closed"))?;
     session
         .master
@@ -173,8 +175,8 @@ pub fn resize(app: &AppHandle, id: u32, cols: u16, rows: u16) -> Result<(), Stri
         .map_err(|e| e.to_string())
 }
 
-pub fn close(app: &AppHandle, id: u32) {
-    app.state::<Terminals>().close(id);
+pub fn close(id: u32) {
+    terminals().close(id);
 }
 
 #[cfg(test)]

@@ -191,14 +191,18 @@ async function main() {
 
   await step("Commit et push", async () => {
     await bottomNav("Détails");
-    await app.tap("Tout indexer");
+    await app.tapUntil("Tout indexer", () => app.locate("^Commiter 1"), { what: "fichier indexé (« Commiter 1 »)" });
     await app.fill("Résumé du commit", "Précise le README depuis le téléphone");
     await app.blur();
-    await app.tap("^Commiter 1");
-    await app.waitText("Aucune modification en cours");
-    await app.tap("Push");
-    await waitUntil(() => serverGit("site-vitrine", "log", "-1", "--format=%s %ae", "main") === "Précise le README depuis le téléphone camille@example.com",
-      { timeout: 30000, what: "commit sur le serveur" });
+    await app.tapUntil("^Commiter 1", async () => (await app.text()).includes("Aucune modification en cours"), { what: "commit créé" });
+    // Le compteur du bouton Push vient du rafraîchissement qui suit le commit : attendu avant de toucher le bouton.
+    await app.waitText("1 commit à envoyer");
+    const onServer = () => serverGit("site-vitrine", "log", "-1", "--format=%s %ae", "main") === "Précise le README depuis le téléphone camille@example.com";
+    await app.tapUntil("Push", onServer, {
+      what: "commit sur le serveur",
+      wait: 10000,
+      retryIf: async () => (await app.text()).includes("1 commit à envoyer"),
+    });
     if (!serverGit("site-vitrine", "show", "main:README.md").includes("Modifié sur Android")) throw new Error("contenu absent du serveur");
   });
 
@@ -241,10 +245,8 @@ async function main() {
   await step("Retour d'Android depuis le diff d'un commit : liste de ses fichiers", async () => {
     const currentScreen = () => app.eval(`return [...document.querySelectorAll("nav [aria-current=page]")].map((e) => e.textContent).join(" ");`);
     await bottomNav("Historique");
-    await app.tap("Précise le README depuis le téléphone");
-    await waitUntil(async () => (await currentScreen()).includes("Détails"), { what: "détail du commit" });
-    await app.tap("README.md");
-    await waitUntil(async () => (await currentScreen()).includes("Historique"), { what: "diff du fichier" });
+    await app.tapUntil("Précise le README depuis le téléphone", async () => (await currentScreen()).includes("Détails"), { what: "détail du commit" });
+    await app.tapUntil("README.md", async () => (await currentScreen()).includes("Historique"), { what: "diff du fichier" });
     await back();
     await waitUntil(async () => (await currentScreen()).includes("Détails"), { what: "Retour : détail du commit, pas le graphe" });
     await app.waitText("README.md");

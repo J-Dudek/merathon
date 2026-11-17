@@ -1,0 +1,13 @@
+.git
+.github
+**/node_modules
+**/target
+git-client/dist
+git-client/dist-server
+git-client/src-tauri/gen
+git-client/src-tauri/icons
+docs
+*.png
+!git-client/branding/**
+!git-client/public/**
+!git-client/src/assets/**

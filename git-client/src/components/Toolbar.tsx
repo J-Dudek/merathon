@@ -6,6 +6,7 @@ import { AppWindow, Archive, ArchiveRestore, ArrowDown, ArrowUp, BookOpen, Chevr
 import {
   createBranch, fetchRemote, openNewWindow, pull, stashApply, stashSave,
 } from "../ipc/commands";
+import { tabShortcuts } from "../lib/tabShortcuts";
 import { reportMerge, runGit } from "../lib/actions";
 import { pushBranch } from "../lib/threadReplies";
 import { chooseAndInitRepo, chooseAndOpenRepo, openRepoAt } from "../lib/repoActions";
@@ -14,7 +15,7 @@ import { MobileDrawer } from "./MobileDrawer";
 import { SearchBar } from "./SearchBar";
 import { Tooltip } from "./Tooltip";
 import { checkForUpdates } from "../lib/updater";
-import { hasDesktopFeatures, isMobile } from "../lib/platform";
+import { hasDesktopFeatures, hasNativeShell, isMobile } from "../lib/platform";
 import { syncOpenRepos, useSyncRunning } from "../lib/autoSync";
 import { useThemeStore } from "../lib/theme";
 import { useDisplayStore, type ThemePreference } from "../store/useDisplayStore";
@@ -53,6 +54,7 @@ export function Toolbar({ onClone, onAccounts }: { onClone: () => void; onAccoun
 
   function repoMenu(): MenuEntry[] {
     const others = recent.filter((p) => p !== repoPath).slice(0, 6);
+    const keys = tabShortcuts();
     return [
       { header: tr("Dépôt") },
       { label: tr("Ouvrir…"), icon: FolderOpen, shortcut: "Ctrl+O", action: chooseAndOpenRepo },
@@ -67,12 +69,12 @@ export function Toolbar({ onClone, onAccounts }: { onClone: () => void; onAccoun
           ]
         : []),
       "separator",
-      { label: tr("Nouvel onglet"), icon: SquarePlus, shortcut: "Ctrl+T", action: newTab },
-      ...(hasDesktopFeatures()
-        ? [{ label: tr("Nouvelle fenêtre"), icon: AppWindow, shortcut: "Ctrl+Maj+N", action: () => openNewWindow() }]
+      { label: tr("Nouvel onglet"), icon: SquarePlus, shortcut: keys.newTab, action: newTab },
+      ...(hasNativeShell()
+        ? [{ label: tr("Nouvelle fenêtre"), icon: AppWindow, shortcut: keys.newWindow ?? undefined, action: () => openNewWindow() }]
         : []),
       ...(repoPath || tabCount > 1
-        ? [{ label: tr("Fermer l'onglet"), icon: X, shortcut: "Ctrl+W", action: () => closeTab(activeTab) }]
+        ? [{ label: tr("Fermer l'onglet"), icon: X, shortcut: keys.closeTab, action: () => closeTab(activeTab) }]
         : []),
       "separator",
       ...(isMobile() ? [{ label: tr("Comptes"), icon: Users, action: onAccounts }] : []),
@@ -249,7 +251,7 @@ export function Toolbar({ onClone, onAccounts }: { onClone: () => void; onAccoun
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <ThemeButton onOpen={openMenu} />
         <SearchBar />
-        {hasDesktopFeatures() && (
+        {hasNativeShell() && (
           <button
             className="text-xs px-2 py-1 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
             onClick={() => openNewWindow()}

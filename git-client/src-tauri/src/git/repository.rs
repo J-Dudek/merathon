@@ -46,6 +46,59 @@ fn safe_directory_entry(path: &str) -> String {
 
 /// Ajoute le dépôt à `safe.directory` dans la configuration Git globale de l'utilisateur
 /// (même effet que `git config --global --add safe.directory …`).
+/// Fichiers suivis examinés pour juger si le système de fichiers conserve les droits.
+#[cfg(unix)]
+const FILEMODE_SAMPLE: usize = 500;
+/// En dessous de ce nombre de fichiers examinés, rien ne prouve que les droits sont faussés.
+#[cfg(unix)]
+const FILEMODE_MIN_FILES: usize = 3;
+
+/// Désactive `core.filemode` quand le système de fichiers ne conserve pas les droits : sur un dossier partagé Synology (ACL), un
+/// partage réseau ou un volume FAT, tout fichier créé sort exécutable (`rwxrwxrwx`). Git compare alors les droits (`100644` dans l'index,
+/// `100755` sur le disque) et signale **chaque fichier** comme modifié, sans aucune différence de contenu.
+///
+/// Le critère est volontairement prudent : au moins [`FILEMODE_MIN_FILES`] fichiers suivis sans droit d'exécution dans l'index, **tous**
+/// exécutables sur le disque. Un dépôt normal n'en a jamais, et un fichier réellement exécutable (`100755` dans l'index) est ignoré.
+/// Renvoie `true` si le réglage vient d'être changé.
+pub fn fix_unreliable_filemode(repo: &Repository) -> Result<bool, GitError> {
+    #[cfg(not(unix))]
+    {
+        let _ = repo;
+        Ok(false)
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut config = repo.config()?;
+        if !config.snapshot()?.get_bool("core.filemode").unwrap_or(true) {
+            return Ok(false);
+        }
+        let Some(workdir) = repo.workdir() else { return Ok(false) };
+        let index = repo.index()?;
+        let (mut seen, mut executable) = (0usize, 0usize);
+        for entry in index.iter().take(FILEMODE_SAMPLE) {
+            if entry.mode != 0o100_644 {
+                continue;
+            }
+            let Ok(relative) = std::str::from_utf8(&entry.path) else { continue };
+            let Ok(meta) = std::fs::symlink_metadata(workdir.join(relative)) else { continue };
+            if !meta.is_file() {
+                continue;
+            }
+            seen += 1;
+            if meta.permissions().mode() & 0o111 != 0 {
+                executable += 1;
+            }
+        }
+        if seen < FILEMODE_MIN_FILES || executable != seen {
+            return Ok(false);
+        }
+        config.set_bool("core.filemode", false)?;
+        crate::debug_log::debug(|| format!("core.filemode désactivé : {seen} fichiers suivis sont tous exécutables sur le disque (ACL, partage réseau ?)"));
+        Ok(true)
+    }
+}
+
 pub fn trust_repo(path: &str) -> Result<(), GitError> {
     let file = match Config::find_global() {
         Ok(file) => file,
@@ -150,6 +203,89 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let repo = git2::Repository::init(dir.path()).unwrap();
         (dir, repo)
+    }
+
+    #[cfg(unix)]
+    mod filemode {
+        use super::*;
+        use std::os::unix::fs::PermissionsExt;
+
+        /// Dépôt avec `n` fichiers commités, dont `executable` en 100755 dans l'index.
+        fn committed_repo(n: usize, executable: usize) -> (TempDir, git2::Repository) {
+            let (dir, repo) = init_test_repo();
+            for i in 0..n {
+                let path = dir.path().join(format!("f{i}.txt"));
+                std::fs::write(&path, format!("contenu {i}\n")).unwrap();
+                let mode = if i < executable { 0o755 } else { 0o644 };
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+            }
+            let mut index = repo.index().unwrap();
+            index.add_all(["*"], git2::IndexAddOption::DEFAULT, None).unwrap();
+            index.write().unwrap();
+            {
+                let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+                let sig = git2::Signature::now("T", "t@example.com").unwrap();
+                repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[]).unwrap();
+            }
+            (dir, repo)
+        }
+
+        fn chmod_all(dir: &TempDir, mode: u32) {
+            for entry in std::fs::read_dir(dir.path()).unwrap().flatten() {
+                if entry.file_type().unwrap().is_file() {
+                    std::fs::set_permissions(entry.path(), std::fs::Permissions::from_mode(mode)).unwrap();
+                }
+            }
+        }
+
+        fn dirty_files(dir: &TempDir) -> usize {
+            let repo = git2::Repository::open(dir.path()).unwrap();
+            crate::git::get_status(&repo).unwrap().len()
+        }
+
+        #[test]
+        fn all_files_executable_on_disk_is_the_acl_symptom() {
+            let (dir, repo) = committed_repo(6, 0);
+            chmod_all(&dir, 0o777); // ce que fait un dossier partagé Synology à la création
+            assert_eq!(dirty_files(&dir), 6, "chaque fichier apparaît modifié alors que seul le droit a changé");
+
+            assert!(fix_unreliable_filemode(&repo).unwrap());
+            assert_eq!(dirty_files(&dir), 0, "plus aucun faux changement");
+            // Idempotent : déjà corrigé, rien à refaire.
+            assert!(!fix_unreliable_filemode(&repo).unwrap());
+        }
+
+        #[test]
+        fn a_normal_repository_is_left_alone() {
+            let (dir, repo) = committed_repo(6, 0);
+            assert!(!fix_unreliable_filemode(&repo).unwrap());
+            chmod_all(&dir, 0o644);
+            assert!(!fix_unreliable_filemode(&repo).unwrap());
+            let snapshot = repo.config().unwrap().snapshot().unwrap();
+            assert!(snapshot.get_bool("core.filemode").unwrap_or(true), "le réglage ne doit pas changer");
+        }
+
+        #[test]
+        fn a_few_executable_files_are_a_real_change_not_the_symptom() {
+            let (dir, repo) = committed_repo(6, 0);
+            std::fs::set_permissions(dir.path().join("f0.txt"), std::fs::Permissions::from_mode(0o755)).unwrap();
+            assert!(!fix_unreliable_filemode(&repo).unwrap());
+            assert_eq!(dirty_files(&dir), 1, "le vrai changement de droit reste visible");
+        }
+
+        #[test]
+        fn too_few_files_prove_nothing() {
+            let (dir, repo) = committed_repo(2, 0);
+            chmod_all(&dir, 0o777);
+            assert!(!fix_unreliable_filemode(&repo).unwrap());
+        }
+
+        #[test]
+        fn files_that_are_executable_in_the_index_do_not_count() {
+            // Un dépôt de scripts : 100755 dans l'index, exécutables sur le disque, comme il se doit.
+            let (_dir, repo) = committed_repo(6, 6);
+            assert!(!fix_unreliable_filemode(&repo).unwrap());
+        }
     }
 
     #[test]

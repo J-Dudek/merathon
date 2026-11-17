@@ -5,6 +5,7 @@ import { confirmAction, useUiStore } from "../store/useUiStore";
 import { useDisplayStore } from "../store/useDisplayStore";
 import type { DeviceKeyStatus } from "../types/git";
 import { tr } from "../i18n";
+import { copyText } from "../lib/clipboard";
 
 const buttonClass = "px-2.5 py-1.5 rounded-md border border-overlay/10 hover:bg-overlay/10 disabled:opacity-50";
 
@@ -49,7 +50,7 @@ export function DeviceSshSection() {
   }
 
   async function copy(publicKey: string) {
-    await navigator.clipboard.writeText(publicKey);
+    await copyText(publicKey);
     notify("success", tr("Clé publique copiée"));
   }
 

@@ -46,9 +46,9 @@ pub fn parse(release: &Value) -> Result<LatestRelease, String> {
     })
 }
 
-#[tauri::command]
+#[crate::host::command]
 pub async fn latest_release() -> Result<LatestRelease, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+    crate::host::spawn_blocking(|| {
         let response = crate::http::agent()
             .get(LATEST_URL)
             .set("Accept", "application/vnd.github+json")

@@ -9,7 +9,7 @@ import {
 import { errorMessage, runGit } from "../lib/actions";
 import { ContextMenu, useContextMenu, type MenuEntry } from "./ContextMenu";
 import { openRepoAt } from "../lib/repoActions";
-import { hasDesktopFeatures, isMobile } from "../lib/platform";
+import { hasNativeShell, isMobile } from "../lib/platform";
 import { createWorktree, deleteWorktree } from "../lib/worktrees";
 import { useBranchMenus } from "./branchMenus";
 import { branchKey, effectiveFilter, EMPTY_FILTER } from "../lib/graphFilter";
@@ -22,6 +22,7 @@ import { clickModifiers, clickSelection, EMPTY_SELECTION, pruneSelection, type M
 import type { BranchInfo, StashInfo, SubmoduleInfo, TagInfo, WorktreeInfo } from "../types/git";
 import type { ForgePR } from "../types/forge";
 import { tr, trn, COLON, LIST_SEPARATOR } from "../i18n";
+import { copyText } from "../lib/clipboard";
 
 const SUBMODULE_STATES: Record<SubmoduleInfo["state"], { label: string; color: string }> = {
   uninitialized: { label: tr("non initialisé"), color: "text-amber-300" },
@@ -146,7 +147,7 @@ export function Sidebar() {
   function remoteGroupMenu(name: string): MenuEntry[] {
     return [
       { label: `Fetch ${name}`, action: () => runGit(() => fetchRemote(path, name), { busy: tr("Fetch…"), success: tr("Fetch terminé") }) },
-      { label: tr("Copier l'URL"), action: () => navigator.clipboard.writeText(remotes.find((r) => r.name === name)?.url ?? "") },
+      { label: tr("Copier l'URL"), action: () => copyText(remotes.find((r) => r.name === name)?.url ?? "") },
       "separator",
       {
         label: tr("Supprimer le remote"),
@@ -214,7 +215,7 @@ export function Sidebar() {
     const initialized = sm.state !== "uninitialized";
     return [
       { label: tr("Ouvrir dans un nouvel onglet"), disabled: !initialized, action: () => openRepoAt(abs) },
-      ...(hasDesktopFeatures()
+      ...(hasNativeShell()
         ? [{ label: tr("Ouvrir dans une nouvelle fenêtre"), disabled: !initialized, action: () => openNewWindow(abs) }]
         : []),
       "separator",
@@ -222,7 +223,7 @@ export function Sidebar() {
         label: initialized ? tr("Mettre à jour (commit enregistré)") : tr("Initialiser et récupérer"),
         action: () => runGit(() => updateSubmodules(path, [sm.name]), { busy: "Sous-module…", success: tr("{name} à jour", { name: sm.name }) }),
       },
-      { label: tr("Copier l'URL"), disabled: !sm.url, action: () => navigator.clipboard.writeText(sm.url ?? "") },
+      { label: tr("Copier l'URL"), disabled: !sm.url, action: () => copyText(sm.url ?? "") },
     ];
   }
 
@@ -237,8 +238,8 @@ export function Sidebar() {
     if (!w.valid) return [remove];
     return [
       { label: tr("Ouvrir dans un onglet"), action: () => openRepoAt(w.path) },
-      ...(hasDesktopFeatures() ? [{ label: tr("Ouvrir dans une nouvelle fenêtre"), action: () => openNewWindow(w.path) }] : []),
-      { label: tr("Copier le chemin"), action: () => navigator.clipboard.writeText(w.path) },
+      ...(hasNativeShell() ? [{ label: tr("Ouvrir dans une nouvelle fenêtre"), action: () => openNewWindow(w.path) }] : []),
+      { label: tr("Copier le chemin"), action: () => copyText(w.path) },
       "separator",
       remove,
     ];

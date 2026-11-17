@@ -1,6 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "../lib/openExternal";
 import { useUiStore } from "../store/useUiStore";
 import { Button, Modal, inputClass } from "./Modal";
 import { fieldLabel } from "../lib/fieldLabel";

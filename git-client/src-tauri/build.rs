@@ -5,5 +5,21 @@ fn main() {
     for name in ["MERATHON_GITHUB_CLIENT_ID", "MERATHON_GITLAB_CLIENT_ID", "GIT_CLIENT_GITHUB_CLIENT_ID", "GIT_CLIENT_GITLAB_CLIENT_ID"] {
         println!("cargo:rerun-if-env-changed={name}");
     }
-    tauri_build::build()
+
+    #[cfg(feature = "tauri-app")]
+    tauri_build::build();
+
+    // Le serveur (NAS) n'utilise pas Tauri : les `cfg(desktop)` / `cfg(mobile)` que Tauri pose d'habitude le sont ici.
+    #[cfg(not(feature = "tauri-app"))]
+    {
+        println!("cargo:rustc-check-cfg=cfg(desktop)");
+        println!("cargo:rustc-check-cfg=cfg(mobile)");
+        println!("cargo:rustc-check-cfg=cfg(dev)");
+        let target = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+        if target == "android" || target == "ios" {
+            println!("cargo:rustc-cfg=mobile");
+        } else {
+            println!("cargo:rustc-cfg=desktop");
+        }
+    }
 }

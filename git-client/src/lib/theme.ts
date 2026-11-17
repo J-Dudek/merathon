@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { setWindowTheme } from "./nativeWindow";
 import { useDisplayStore, type ThemePreference } from "../store/useDisplayStore";
 
 export type Theme = "dark" | "light";
@@ -36,7 +36,7 @@ export function initTheme() {
     // Barre de titre et contrôles natifs de la fenêtre ; null : thème du système.
     if (next !== preference) {
       preference = next;
-      getCurrentWindow().setTheme(next === "system" ? null : next).catch(() => {});
+      setWindowTheme(next === "system" ? null : next).catch(() => {});
     }
   }
 
