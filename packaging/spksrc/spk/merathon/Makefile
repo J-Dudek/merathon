@@ -1,5 +1,5 @@
 SPK_NAME = merathon
-SPK_VERS = 2.17.0
+SPK_VERS = 2.18.0
 SPK_REV = 1
 SPK_ICON = src/merathon.png
 

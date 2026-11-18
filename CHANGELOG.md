@@ -2,6 +2,10 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.18.1](https://github.com/J-Dudek/merathon/compare/v2.18.0...v2.18.1) (2026-11-18)
+
+Maintenance interne, sans changement visible.
+
 ## [2.18.0](https://github.com/J-Dudek/merathon/compare/v2.17.0...v2.18.0) (2026-11-17)
 
 ### Nouveautés
