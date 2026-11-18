@@ -1,5 +1,5 @@
 PKG_NAME = merathon_web
-PKG_VERS = 2.18.0
+PKG_VERS = 2.19.0
 PKG_EXT = tar.gz
 PKG_DIST_NAME = merathon-web-$(PKG_VERS).$(PKG_EXT)
 PKG_DIST_SITE = https://github.com/J-Dudek/merathon/releases/download/v$(PKG_VERS)

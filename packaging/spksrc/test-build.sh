@@ -5,6 +5,7 @@
 #
 # Le code source (git archive HEAD) et l'interface (<dist-server>) sont servis par un serveur HTTP local, et les
 # adresses de téléchargement de la recette lui sont substituées dans une copie : la recette du dépôt n'est pas modifiée.
+# L'image est celle de ghcr.io (l'ancienne, sur Docker Hub, a un GNU Make trop vieux pour spksrc) ; SPKSRC_IMAGE la remplace.
 set -eu
 [ $# -ge 2 ] || { sed -n '2,8p' "$0" >&2; exit 2; }
 spksrc=$(cd "$1" && pwd)
@@ -30,5 +31,5 @@ sed -i -e "s|^PKG_DIST_SITE = .*|PKG_DIST_SITE = http://$host:8099|" -e "s|^PKG_
 "$here/digests.sh" "$serve/source.tar.gz" "merathon-$version.tar.gz" > "$spksrc/cross/merathon/digests"
 "$here/digests.sh" "$serve/web.tar.gz" "merathon_web-$version.tar.gz" > "$spksrc/cross/merathon_web/digests"
 
-docker run --rm -v "$spksrc":/spksrc -w /spksrc "${SPKSRC_IMAGE:-synocommunity/spksrc}" /bin/bash -c "make setup >/dev/null 2>&1; cd spk/merathon && make $target"
+docker run --rm --platform=linux/amd64 -v "$spksrc":/spksrc -w /spksrc "${SPKSRC_IMAGE:-ghcr.io/synocommunity/spksrc}" /bin/bash -c "make setup >/dev/null 2>&1; cd spk/merathon && make $target"
 ls -la "$spksrc"/packages/*.spk

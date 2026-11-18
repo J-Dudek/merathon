@@ -1,0 +1,48 @@
+# Workflow du dépôt PUBLIC (merathon), maintenu ici : .github/public-workflows/ de git-management.
+# publish-public.yml le copie dans .github/workflows/ du dépôt public à chaque release ;
+# une modification faite directement dans le dépôt public serait écrasée.
+#
+# Rattache le paquet ghcr.io/j-dudek/merathon à ce dépôt. Le paquet est poussé par le workflow Release de git-management (privé) :
+# GitHub ne le rattache à ce dépôt (page « Packages », lien vérifié) que si un workflow de CE dépôt le publie avec son propre
+# GITHUB_TOKEN. Ce workflow réétiquette, sans reconstruire, les images déjà publiées : mêmes images, nouveau manifeste poussé d'ici.
+#
+# À lancer à la main (Actions > Rattacher le paquet > Run workflow), avec la version à réétiqueter (ex. 2.19.0).
+# Prérequis : le paquet doit donner à ce dépôt le rôle Admin (Package settings > Manage Actions access).
+name: Rattacher le paquet
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version dont les images (<version>-x86_64 et <version>-armv8) sont réétiquetées (ex. 2.19.0)
+        required: true
+        type: string
+      latest:
+        description: Réétiqueter aussi latest
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  rattacher:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      LATEST: ${{ inputs.latest }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Réétiqueter l'image depuis ce dépôt
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version invalide : $VERSION"; exit 1; }
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          tags=(-t "$IMAGE:$VERSION")
+          [ "$LATEST" = "true" ] && tags+=(-t "$IMAGE:latest")
+          docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            "${tags[@]}" "$IMAGE:$VERSION-x86_64" "$IMAGE:$VERSION-armv8"
+          docker buildx imagetools inspect "$IMAGE:$VERSION"

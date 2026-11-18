@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.19.1](https://github.com/J-Dudek/merathon/compare/v2.19.0...v2.19.1) (2026-11-18)
+
+### Corrections
+
+- **spksrc :** test-build.sh utilise l'image ghcr.io de SynoCommunity (4a4d478)
+
 ## [2.19.0](https://github.com/J-Dudek/merathon/compare/v2.18.1...v2.19.0) (2026-11-18)
 
 ### Nouveautés
