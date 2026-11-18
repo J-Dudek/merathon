@@ -2567,7 +2567,7 @@ dependencies = [
 
 [[package]]
 name = "merathon"
-version = "2.18.1"
+version = "2.19.0"
 dependencies = [
  "axum",
  "base64 0.22.1",

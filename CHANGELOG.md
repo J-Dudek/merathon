@@ -2,6 +2,16 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.19.0](https://github.com/J-Dudek/merathon/compare/v2.18.1...v2.19.0) (2026-11-18)
+
+### Nouveautés
+
+- **docker :** publication du paquet Docker sur le dépôt public merathon (436f4ba)
+
+### Corrections
+
+- **docker :** rattacher le paquet ghcr.io au dépôt public merathon (6256f0d)
+
 ## [2.18.1](https://github.com/J-Dudek/merathon/compare/v2.18.0...v2.18.1) (2026-11-18)
 
 Maintenance interne, sans changement visible.
