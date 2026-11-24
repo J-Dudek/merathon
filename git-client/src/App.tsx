@@ -27,7 +27,7 @@ import { persistTabSession, useTabsStore, whenSessionRestored } from "./store/us
 import { stepZoom, useDisplayStore } from "./store/useDisplayStore";
 import { loadEmojiData } from "./components/EmojiAssist";
 import { InteractiveRebaseDialog } from "./components/InteractiveRebaseDialog";
-import { CloneDialog, ConflictViewer, FileEditorDialog, GitMemoDialog, PreferencesDialog } from "./components/lazy";
+import { BlameViewer, CloneDialog, ConflictViewer, FileEditorDialog, GitMemoDialog, PreferencesDialog } from "./components/lazy";
 import { openNewWindow, workdirUnwatch, workdirWatch } from "./ipc/commands";
 import { debugLog } from "./store/useDebugLogStore";
 import { chooseAndOpenRepo as openRepoDialog } from "./lib/repoActions";
@@ -36,7 +36,9 @@ import { chooseAndInitRepo, chooseAndOpenRepo, openRepoAt } from "./lib/repoActi
 import { checkForUpdatesOnStartup } from "./lib/updater";
 import { hasNativeShell, isAndroid, isMobile, isPhone, isServer } from "./lib/platform";
 import { backAction, closeOverlay, overlayOpen, paneAfterCenterChange } from "./lib/androidBack";
-import { pullOpenRepos, startAutoSync } from "./lib/autoSync";
+import { pullOpenRepos, startAutoSync, syncAndPull } from "./lib/autoSync";
+import { usePullToRefresh } from "./lib/usePullToRefresh";
+import { PullIndicator } from "./components/PullIndicator";
 import { startDebugLogging } from "./lib/debugLog";
 import { useIconBadge } from "./lib/iconBadge";
 import { usePrWatch } from "./lib/prWatch";
@@ -72,7 +74,13 @@ export default function App() {
   const fileEditor = useUiStore((s) => s.fileEditor);
   const closeFileEditor = useUiStore((s) => s.closeFileEditor);
   const setMemoOpen = useUiStore((s) => s.setMemoOpen);
+  const rebaseOnto = useUiStore((s) => s.interactiveRebaseOnto);
   const setRebaseBase = useUiStore((s) => s.setInteractiveRebaseBase);
+  // Mobile : tirer vers le bas depuis le haut d'un panneau synchronise puis tire (comme l'actualisation d'une messagerie).
+  const panesRef = useRef<HTMLDivElement>(null);
+  const uiBusy = useUiStore((s) => s.busy);
+  const uiDialog = useUiStore((s) => s.dialog);
+  const pull = usePullToRefresh(panesRef, mobile && !!repoPath && !uiBusy && !uiDialog && !preferencesOpen && !showClone, syncAndPull);
   const chosenWidths = useUiStore((s) => s.sideWidths);
   // Tablette en portrait : les panneaux latéraux rétrécissent pour laisser le centre lisible.
   const windowWidth = useWindowWidth(device);
@@ -276,6 +284,7 @@ export default function App() {
     }
     if (center.kind === "diff") return <CenterDiff view={center} />;
     if (center.kind === "conflict") return <ConflictViewer path={center.path} />;
+    if (center.kind === "blame") return <BlameViewer view={center} />;
     return <CommitGraph />;
   }
 
@@ -310,7 +319,8 @@ export default function App() {
 
       {/* Remonté à chaque changement d'onglet : pas de sélection d'un dépôt appliquée à un autre. */}
       {/* Fenêtre étroite ou zoom fort (RGAA 10.4, 10.11) : les panneaux s'empilent et la page défile verticalement. */}
-      <div key={activeTab} className={`flex flex-1 overflow-hidden max-[760px]:flex-col max-[760px]:flex-none max-[760px]:overflow-visible ${mobile ? "flex-col! flex-1! min-h-0 overflow-hidden!" : ""}`}>
+      <div ref={panesRef} key={activeTab} className={`relative flex flex-1 overflow-hidden max-[760px]:flex-col max-[760px]:flex-none max-[760px]:overflow-visible ${mobile ? "flex-col! flex-1! min-h-0 overflow-hidden!" : ""}`}>
+        {mobile && <PullIndicator distance={pull.distance} refreshing={pull.refreshing} />}
         <aside
           aria-label={leftTab === "accounts" ? tr("Comptes") : tr("Dépôt : branches, tags et stashes")}
           className={`relative shrink-0 flex flex-col overflow-hidden border-r border-overlay/10 bg-[var(--color-bg-secondary)] max-[760px]:w-full! max-[760px]:h-80 max-[760px]:border-r-0 max-[760px]:border-b ${paneClass("left")}`}
@@ -347,7 +357,7 @@ export default function App() {
       {preferencesOpen && <PreferencesDialog onClose={() => setPreferencesOpen(false)} />}
       {memoOpen && <GitMemoDialog onClose={() => setMemoOpen(false)} />}
       {fileEditor && repoPath && <FileEditorDialog key={repoPath} repoPath={repoPath} initialFile={fileEditor.file} onClose={closeFileEditor} />}
-      {rebaseBase && repoPath && <InteractiveRebaseDialog base={rebaseBase} onClose={() => setRebaseBase(null)} />}
+      {rebaseBase && repoPath && <InteractiveRebaseDialog base={rebaseBase} onto={rebaseOnto} onClose={() => setRebaseBase(null)} />}
       {folderPicker && <FolderPicker />}
       <Dialog />
       <LanguageChooser />

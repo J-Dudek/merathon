@@ -2,6 +2,22 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.20.0](https://github.com/J-Dudek/merathon/compare/v2.19.1...v2.20.0) (2026-11-24)
+
+### Nouveautés
+
+- **graph :** nom de la branche au survol des points et des lignes de l'arbre (5c3a716)
+- **mobile :** tirer pour actualiser (synchro + pull fast-forward) (0f43bd4)
+- dégradé d'âge dans le blame et contexte dépliable (5/10 lignes) dans le diff (bb25392)
+- git blame sur les fichiers (copie de travail, commit ou comparaison) (f0b34f7)
+- rebase interactif sur une autre branche (paramètre onto) depuis le menu d'une branche (3ee5a6f)
+
+### Corrections
+
+- **deps :** cookie 0.18.3 et url 2.5.9 (RUSTSEC-2026-0594, RUSTSEC-2026-0592) (1365401)
+- **ci :** clippy (interactive_rebase réservé aux tests) et règles ESLint/SonarJS (2bc2206)
+- la liste des MR/PR se recharge quand une synchro réussit après une erreur réseau (3c7159b)
+
 ## [2.19.1](https://github.com/J-Dudek/merathon/compare/v2.19.0...v2.19.1) (2026-11-18)
 
 ### Corrections

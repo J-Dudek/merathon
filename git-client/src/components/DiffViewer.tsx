@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp, Plus, Search, X } from "lucide-react";
+import { CONTEXT_STEPS, contextAround, contextLines, type Expansion } from "../lib/diffContext";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { FileDiff, DiffHunk, DiffLine } from "../types/git";
 import type { LineAction } from "../ipc/commands";
@@ -31,6 +32,8 @@ interface Props {
    * blocs annoncés par leurs numéros de ligne. Avec `wrap`, les lignes longues passent à la ligne.
    */
   compact?: { wrap: boolean };
+  /** Charge les lignes de la nouvelle version du fichier : active les boutons qui déplient le contexte des blocs. */
+  expandContext?: () => Promise<string[]>;
 }
 
 /** Occurrence de la recherche : bloc, ligne dans le bloc, position dans le contenu. */
@@ -71,7 +74,7 @@ interface Selection {
   anchor: number;
 }
 
-export function DiffViewer({ diff, loading, staging, annotations, searchable, compact }: Props) {
+export function DiffViewer({ diff, loading, staging, annotations, searchable, compact, expandContext }: Props) {
   // Valeurs simples pour les lignes mémoïsées : un objet recréé à chaque rendu les re-rendrait toutes.
   const isCompact = !!compact;
   const wrap = !!compact?.wrap;
@@ -99,6 +102,38 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable, co
   const activeKey = active >= 0 ? `${matches[active].hunk}:${matches[active].line}` : null;
 
   useEffect(() => setSelection(null), [diff]);
+
+  // Contexte déplié autour des blocs : les lignes du fichier ne sont chargées qu'au premier clic.
+  const [fileLines, setFileLines] = useState<string[] | null>(null);
+  const [expansions, setExpansions] = useState<Expansion[]>([]);
+  const [contextError, setContextError] = useState<string | null>(null);
+  useEffect(() => {
+    setFileLines(null);
+    setExpansions([]);
+    setContextError(null);
+  }, [diff, expandContext]);
+  const contexts = useMemo(
+    () => (diff && expandContext ? contextAround(diff.hunks, expansions, fileLines?.length ?? null) : []),
+    [diff, expandContext, expansions, fileLines],
+  );
+
+  async function expand(hunk: number, side: "up" | "down", by: number) {
+    if (!expandContext) return;
+    if (!fileLines) {
+      try {
+        setFileLines(await expandContext());
+      } catch (e) {
+        setContextError(e instanceof Error ? e.message : String(e));
+        return;
+      }
+    }
+    setExpansions((prev) => {
+      const next = [...prev];
+      for (let i = 0; i <= hunk; i++) next[i] ??= { up: 0, down: 0 };
+      next[hunk] = { ...next[hunk], [side]: next[hunk][side] + by };
+      return next;
+    });
+  }
   // Mobile : la barre s'ouvre depuis une icône, prête à la saisie, et se vide en se fermant.
   useEffect(() => {
     if (!isCompact) return;
@@ -238,6 +273,12 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable, co
                 </div>
               )}
             </div>
+            {expandContext && contexts[i] && (
+              <ContextBar side="up" hidden={contexts[i].hiddenAbove} onExpand={(n) => expand(i, "up", n)} error={contextError} />
+            )}
+            {fileLines && contexts[i]?.above && (
+              <ContextRows lines={contextLines(fileLines, contexts[i].above, contexts[i].offsetAbove)} annotated={!!annotations} compact={isCompact} wrap={wrap} />
+            )}
             <table className="w-full border-collapse">
               <DiffHeader annotations={!!annotations} compact={!!compact} />
               <tbody>
@@ -267,6 +308,12 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable, co
                 })}
               </tbody>
             </table>
+            {fileLines && contexts[i]?.below && (
+              <ContextRows lines={contextLines(fileLines, contexts[i].below, contexts[i].offsetBelow)} annotated={!!annotations} compact={isCompact} wrap={wrap} />
+            )}
+            {expandContext && contexts[i] && (
+              <ContextBar side="down" hidden={contexts[i].hiddenBelow} onExpand={(n) => expand(i, "down", n)} error={null} />
+            )}
           </div>
         ))}
       </div>
@@ -297,6 +344,59 @@ export function DiffViewer({ diff, loading, staging, annotations, searchable, co
     </div>
   );
 }
+
+/** Boutons qui déplient 5 ou 10 lignes de contexte au-dessus ou en dessous d'un bloc. */
+function ContextBar({ side, hidden, onExpand, error }: { side: "up" | "down"; hidden: number; onExpand: (n: number) => void; error: string | null }) {
+  if (hidden <= 0 && !error) return null;
+  const Icon = side === "up" ? ChevronUp : ChevronDown;
+  return (
+    <div className="flex items-center gap-1 px-2 py-0.5 font-sans text-[10px] bg-overlay/5 border-y border-overlay/5">
+      {hidden > 0 && CONTEXT_STEPS.filter((_, k) => k === 0 || hidden > CONTEXT_STEPS[k - 1]).map((n) => (
+        <button
+          key={n}
+          type="button"
+          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-overlay/10"
+          title={side === "up" ? tr("Afficher {n} lignes au-dessus", { n }) : tr("Afficher {n} lignes en dessous", { n })}
+          onClick={() => onExpand(n)}
+        >
+          <Icon size={11} aria-hidden />
+          {n}
+        </button>
+      ))}
+      {error && <span className="text-red-400 truncate">{error}</span>}
+    </div>
+  );
+}
+
+/** Lignes de contexte dépliées, hors du bloc : elles ne se sélectionnent pas et ne bougent pas l'indexation partielle. */
+function ContextRows({ lines, annotated, compact, wrap }: { lines: DiffLine[]; annotated: boolean; compact: boolean; wrap: boolean }) {
+  return (
+    <table className="w-full border-collapse">
+      <DiffHeader annotations={annotated} compact={compact} />
+      <tbody>
+        {lines.map((line, k) => (
+          <DiffLineRow
+            key={k}
+            line={line}
+            hunk={-1}
+            index={k}
+            selectable={false}
+            selected={false}
+            onToggle={noToggle}
+            annotated={annotated}
+            below={null}
+            current={-1}
+            queryLength={0}
+            compact={compact}
+            wrap={wrap}
+          />
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+const noToggle = () => {};
 
 function SearchBtn({ label, disabled, onClick, children }: {
   label: string;

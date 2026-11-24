@@ -16,6 +16,7 @@ mod pr_rebase;
 mod submodule;
 mod worktree;
 mod files;
+mod blame;
 mod profiles;
 pub mod lfs;
 
@@ -24,7 +25,7 @@ pub use auth::{configure_network_timeouts, Credentials};
 pub use repository::{open_repo, trust_repo, repo_info, fix_unreliable_filemode, get_identity, set_identity, RepoInfo, Identity};
 pub use history::{get_commits, get_branches, get_tags, get_commit_details, compare_refs, diff_commits, commit_trailers, CommitInfo, BranchInfo, TagInfo, CommitDetails, CommitFile, RefComparison, CommitTrailers};
 pub use status::{get_status, stage_paths, stage_all, unstage_paths, unstage_all, discard_paths, ignore_patterns, FileStatus};
-pub use diff::{get_diff, get_commit_file_diff, get_compare_file_diff, FileDiff};
+pub use diff::{get_file_lines, get_diff, get_commit_file_diff, get_compare_file_diff, FileDiff};
 pub use remote::{
     init_repo, clone_repo, fetch, fetch_all, pull, pull_fast_forward, FastForwardPull, push_branch, delete_remote_branch, push_tag,
     delete_remote_tag, list_remotes, add_remote, remove_remote, RemoteInfo,
@@ -37,7 +38,7 @@ pub use ops::{
 };
 pub use commit::{create_commit, reword_head};
 pub use interactive::{
-    rebase_todo, interactive_rebase, continue_interactive, abort_interactive, InteractiveOutcome,
+    rebase_todo, interactive_rebase_onto, rebase_merge_base, continue_interactive, abort_interactive, InteractiveOutcome,
     RebaseMode, RebaseStep, TodoCommit,
 };
 pub use pr_rebase::{
@@ -47,6 +48,7 @@ pub use pr_rebase::{
 pub use submodule::{list_submodules, update_submodules, SubmoduleInfo};
 pub use worktree::{list_worktrees, add_worktree, remove_worktree, WorktreeInfo};
 pub use files::{list_files, read_file, write_file, delete_file};
+pub use blame::{blame_file, FileBlame};
 #[cfg(not(target_os = "android"))]
 pub(crate) use profiles::is_plain_file_name;
 pub use profiles::{home_dir, list_profiles, save_profile, delete_profile, identity_status, clear_local_identity, GitProfile, ProfileInput, ProfilesInfo, IdentityStatus};

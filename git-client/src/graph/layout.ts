@@ -121,3 +121,43 @@ export function computeGraphLayout(commits: CommitInfo[]): GraphLayout {
 
   return { nodes, edges, laneCount: Math.max(1, maxLanes) };
 }
+
+/** Nom de branche sans le préfixe de son remote (« origin/main » → « main »), pour reconnaître les branches principales. */
+function bareName(name: string): string {
+  const slash = name.indexOf("/");
+  return slash === -1 ? name : name.slice(slash + 1);
+}
+
+const MAIN_BRANCHES = new Set(["main", "master", "develop", "dev", "trunk"]);
+
+/**
+ * Branche à laquelle appartient chaque commit (par ligne), `null` si aucune étiquette de branche ne l'atteint.
+ * Chaque pointe de branche donne son nom aux commits qu'elle atteint en suivant les premiers parents, jusqu'à un commit
+ * déjà nommé. Les branches principales passent d'abord, puis les locales avant les distantes, pour que `main` garde son
+ * historique quand une branche en est partie.
+ */
+export function branchNamesByRow(commits: CommitInfo[]): (string | null)[] {
+  const hashToRow = new Map<string, number>();
+  commits.forEach((c, i) => hashToRow.set(c.hash, i));
+
+  const tips: { row: number; name: string; rank: number }[] = [];
+  commits.forEach((commit, row) => {
+    for (const ref of commit.refs) {
+      if (ref.kind === "tag") continue;
+      const remote = ref.kind === "remote";
+      tips.push({ row, name: ref.name, rank: (MAIN_BRANCHES.has(bareName(ref.name)) ? 0 : 2) + (remote ? 1 : 0) });
+    }
+  });
+  tips.sort((a, b) => a.rank - b.rank || a.row - b.row);
+
+  const names: (string | null)[] = commits.map(() => null);
+  for (const tip of tips) {
+    let row: number | undefined = tip.row;
+    while (row !== undefined && names[row] === null) {
+      names[row] = tip.name;
+      const parent: string | undefined = commits[row].parents[0];
+      row = parent === undefined ? undefined : hashToRow.get(parent);
+    }
+  }
+  return names;
+}

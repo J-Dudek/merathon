@@ -289,6 +289,9 @@ export function StagingPanel() {
         : []),
       // Mobile : aucun autre éditeur n'accède au dossier privé des dépôts.
       ...(isMobile() && f.status !== "deleted" ? [{ label: tr("Modifier dans Merathon"), action: () => openFileEditor(f.path) }] : []),
+      ...(["untracked", "added", "deleted"].includes(f.status)
+        ? []
+        : [{ label: tr("Blame (qui a modifié chaque ligne)"), action: () => setCenter({ kind: "blame" as const, path: f.path, rev: null }) }]),
       ...lfsEntry(f),
       ...ignoreEntries(f),
       "separator" as const,

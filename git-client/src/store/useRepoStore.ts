@@ -22,7 +22,9 @@ export type CenterView =
       path: string;
       source: { type: "workdir"; staged: boolean } | { type: "commit"; hash: string } | { type: "compare"; base: string; head: string };
     }
-  | { kind: "conflict"; path: string };
+  | { kind: "conflict"; path: string }
+  /** `git blame` : `rev` absent = copie de travail. */
+  | { kind: "blame"; path: string; rev: string | null };
 
 const RECENT_KEY = "merathon.recent-repos";
 const MAX_RECENT = 10;

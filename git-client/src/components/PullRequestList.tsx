@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { openUrl } from "../lib/openExternal";
 import { GitCommitHorizontal, GitMerge, GitPullRequestArrow, GitPullRequestClosed, MessageSquare, type LucideIcon } from "lucide-react";
 import { useAccountsStore } from "../store/useAccountsStore";
@@ -159,7 +159,13 @@ export function usePullRequests(forge: LinkedForge | null) {
   const [state, setState] = useState<PullRequestState>("open");
   const [scope, setScope] = useState<PrScope>("all");
   const [fetching, setFetching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setErrorState] = useState<string | null>(null);
+  // Copie synchrone de l'erreur : lue par l'écouteur du cache, qui ne doit pas se recréer à chaque erreur.
+  const errorRef = useRef<string | null>(null);
+  const setError = useCallback((message: string | null) => {
+    errorRef.current = message;
+    setErrorState(message);
+  }, []);
   const [, refreshed] = useReducer((n: number) => n + 1, 0);
   const account = forge?.account;
   const projectPath = forge?.projectPath;
@@ -188,18 +194,24 @@ export function usePullRequests(forge: LinkedForge | null) {
     } finally {
       setFetching(false);
     }
-  }, [account, projectPath, key, state, client]);
+  }, [account, projectPath, key, state, client, setError]);
 
   useEffect(() => {
     reload();
   }, [reload]);
 
+  // Une synchronisation réussie hors de la liste (réseau revenu, VPN rétabli…) prouve que l'erreur affichée est
+  // périmée : on recharge au lieu de la laisser masquer la liste jusqu'au prochain redémarrage.
   useEffect(() => {
-    listeners.add(refreshed);
-    return () => {
-      listeners.delete(refreshed);
+    const onCacheRefreshed = () => {
+      refreshed();
+      if (errorRef.current) reload();
     };
-  }, []);
+    listeners.add(onCacheRefreshed);
+    return () => {
+      listeners.delete(onCacheRefreshed);
+    };
+  }, [reload]);
 
   const prs = entry?.filtered ?? [];
   const visible = account ? prs.filter((pr) => matchesScope(pr, scope, account.username)) : [];

@@ -316,6 +316,18 @@ pub fn read_file(path: String, file_path: String) -> Result<String, GitError> {
     with_repo(&path, |r| git::read_file(r, &file_path))
 }
 
+/// Lignes d'un fichier dans la version affichée par un diff (commit `rev`, sinon index ou copie de travail).
+#[command(async)]
+pub fn get_file_lines(path: String, file_path: String, rev: Option<String>, staged: bool) -> Result<Vec<String>, GitError> {
+    with_repo(&path, |r| git::get_file_lines(r, &file_path, rev.as_deref(), staged))
+}
+
+/// Blame d'un fichier : à la révision `rev`, ou dans la copie de travail si elle est absente.
+#[command(async)]
+pub fn blame_file(path: String, file_path: String, rev: Option<String>) -> Result<git::FileBlame, GitError> {
+    with_repo(&path, |r| git::blame_file(r, &file_path, rev.as_deref()))
+}
+
 /// `create` : nouveau fichier, refusé s'il existe déjà.
 #[command(async)]
 pub fn write_file(path: String, file_path: String, content: String, create: bool) -> Result<(), GitError> {
@@ -439,14 +451,22 @@ pub fn rebase_todo(path: String, base: String) -> Result<Vec<git::TodoCommit>, G
     with_repo(&path, |r| git::rebase_todo(r, &base))
 }
 
+/// Point de divergence entre HEAD et `target` : la base d'un rebase interactif de HEAD sur `target`.
+#[command(async)]
+pub fn rebase_merge_base(path: String, target: String) -> Result<String, GitError> {
+    with_repo(&path, |r| git::rebase_merge_base(r, &target))
+}
+
+/// `onto` : commit sur lequel rejouer les commits (par défaut `base`).
 #[command(async)]
 pub fn interactive_rebase(
     path: String,
     base: String,
+    onto: Option<String>,
     steps: Vec<git::RebaseStep>,
     mode: git::RebaseMode,
 ) -> Result<git::InteractiveOutcome, GitError> {
-    with_repo_lfs(&path, |r| git::interactive_rebase(r, &base, &steps, mode))
+    with_repo_lfs(&path, |r| git::interactive_rebase_onto(r, &base, onto.as_deref(), &steps, mode))
 }
 
 #[command(async)]

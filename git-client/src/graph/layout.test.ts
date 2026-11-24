@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGraphLayout } from "./layout";
+import { branchNamesByRow, computeGraphLayout } from "./layout";
 import type { CommitInfo } from "../types/git";
 
 function makeCommit(hash: string, parents: string[]): CommitInfo {
@@ -120,5 +120,31 @@ describe("computeGraphLayout", () => {
     expect(mergeEdge.curve).toBe("start");
     expect(mergeEdge.toLane).toBe(featLane);
     expect(featLane).toBe(1);
+  });
+});
+
+describe("branchNamesByRow", () => {
+  const c = (hash: string, parents: string[], refs: { name: string; kind: "head" | "local" | "remote" | "tag" }[] = []) =>
+    ({ hash, short_hash: hash, message: "", author: "", email: "", timestamp: 0, parents, refs }) as CommitInfo;
+
+  it("names commits after the branch that reaches them, main keeping its own history", () => {
+    // feature (f2 → f1) est partie de m2 ; main : m3 → m2 → m1
+    const commits = [
+      c("f2", ["f1"], [{ name: "feature", kind: "local" }]),
+      c("m3", ["m2"], [{ name: "main", kind: "head" }]),
+      c("f1", ["m2"]),
+      c("m2", ["m1"]),
+      c("m1", []),
+    ];
+    expect(branchNamesByRow(commits)).toEqual(["feature", "main", "feature", "main", "main"]);
+  });
+
+  it("prefers local over remote names and leaves unreachable commits unnamed", () => {
+    const commits = [
+      c("a", ["b"], [{ name: "origin/x", kind: "remote" }, { name: "x", kind: "local" }]),
+      c("b", []),
+      c("orphan", [], [{ name: "v1", kind: "tag" }]),
+    ];
+    expect(branchNamesByRow(commits)).toEqual(["x", "x", null]);
   });
 });

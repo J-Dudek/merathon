@@ -5,7 +5,7 @@ import { useAccountsStore } from "../store/useAccountsStore";
 import { useUiStore, confirmAction, promptText } from "../store/useUiStore";
 import {
   checkoutBranch, checkoutRemoteBranch, createBranch, deleteBranch, deleteRemoteBranch, fastForward, fastForwardBranch, mergeBranch, pull,
-  rebaseOnto, renameBranch, setUpstream,
+  rebaseMergeBase, rebaseOnto, renameBranch, setUpstream,
 } from "../ipc/commands";
 import { reportMerge, runGit } from "../lib/actions";
 import { pushBranch } from "../lib/threadReplies";
@@ -120,6 +120,16 @@ export function useBranchMenus() {
         disabled: inHead,
         hint: inHeadHint,
         action: async () => reportMerge(await runGit(() => rebaseOnto(path, b.name)), tr("Rebase sur {name} terminé", { name: b.name })),
+      },
+      // Rejoue les commits de la branche courante sur la pointe de {name}, en les retouchant : base = point de divergence.
+      {
+        label: tr("Rebase interactif de {head} sur {name}…", { head, name: b.name }),
+        disabled: b.target_hash === info?.head_hash,
+        action: async () => {
+          const base = await runGit(() => rebaseMergeBase(path, b.target_hash), { refresh: false });
+          if (!base) return;
+          useUiStore.getState().setInteractiveRebaseBase(base, inHead ? null : b.target_hash);
+        },
       },
     ];
     return [...entries, ...fastForwardEntries(b)];

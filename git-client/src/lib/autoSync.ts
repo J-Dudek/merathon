@@ -274,3 +274,12 @@ export function startAutoSync(minutes: number): () => void {
   const timer = setInterval(() => void syncOpenRepos(), minutes * 60 * 1000);
   return () => clearInterval(timer);
 }
+
+/**
+ * « Tirer pour actualiser » (mobile) : synchronise les dépôts ouverts (fetch, PR / MR), puis tire leurs branches
+ * en fast-forward. Les changements sont signalés comme pour une synchronisation automatique.
+ */
+export async function syncAndPull() {
+  await syncOpenRepos();
+  await pullOpenRepos();
+}

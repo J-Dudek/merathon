@@ -1,7 +1,7 @@
 import { createChannel, invokeRaw, type InvokeArgs } from "./transport";
 import { RECONNECTED_EVENT } from "./serverTransport";
 import type {
-  BranchDivergence, BranchInfo, CommitDetails, CommitFile, CommitTrailers, PrPush, PrRebase, CommitInfo, FileDiff, FileStatus, GitProfile, GitProfileInput, GitProfilesInfo, Identity, IdentityStatus, MergeResult,
+  BranchDivergence, BranchInfo, CommitDetails, CommitFile, CommitTrailers, PrPush, PrRebase, CommitInfo, FileBlame, FileDiff, FileStatus, GitProfile, GitProfileInput, GitProfilesInfo, Identity, IdentityStatus, MergeResult,
   InteractiveOutcome, LfsStatus, RefComparison, RemoteInfo, RepoInfo, DeviceKeyStatus, SshCheck, SshHostStatus, SshKeyInfo, SshSetupInfo, StashInfo, SubmoduleInfo, TagInfo, TodoCommit, WorktreeInfo,
 } from "../types/git";
 import type { DeviceCode, ForgeAccount, MyPullRequests, PrSummary, Provider, SavedAccount } from "../types/forge";
@@ -192,6 +192,10 @@ export const resolveConflict = (path: string, filePath: string, content: string)
   invoke<void>("resolve_conflict", { path, filePath, content });
 /** Fichiers suivis et non suivis (hors .gitignore) de la copie de travail. */
 export const listFiles = (path: string) => invoke<string[]>("list_files", { path });
+export const getFileLines = (path: string, filePath: string, rev: string | null, staged: boolean) =>
+  invoke<string[]>("get_file_lines", { path, filePath, rev, staged });
+export const blameFile = (path: string, filePath: string, rev: string | null) =>
+  invoke<FileBlame>("blame_file", { path, filePath, rev });
 export const readFile = (path: string, filePath: string) => invoke<string>("read_file", { path, filePath });
 /** `create` : nouveau fichier, refusé s'il existe déjà. */
 export const writeFile = (path: string, filePath: string, content: string, create: boolean) =>
@@ -239,8 +243,11 @@ export interface RebaseStep {
 export const rebaseTodo = (path: string, base: string) => invoke<TodoCommit[]>("rebase_todo", { path, base });
 /** "linear" : merges aplatis, ordre libre ; "preserve" : merges conservés, ordre fixe. */
 export type RebaseMode = "linear" | "preserve";
-export const interactiveRebase = (path: string, base: string, steps: RebaseStep[], mode: RebaseMode = "linear") =>
-  invoke<InteractiveOutcome>("interactive_rebase", { path, base, steps, mode });
+/** `onto` : commit sur lequel rejouer les commits de `base` à HEAD (par défaut `base` elle-même). */
+export const interactiveRebase = (path: string, base: string, steps: RebaseStep[], mode: RebaseMode = "linear", onto: string | null = null) =>
+  invoke<InteractiveOutcome>("interactive_rebase", { path, base, onto, steps, mode });
+/** Point de divergence entre HEAD et `target` : la base d'un rebase interactif de HEAD sur `target`. */
+export const rebaseMergeBase = (path: string, target: string) => invoke<string>("rebase_merge_base", { path, target });
 export const continueInteractiveRebase = (path: string) =>
   invoke<InteractiveOutcome>("continue_interactive_rebase", { path });
 export const abortInteractiveRebase = (path: string) => invoke<void>("abort_interactive_rebase", { path });

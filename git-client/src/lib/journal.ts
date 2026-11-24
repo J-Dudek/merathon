@@ -70,7 +70,8 @@ const COMMANDS: Record<string, (a: Args) => string> = {
   continue_rebase: () => "git rebase --continue",
   abort_rebase: () => "git rebase --abort",
   interactive_rebase: (a) =>
-    `git rebase -i ${a.mode === "preserve" ? "--rebase-merges " : ""}${short(a.base)}  # ${Array.isArray(a.steps) ? a.steps.length : 0} commits`,
+    join("git rebase -i", a.mode === "preserve" && "--rebase-merges", a.onto && `--onto ${short(a.onto)}`, short(a.base)) +
+    `  # ${Array.isArray(a.steps) ? a.steps.length : 0} commits`,
   continue_interactive_rebase: () => "git rebase --continue",
   abort_interactive_rebase: () => "git rebase --abort",
   reset_to: (a) => `git reset --${a.mode} ${short(a.hash)}`,

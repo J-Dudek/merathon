@@ -121,6 +121,9 @@ pub struct InteractiveOutcome {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct SavedRebase {
     base: String,
+    /// Commit sur lequel les commits sont rejoués ; None : `base` elle-même.
+    #[serde(default)]
+    onto: Option<String>,
     orig_head: String,
     /// Branche réécrite ; None si HEAD était détaché.
     branch_ref: Option<String>,
@@ -328,10 +331,33 @@ fn validate(todo: &[TodoCommit], steps: &[RebaseStep], mode: RebaseMode) -> Resu
     Ok(())
 }
 
+/// Point de divergence entre HEAD et `target` : la `base` d'un rebase interactif de HEAD sur `target`.
+pub fn rebase_merge_base(repo: &Repository, target: &str) -> Result<String, GitError> {
+    let head = repo.head()?.peel_to_commit()?;
+    let target = repo.revparse_single(target)?.peel_to_commit()?;
+    let base = repo.merge_base(head.id(), target.id()).map_err(|_| {
+        GitError::Other(tr!("Aucun ancêtre commun avec HEAD : rebase impossible", "No common ancestor with HEAD: cannot rebase"))
+    })?;
+    Ok(base.to_string())
+}
+
 /// Démarre un rebase interactif sur `base` selon `steps` (les commits absents sont supprimés).
+#[cfg(test)]
 pub fn interactive_rebase(
     repo: &Repository,
     base: &str,
+    steps: &[RebaseStep],
+    mode: RebaseMode,
+) -> Result<InteractiveOutcome, GitError> {
+    interactive_rebase_onto(repo, base, None, steps, mode)
+}
+
+/// Comme `interactive_rebase`, mais les commits de `base` (exclu) à HEAD sont rejoués sur `onto` (un autre
+/// commit que `base`, typiquement la pointe d'une autre branche). Sans `onto`, ils restent sur `base`.
+pub fn interactive_rebase_onto(
+    repo: &Repository,
+    base: &str,
+    onto: Option<&str>,
     steps: &[RebaseStep],
     mode: RebaseMode,
 ) -> Result<InteractiveOutcome, GitError> {
@@ -358,15 +384,25 @@ pub fn interactive_rebase(
 
     let head = repo.head()?;
     let base_id = repo.revparse_single(base)?.peel_to_commit()?.id().to_string();
+    let onto_id = match onto {
+        Some(o) => repo.revparse_single(o)?.peel_to_commit()?.id().to_string(),
+        None => base_id.clone(),
+    };
+    let mut mapping = HashMap::new();
+    if onto_id != base_id {
+        // Les enfants directs de la base se rattachent à la nouvelle base (mode préservé).
+        mapping.insert(base_id.clone(), onto_id.clone());
+    }
     let state = SavedRebase {
         base: base_id.clone(),
+        onto: (onto_id != base_id).then(|| onto_id.clone()),
         orig_head: head.peel_to_commit()?.id().to_string(),
         branch_ref: if repo.head_detached()? { None } else { head.name().ok().map(str::to_string) },
         mode,
         steps,
         next: 0,
-        tip: base_id,
-        mapping: HashMap::new(),
+        tip: onto_id,
+        mapping,
         skipped: HashSet::new(),
         stopped: None,
     };
@@ -583,7 +619,7 @@ fn stop_info(repo: &Repository, state: &SavedRebase) -> Result<Option<Interactiv
         step: kept.iter().position(|s| s.hash == step.hash).map(|p| p + 1).unwrap_or(0),
         total: kept.len(),
         conflicted_files: if reason == StopReason::Conflict { conflicted_paths(repo)? } else { Vec::new() },
-        onto: short(&state.base).to_string(),
+        onto: short(state.onto.as_deref().unwrap_or(&state.base)).to_string(),
         timeline: timeline(repo, state, index)?,
     }))
 }
@@ -886,6 +922,77 @@ mod tests {
         let mut index = repo.index().unwrap();
         index.add_path(std::path::Path::new(file)).unwrap();
         index.write().unwrap();
+    }
+
+    /// Ajoute à `fixture()` une branche `side` partie de `base`, avec un commit `m1` (m.txt) ; HEAD reste sur la branche d'origine.
+    fn with_side_branch(f: &Fixture) -> String {
+        let main_ref = f.repo.head().unwrap().name().unwrap().to_string();
+        let base = f.repo.find_commit(Oid::from_str(&f.base).unwrap()).unwrap();
+        f.repo.branch("side", &base, false).unwrap();
+        f.repo.set_head("refs/heads/side").unwrap();
+        f.repo.checkout_head(Some(CheckoutBuilder::new().force())).unwrap();
+        let m1 = commit_file(&f.repo, &f.dir, "m.txt", "m\n", "m1");
+        f.repo.set_head(&main_ref).unwrap();
+        f.repo.checkout_head(Some(CheckoutBuilder::new().force())).unwrap();
+        m1
+    }
+
+    #[test]
+    fn merge_base_is_the_fork_point() {
+        let f = fixture();
+        let m1 = with_side_branch(&f);
+        assert_eq!(rebase_merge_base(&f.repo, &m1).unwrap(), f.base);
+    }
+
+    #[test]
+    fn rebase_onto_another_commit_linear() {
+        let f = fixture();
+        let m1 = with_side_branch(&f);
+        let steps = vec![
+            step(&f.c[2], RebaseAction::Pick, None),
+            step(&f.c[0], RebaseAction::Pick, None),
+            step(&f.c[1], RebaseAction::Drop, None),
+        ];
+        assert!(interactive_rebase_onto(&f.repo, &f.base, Some(&m1), &steps, RebaseMode::Linear).unwrap().done);
+        let tip = head(&f.repo);
+        let first = tip.parent(0).unwrap();
+        assert_eq!(tip.summary().unwrap(), Some("c1"));
+        assert_eq!(first.summary().unwrap(), Some("c3"));
+        assert_eq!(first.parent(0).unwrap().id().to_string(), m1);
+        assert!(f.dir.path().join("m.txt").exists() && f.dir.path().join("c.txt").exists());
+        assert!(!f.dir.path().join("b.txt").exists());
+    }
+
+    #[test]
+    fn rebase_onto_another_commit_preserve() {
+        let f = fixture();
+        let m1 = with_side_branch(&f);
+        let steps: Vec<_> = f.c.iter().map(|h| step(h, RebaseAction::Pick, None)).collect();
+        assert!(interactive_rebase_onto(&f.repo, &f.base, Some(&m1), &steps, RebaseMode::Preserve).unwrap().done);
+        let tip = head(&f.repo);
+        assert_eq!(tip.parent(0).unwrap().parent(0).unwrap().parent(0).unwrap().id().to_string(), m1);
+    }
+
+    #[test]
+    fn rebase_onto_conflict_reports_the_new_base_and_abort_restores() {
+        let f = fixture();
+        // m1 touche a.txt, que c1 crée aussi : conflit à la première étape.
+        let main_ref = f.repo.head().unwrap().name().unwrap().to_string();
+        let orig = head(&f.repo).id();
+        let base = f.repo.find_commit(Oid::from_str(&f.base).unwrap()).unwrap();
+        f.repo.branch("side", &base, false).unwrap();
+        f.repo.set_head("refs/heads/side").unwrap();
+        f.repo.checkout_head(Some(CheckoutBuilder::new().force())).unwrap();
+        let m1 = commit_file(&f.repo, &f.dir, "a.txt", "other\n", "m1");
+        f.repo.set_head(&main_ref).unwrap();
+        f.repo.checkout_head(Some(CheckoutBuilder::new().force())).unwrap();
+
+        let steps: Vec<_> = f.c.iter().map(|h| step(h, RebaseAction::Pick, None)).collect();
+        let stop = interactive_rebase_onto(&f.repo, &f.base, Some(&m1), &steps, RebaseMode::Linear).unwrap().stopped.unwrap();
+        assert_eq!(stop.reason, StopReason::Conflict);
+        assert_eq!(stop.onto, m1[..7]);
+        abort_interactive(&f.repo).unwrap();
+        assert_eq!(head(&f.repo).id(), orig);
     }
 
     #[test]

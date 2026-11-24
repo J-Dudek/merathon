@@ -140,6 +140,8 @@ interface UiStore {
   busy: string | null;
   /** Commit de base du rebase interactif en cours de préparation. */
   interactiveRebaseBase: string | null;
+  /** Commit sur lequel rejouer les commits (autre branche) ; null : la base elle-même. */
+  interactiveRebaseOnto: string | null;
   panel: BottomPanelState;
   sideWidths: SideWidths;
   /** Largeur maximale de l'arbre des branches dans le graphe ; au-delà, les voies sont coupées. null : pas de limite. */
@@ -160,7 +162,7 @@ interface UiStore {
   ask: (options: DialogOptions) => Promise<DialogResult | null>;
   closeDialog: (result: DialogResult | null) => void;
   setBusy: (label: string | null) => void;
-  setInteractiveRebaseBase: (hash: string | null) => void;
+  setInteractiveRebaseBase: (hash: string | null, onto?: string | null) => void;
   setPanel: (patch: Partial<BottomPanelState>) => void;
   setSideWidth: (side: Side, width: number) => void;
   setGraphWidth: (width: number | null) => void;
@@ -190,6 +192,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   folderPicker: null,
   busy: null,
   interactiveRebaseBase: null,
+  interactiveRebaseOnto: null,
   panel: loadPanel(),
   sideWidths: loadSideWidths(),
   graphWidth: loadGraphWidth(),
@@ -256,7 +259,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   },
 
   setBusy: (busy) => set({ busy }),
-  setInteractiveRebaseBase: (interactiveRebaseBase) => set({ interactiveRebaseBase }),
+  setInteractiveRebaseBase: (interactiveRebaseBase, onto = null) => set({ interactiveRebaseBase, interactiveRebaseOnto: interactiveRebaseBase ? onto : null }),
 
   setPreferencesOpen: (preferencesOpen, preferencesSection = "appearance") => set({ preferencesOpen, preferencesSection }),
   setMemoOpen: (memoOpen) => set({ memoOpen }),

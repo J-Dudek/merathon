@@ -191,6 +191,25 @@ export interface FileDiff {
   is_binary: boolean;
 }
 
+/** Lignes consécutives issues d'un même commit (`hash` vide : pas encore commitées). */
+export interface BlameHunk {
+  start_line: number;
+  line_count: number;
+  hash: string;
+  short_hash: string;
+  author: string;
+  email: string;
+  timestamp: number;
+  summary: string;
+  orig_path: string;
+}
+
+export interface FileBlame {
+  path: string;
+  hunks: BlameHunk[];
+  lines: string[];
+}
+
 /** Commit proposé dans le plan d'un rebase interactif. */
 export interface TodoCommit {
   hash: string;

@@ -22,4 +22,5 @@ export const PreferencesDialog = onDemand(() => import("./PreferencesDialog").th
 export const GitMemoDialog = onDemand(() => import("./GitMemoDialog").then((m) => m.GitMemoDialog));
 export const FileEditorDialog = onDemand(() => import("./FileEditorDialog").then((m) => m.FileEditorDialog));
 export const CloneDialog = onDemand(() => import("./CloneDialog").then((m) => m.CloneDialog));
+export const BlameViewer = onDemand(() => import("./BlameViewer").then((m) => m.BlameViewer));
 export const ConflictViewer = onDemand(() => import("./ConflictViewer").then((m) => m.ConflictViewer));

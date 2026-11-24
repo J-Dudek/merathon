@@ -50,7 +50,7 @@ function rowsFor(todo: TodoCommit[], mode: RebaseMode): Row[] {
     .map((commit) => ({ commit, action: "pick" as RebaseAction, message: commit.message }));
 }
 
-export function InteractiveRebaseDialog({ base, onClose }: { base: string; onClose: () => void }) {
+export function InteractiveRebaseDialog({ base, onto = null, onClose }: { base: string; onto?: string | null; onClose: () => void }) {
   const repoPath = useRepoStore((s) => s.repoPath);
   const info = useRepoStore((s) => s.info);
   const refresh = useRepoStore((s) => s.refresh);
@@ -123,7 +123,7 @@ export function InteractiveRebaseDialog({ base, onClose }: { base: string; onClo
   const planError = rows.length ? validatePlan(rows) : null;
   const original = useMemo(() => (todo ? rowsFor(todo, mode).map((r) => r.commit.hash) : []), [todo, mode]);
   // Plan identique à l'historique : rien à faire (sauf aplatir des merges en mode linéaire).
-  const noop = rows.every((r, i) => r.action === "pick" && r.commit.hash === original[i]) && (mode === "preserve" || merges === 0);
+  const noop = !onto && rows.every((r, i) => r.action === "pick" && r.commit.hash === original[i]) && (mode === "preserve" || merges === 0);
 
   async function start() {
     if (!repoPath || planError) return;
@@ -139,6 +139,7 @@ export function InteractiveRebaseDialog({ base, onClose }: { base: string; onClo
           message: r.action === "reword" || r.action === "squash" ? r.message : null,
         })),
         mode,
+        onto,
       );
       reportInteractive(outcome);
       await refresh();
@@ -151,7 +152,7 @@ export function InteractiveRebaseDialog({ base, onClose }: { base: string; onClo
   }
 
   return (
-    <Modal title={tr("Rebase interactif de {value} sur {base}", { value: info?.head_branch ?? "HEAD", base: base.slice(0, 7) })} onClose={() => !running && onClose()} width="w-[760px]">
+    <Modal title={tr("Rebase interactif de {value} sur {base}", { value: info?.head_branch ?? "HEAD", base: (onto ?? base).slice(0, 7) })} onClose={() => !running && onClose()} width="w-[760px]">
       <div className="p-4 flex flex-col gap-3">
         {merges > 0 && (
           <div className="flex flex-col gap-1.5 p-2 rounded border border-overlay/10 bg-shade/20">

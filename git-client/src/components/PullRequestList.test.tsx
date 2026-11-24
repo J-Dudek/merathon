@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { clearPullRequestCache, usePullRequests, type LinkedForge } from "./PullRequestList";
+import { clearPullRequestCache, refreshOpenPullRequests, usePullRequests, type LinkedForge } from "./PullRequestList";
 import { useAccountsStore } from "../store/useAccountsStore";
 import { useSeenPrsStore } from "../store/useSeenPrsStore";
 import type { ForgeClient } from "../api/forge";
@@ -82,5 +82,18 @@ describe("usePullRequests", () => {
     const full = renderHook(() => usePullRequests(forge));
     await waitFor(() => expect(full.result.current.openPrs).toHaveLength(50));
     expect(Object.keys(useSeenPrsStore.getState().seen)).toEqual(["acc|o/r#999"]);
+  });
+
+  it("clears a stale error once a background sync succeeds again", async () => {
+    getPullRequests.mockImplementation(() => Promise.reject(new Error("réseau coupé")));
+    const { result } = renderHook(() => usePullRequests(forge));
+    await waitFor(() => expect(result.current.error).toContain("réseau coupé"));
+
+    getPullRequests.mockImplementation(() => Promise.resolve([pr(4)]));
+    await act(async () => {
+      await refreshOpenPullRequests(account, "o/r");
+    });
+    await waitFor(() => expect(result.current.error).toBeNull());
+    expect(result.current.prs.map((p) => p.number)).toEqual([4]);
   });
 });

@@ -1,11 +1,11 @@
-import { ArrowLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, UserSearch } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useRepoStore, type CenterView } from "../store/useRepoStore";
-import { applyLines, getCommitFileDiff, getCompareFileDiff, getDiff } from "../ipc/commands";
+import { applyLines, getCommitFileDiff, getCompareFileDiff, getDiff, getFileLines } from "../ipc/commands";
 import { errorMessage, runGit } from "../lib/actions";
 import { DiffViewer, type PartialStaging } from "./DiffViewer";
 import { LineCounts } from "./CommitDetails";
-import type { FileDiff } from "../types/git";
+import type { FileDiff, FileStatus } from "../types/git";
 import { tr } from "../i18n";
 
 type DiffView = Extract<CenterView, { kind: "diff" }>;
@@ -18,6 +18,18 @@ function diffSourceLabel(source: DiffView["source"]): string {
 
 function sameDiff(a: FileDiff, b: FileDiff): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Révision où le fichier est montré dans sa nouvelle version : le commit, la tête d'une comparaison, null pour l'index ou la copie de travail. */
+function sourceRev(source: DiffView["source"]): string | null {
+  if (source.type === "commit") return source.hash;
+  return source.type === "compare" ? source.head : null;
+}
+
+/** Révision à blâmer (null : copie de travail) ; undefined quand il n'y a rien à blâmer (fichier nouveau ou supprimé). */
+function blameRevOf(source: DiffView["source"], file: FileStatus | undefined): string | null | undefined {
+  if (source.type !== "workdir") return sourceRev(source);
+  return file && ["untracked", "added", "deleted"].includes(file.status) ? undefined : null;
 }
 
 export function CenterDiff({ view }: { view: DiffView }) {
@@ -77,6 +89,14 @@ export function CenterDiff({ view }: { view: DiffView }) {
     }
   }
 
+  const blameRev = blameRevOf(view.source, status.find((f) => f.path === view.path));
+
+  // Contexte déplié : la nouvelle version du fichier (commit, tête de la comparaison, index ou copie de travail).
+  const expandContext = useCallback(() => {
+    const { source } = view;
+    return getFileLines(repoPath!, view.path, sourceRev(source), source.type === "workdir" && source.staged);
+  }, [repoPath, view]);
+
   const stats = diff?.hunks.reduce(
     (acc, h) => {
       for (const l of h.lines) {
@@ -100,8 +120,17 @@ export function CenterDiff({ view }: { view: DiffView }) {
         </button>
         <span className="text-xs font-mono text-[var(--color-text)] truncate select-text">{view.path}</span>
         <span className="text-[10px] px-1.5 rounded bg-overlay/10 text-[var(--color-muted)] shrink-0">{sourceLabel}</span>
+        {blameRev !== undefined && (
+          <button
+            className="ml-auto text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] shrink-0"
+            onClick={() => setCenter({ kind: "blame", path: view.path, rev: blameRev })}
+            title={tr("Afficher qui a modifié chaque ligne (git blame)")}
+          >
+            <UserSearch size={12} className="inline mr-1 -mt-0.5" />{tr("Blame")}
+          </button>
+        )}
         {stats && (
-          <span className="ml-auto text-[11px] font-mono shrink-0">
+          <span className={`${blameRev === undefined ? "ml-auto " : ""}text-[11px] font-mono shrink-0`}>
             <LineCounts add={stats.add} del={stats.del} all />
           </span>
         )}
@@ -110,7 +139,7 @@ export function CenterDiff({ view }: { view: DiffView }) {
         {error ? (
           <p className="p-3 text-xs text-red-400 break-words">{error}</p>
         ) : (
-          <DiffViewer diff={diff} loading={loading && !diff} staging={staging} />
+          <DiffViewer diff={diff} loading={loading && !diff} staging={staging} expandContext={repoPath ? expandContext : undefined} />
         )}
       </div>
     </div>
