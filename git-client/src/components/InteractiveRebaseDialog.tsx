@@ -6,6 +6,7 @@ import { errorMessage, reportInteractive } from "../lib/actions";
 import { Button, Modal, inputClass } from "./Modal";
 import type { TodoCommit } from "../types/git";
 import { fieldLabel } from "../lib/fieldLabel";
+import { isPhone } from "../lib/platform";
 import { tr, trn } from "../i18n";
 
 interface Row {
@@ -68,6 +69,8 @@ export function InteractiveRebaseDialog({ base, onto = null, onClose }: { base: 
     setMoved(tr("{short_hash} en position {value} sur {length}", { short_hash: rows[i].commit.short_hash, value: i + step + 1, length: rows.length }));
   }
   const listRef = useRef<HTMLDivElement>(null);
+  // Téléphone : une liste déroulante (peu de place) ; PC et tablette : des boutons radio, toutes les actions visibles.
+  const phone = isPhone();
 
   useEffect(() => {
     if (!repoPath) return;
@@ -90,6 +93,11 @@ export function InteractiveRebaseDialog({ base, onto = null, onClose }: { base: 
 
   function update(i: number, patch: Partial<Row>) {
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  }
+
+  function changeAction(i: number, action: RebaseAction) {
+    // Squash : vide = messages combinés ; reword : on part du message actuel.
+    update(i, { action, message: action === "squash" ? "" : rows[i].commit.message });
   }
 
   // Glisser-déposer à la souris : la liste se réordonne pendant le déplacement.
@@ -185,6 +193,10 @@ export function InteractiveRebaseDialog({ base, onto = null, onClose }: { base: 
             {rows.map((row, i) => {
               const editable = row.action === "reword" || row.action === "squash";
               const isMerge = row.commit.is_merge;
+              const actions = ACTIONS.filter((a) => !isMerge || a.merge);
+              // Téléphone : le message s'aligne sous la liste déroulante ; ailleurs, les boutons radio ont leur propre ligne.
+              let noteIndent = "";
+              if (phone) noteIndent = canReorder ? "ml-[10rem]" : "ml-[7.5rem]";
               return (
                 <div
                   key={row.commit.hash}
@@ -214,21 +226,9 @@ export function InteractiveRebaseDialog({ base, onto = null, onClose }: { base: 
                         </div>
                       </>
                     )}
-                    <select
-                      className="w-28 shrink-0 bg-shade/30 border border-overlay/50 rounded px-1.5 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/60"
-                      value={row.action}
-                      aria-label={tr("Action pour le commit {short_hash}", { short_hash: row.commit.short_hash })}
-                      title={ACTIONS.find((a) => a.value === row.action)?.hint}
-                      onChange={(e) => {
-                        const action = e.target.value as RebaseAction;
-                        // Squash : vide = messages combinés ; reword : on part du message actuel.
-                        update(i, { action, message: action === "squash" ? "" : row.commit.message });
-                      }}
-                    >
-                      {ACTIONS.filter((a) => !isMerge || a.merge).map((a) => (
-                        <option key={a.value} value={a.value}>{a.label}</option>
-                      ))}
-                    </select>
+                    {phone && (
+                      <ActionSelect row={row} actions={actions} onChange={(action) => changeAction(i, action)} />
+                    )}
                     <span className="font-mono text-[11px] text-[var(--color-accent-text)]">{row.commit.short_hash}</span>
                     {isMerge && (
                       <span className="text-[9px] px-1 rounded border border-sky-400/40 text-sky-300 shrink-0">
@@ -240,10 +240,11 @@ export function InteractiveRebaseDialog({ base, onto = null, onClose }: { base: 
                     </span>
                     <span className="text-[10px] text-[var(--color-muted)] shrink-0">{row.commit.author}</span>
                   </div>
+                  {!phone && <ActionRadios row={row} actions={actions} onChange={(action) => changeAction(i, action)} />}
                   {editable && (
                     <textarea
                       rows={row.action === "squash" ? 3 : 2}
-                      className={`${inputClass} resize-y ${canReorder ? "ml-[10rem]" : "ml-[7.5rem]"} w-auto!`}
+                      className={`${inputClass} resize-y ${noteIndent} w-auto!`}
                       placeholder={row.action === "squash" ? tr("Message du commit fusionné (vide : messages combinés)") : tr("Nouveau message")}
                       {...fieldLabel(tr("{value} pour {short_hash}", { value: row.action === "squash" ? tr("Message du commit fusionné") : tr("Nouveau message"), short_hash: row.commit.short_hash }))}
                       value={row.message}
@@ -282,5 +283,65 @@ function ModeBtn({ active, onClick, title, children }: { active: boolean; onClic
       <span className={`block text-xs font-semibold ${active ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}`}>{title}</span>
       <span className="block text-[10px] text-[var(--color-muted)]">{children}</span>
     </button>
+  );
+}
+
+interface ActionPickerProps {
+  row: Row;
+  /** Actions permises pour ce commit (un commit de fusion n'a pas toutes les actions). */
+  actions: typeof ACTIONS;
+  onChange: (action: RebaseAction) => void;
+}
+
+/** Choix de l'action d'un commit en liste déroulante (téléphone). */
+function ActionSelect({ row, actions, onChange }: ActionPickerProps) {
+  return (
+    <select
+      className="w-28 shrink-0 bg-shade/30 border border-overlay/50 rounded px-1.5 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]/60"
+      value={row.action}
+      aria-label={tr("Action pour le commit {short_hash}", { short_hash: row.commit.short_hash })}
+      title={ACTIONS.find((a) => a.value === row.action)?.hint}
+      onChange={(e) => onChange(e.target.value as RebaseAction)}
+    >
+      {actions.map((a) => (
+        <option key={a.value} value={a.value}>{a.label}</option>
+      ))}
+    </select>
+  );
+}
+
+/** Choix de l'action d'un commit en boutons radio (PC et tablette) : toutes les actions sont visibles d'un coup d'œil. */
+function ActionRadios({ row, actions, onChange }: ActionPickerProps) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={tr("Action pour le commit {short_hash}", { short_hash: row.commit.short_hash })}
+      className="flex flex-wrap gap-x-1 gap-y-1 pl-1"
+    >
+      {actions.map((a) => {
+        const checked = row.action === a.value;
+        return (
+          <label
+            key={a.value}
+            title={a.hint}
+            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-xs cursor-pointer select-none has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[var(--color-accent)] ${
+              checked
+                ? "border-[var(--color-accent)]/60 bg-overlay/10 text-[var(--color-text)]"
+                : "border-overlay/10 text-[var(--color-muted)] hover:bg-overlay/5 hover:text-[var(--color-text)]"
+            }`}
+          >
+            <input
+              type="radio"
+              name={`rebase-action-${row.commit.hash}`}
+              value={a.value}
+              checked={checked}
+              onChange={() => onChange(a.value)}
+              className="accent-[var(--color-accent)] m-0"
+            />
+            {a.label}
+          </label>
+        );
+      })}
+    </div>
   );
 }
