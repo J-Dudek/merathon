@@ -2,6 +2,12 @@
 
 Toutes les évolutions notables de Merathon, générées à partir des messages de commit.
 
+## [2.21.1](https://github.com/J-Dudek/merathon/compare/v2.21.0...v2.21.1) (2026-11-25)
+
+### Corrections
+
+- **wsl :** taille du curseur XCURSOR_SIZE=24 sous WSLg (curseur énorme) (2978624)
+
 ## [2.21.0](https://github.com/J-Dudek/merathon/compare/v2.20.0...v2.21.0) (2026-11-24)
 
 ### Nouveautés

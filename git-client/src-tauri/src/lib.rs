@@ -220,11 +220,13 @@ pub fn run() {
 ///   en X11 (XWayland), l'icône de la fenêtre est transmise.
 /// - `WEBKIT_DISABLE_DMABUF_RENDERER=1` et `LIBGL_ALWAYS_SOFTWARE=1` : selon le GPU et son pilote Windows, le rendu
 ///   accéléré de WebKitGTK laisse des zones non redessinées (rectangles blancs sur le graphe) ; rendu logiciel à la place.
+/// - `XCURSOR_SIZE=24` : sous XWayland (WSLg), le curseur de la souris est énorme sur un écran HiDPI sans taille explicite.
 #[cfg(all(target_os = "linux", feature = "tauri-app"))]
-const WSL_ENV: [(&str, &str); 3] = [
+const WSL_ENV: [(&str, &str); 4] = [
     ("GDK_BACKEND", "x11"),
     ("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
     ("LIBGL_ALWAYS_SOFTWARE", "1"),
+    ("XCURSOR_SIZE", "24"),
 ];
 
 /// Pose les variables de [`WSL_ENV`] sous WSL ; une variable déjà définie par l'utilisateur est respectée.
